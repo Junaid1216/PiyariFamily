@@ -11,6 +11,8 @@ export { default as AuthHeader } from './AuthHeader';
 export { default as AuthInput } from './AuthInput';
 export { default as BackButton } from './BackButton';
 export { default as DividerOr } from './DividerOr';
+export { default as OnboardingDots } from './OnboardingDots';
+export { default as OnboardingFeatureCard } from './OnboardingFeatureCard';
 export { default as OtpCodeInput } from './OtpCodeInput';
 export { default as PasswordRequirements } from './PasswordRequirements';
 export { default as PasswordStrengthMeter } from './PasswordStrengthMeter';

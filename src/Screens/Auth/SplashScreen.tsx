@@ -13,7 +13,7 @@ type Props = {
 const SplashScreen = ({ navigation }: Props) => {
   useEffect(() => {
     const timer = setTimeout(() => {
-      navigation.replace('Login');
+      navigation.replace('Onboarding');
     }, 2500);
     return () => clearTimeout(timer);
   }, [navigation]);

@@ -8,4 +8,5 @@ export const Images = {
   handshakeIcon: require('./images/handshake.png'),
   heartIcon: require('./images/heart.png'),
   resetSuccessCheck: require('./images/Background (3).png'),
+  onboardingIllustration: require('./images/image 3 (4).png'),
 };

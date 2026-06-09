@@ -78,4 +78,25 @@ export const Strings = {
   passwordResetSuccessMessage: 'Password successfully reset',
   logInNow: 'Log In Now',
   needHelpContactSupport: 'Need help? Contact Support',
+
+  onboardingTitle: 'Find Your Perfect Life Partner',
+  onboardingTitle1: 'Find Your Perfect Life Partner',
+  onboardingSubtitle1:
+    'Millions of verified profiles. Trusted by families across the world.',
+  onboardingTitle2: 'Built for Real Connections',
+  onboardingSubtitle2:
+    'Match with profiles that share your values, culture, and family traditions.',
+  onboardingTitle3: 'Start Your Story Today',
+  onboardingSubtitle3:
+    'Create your profile in minutes and take the first step toward forever.',
+  getStarted: 'Get Started',
+  onboardingVerified: 'Verified',
+  onboardingMillions: 'Millions',
+  onboardingPrivate: 'Private',
+  onboardingMatches: 'Matches',
+  onboardingFamilies: 'Families',
+  onboardingTrusted: 'Trusted',
+  onboardingEasySetup: 'Easy Setup',
+  onboardingSecure: 'Secure',
+  onboardingForever: 'Forever',
 };

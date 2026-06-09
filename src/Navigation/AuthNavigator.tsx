@@ -3,6 +3,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { NavigationContainer } from '@react-navigation/native';
 import {
   LoginScreen,
+  OnboardingScreen,
   SignUpScreen,
   SplashScreen,
   VerifyEmailScreen,
@@ -15,6 +16,7 @@ import {
 
 export type AuthStackParamList = {
   Splash: undefined;
+  Onboarding: undefined;
   Login: undefined;
   SignUp: undefined;
   VerifyEmail: undefined;
@@ -37,6 +39,7 @@ const AuthNavigator = () => {
           animation: 'slide_from_right',
         }}>
         <Stack.Screen name="Splash" component={SplashScreen} />
+        <Stack.Screen name="Onboarding" component={OnboardingScreen} />
         <Stack.Screen name="Login" component={LoginScreen} />
         <Stack.Screen name="SignUp" component={SignUpScreen} />
         <Stack.Screen name="VerifyEmail" component={VerifyEmailScreen} />
