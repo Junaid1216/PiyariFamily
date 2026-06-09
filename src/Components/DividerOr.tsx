@@ -1,8 +1,10 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { FontSizes } from '../Constant/AuthStyles';
 import { Colors } from '../Constant/Colors';
 import { Fonts } from '../Constant/Fonts';
 import { Strings } from '../Constant/Strings';
+import { hp, wp } from '../Functions/responsive';
 
 const DividerOr = () => {
   return (
@@ -18,7 +20,7 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 20,
+    marginVertical: hp('2.5%'),
   },
   line: {
     flex: 1,
@@ -26,9 +28,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.divider,
   },
   text: {
-    marginHorizontal: 16,
+    marginHorizontal: wp('4.3%'),
     color: Colors.textLight,
-    fontSize: 14,
+    fontSize: FontSizes.body,
     fontFamily: Fonts.regular,
   },
 });

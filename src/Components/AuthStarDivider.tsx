@@ -7,7 +7,9 @@ import {
   ViewStyle,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { AuthStyles } from '../Constant/AuthStyles';
 import { Colors } from '../Constant/Colors';
+import { fs, hp, wp } from '../Functions/responsive';
 
 type Props = {
   icon?: 'star' | 'heart';
@@ -43,14 +45,23 @@ const AuthStarDivider = ({
             resizeMode="contain"
           />
         ) : (
-          <Icon name="heart" size={12} color={Colors.gold} style={styles.icon} />
+          <Icon
+            name="heart"
+            size={fs(12)}
+            color={Colors.gold}
+            style={styles.icon}
+          />
         )
       ) : starImage ? (
-        <Image source={starImage} style={styles.starImage} resizeMode="contain" />
+        <Image
+          source={starImage}
+          style={styles.starImage}
+          resizeMode="contain"
+        />
       ) : (
         <Icon
           name="star-four-points"
-          size={10}
+          size={fs(10)}
           color={Colors.gold}
           style={styles.icon}
         />
@@ -66,7 +77,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     alignSelf: 'stretch',
     width: '100%',
-    marginVertical: 22,
+    marginVertical: hp('2.7%'),
   },
   containerCompact: {
     alignSelf: 'center',
@@ -78,17 +89,17 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   icon: {
-    marginHorizontal: 10,
+    marginHorizontal: wp('2.7%'),
   },
   starImage: {
-    width: 14,
-    height: 14,
-    marginHorizontal: 10,
+    width: AuthStyles.starIconSize,
+    height: AuthStyles.starIconSize,
+    marginHorizontal: wp('2.7%'),
   },
   heartImage: {
-    width: 16,
-    height: 16,
-    marginHorizontal: 10,
+    width: AuthStyles.heartIconSize,
+    height: AuthStyles.heartIconSize,
+    marginHorizontal: wp('2.7%'),
   },
 });
 

@@ -9,8 +9,9 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Colors } from '../Constant/Colors';
-import { AuthStyles } from '../Constant/AuthStyles';
+import { AuthStyles, FontSizes } from '../Constant/AuthStyles';
 import { Fonts } from '../Constant/Fonts';
+import { fs, wp } from '../Functions/responsive';
 
 type Props = {
   title: string;
@@ -43,7 +44,7 @@ const PrimaryButton = ({
           {showArrow && (
             <Icon
               name="arrow-right"
-              size={20}
+              size={fs(20)}
               color={Colors.white}
               style={styles.arrow}
             />
@@ -72,11 +73,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   arrow: {
-    marginLeft: 8,
+    marginLeft: wp('2%'),
   },
   text: {
     color: Colors.white,
-    fontSize: 16,
+    fontSize: FontSizes.button,
     fontFamily: Fonts.semiBold,
     letterSpacing: 0.2,
   },

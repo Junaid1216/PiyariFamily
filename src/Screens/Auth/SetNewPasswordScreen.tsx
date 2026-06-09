@@ -15,11 +15,11 @@ import BackButton from '../../Components/BackButton';
 import PasswordRequirements from '../../Components/PasswordRequirements';
 import PasswordStrengthMeter from '../../Components/PasswordStrengthMeter';
 import PrimaryButton from '../../Components/PrimaryButton';
-import { AuthStyles } from '../../Constant/AuthStyles';
+import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
-import { hp } from '../../Functions/responsive';
+import { fs, hp, wp } from '../../Functions/responsive';
 
 type Props = {
   navigation: {
@@ -73,7 +73,7 @@ const SetNewPasswordScreen = ({ navigation }: Props) => {
           >
             <BackButton variant="pink" onPress={() => navigation.goBack()} />
 
-            <AuthIconBadge iconName="hand-heart" iconSize={32} />
+            <AuthIconBadge iconName="hand-heart" iconSize={fs(32)} />
 
             <Text style={styles.title}>{Strings.setNewPasswordTitle}</Text>
             <Text style={styles.subtitle}>
@@ -133,21 +133,21 @@ const styles = StyleSheet.create({
     paddingTop: hp('1%'),
   },
   title: {
-    fontSize: 26,
+    fontSize: FontSizes.h2,
     color: Colors.primary,
     fontFamily: Fonts.bold,
-    marginBottom: 8,
+    marginBottom: hp('1%'),
     letterSpacing: -0.3,
     textAlign: 'center',
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: FontSizes.body,
     color: Colors.textSecondary,
-    marginBottom: 24,
+    marginBottom: hp('3%'),
     fontFamily: Fonts.regular,
-    lineHeight: 20,
+    lineHeight: hp('2.5%'),
     textAlign: 'center',
-    paddingHorizontal: 8,
+    paddingHorizontal: wp('2%'),
   },
   flexSpacer: {
     flex: 1,

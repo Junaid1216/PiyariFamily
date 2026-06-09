@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, View, ViewStyle } from 'react-native';
 import { Colors } from '../Constant/Colors';
+import { hp, wp } from '../Functions/responsive';
 
 type Props = {
   total?: number;
@@ -29,20 +30,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    marginVertical: 18,
+    gap: wp('2%'),
+    marginVertical: hp('2.2%'),
   },
   dot: {
-    borderRadius: 4,
+    borderRadius: wp('1%'),
   },
   activeDot: {
-    width: 28,
-    height: 8,
+    width: wp('7.5%'),
+    height: hp('1%'),
     backgroundColor: Colors.gold,
   },
   inactiveDot: {
-    width: 8,
-    height: 8,
+    width: wp('2%'),
+    height: wp('2%'),
     backgroundColor: Colors.gradientStart,
   },
 });

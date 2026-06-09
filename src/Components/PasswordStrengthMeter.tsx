@@ -1,7 +1,9 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { FontSizes } from '../Constant/AuthStyles';
 import { Colors } from '../Constant/Colors';
 import { Fonts } from '../Constant/Fonts';
+import { hp, wp } from '../Functions/responsive';
 
 type Props = {
   password: string;
@@ -58,29 +60,29 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
-    marginTop: 4,
+    marginBottom: hp('2%'),
+    marginTop: hp('0.5%'),
   },
   bars: {
     flex: 1,
     flexDirection: 'row',
-    gap: 6,
+    gap: wp('1.6%'),
   },
   bar: {
     flex: 1,
-    height: 4,
-    borderRadius: 2,
+    height: hp('0.5%'),
+    borderRadius: wp('0.5%'),
   },
   barEmpty: {
     backgroundColor: Colors.gradientStart,
     opacity: 0.7,
   },
   label: {
-    fontSize: 13,
+    fontSize: FontSizes.bodySmall,
     color: Colors.gold,
     fontFamily: Fonts.semiBold,
-    marginLeft: 10,
-    minWidth: 48,
+    marginLeft: wp('2.7%'),
+    minWidth: wp('12%'),
     textAlign: 'right',
   },
 });

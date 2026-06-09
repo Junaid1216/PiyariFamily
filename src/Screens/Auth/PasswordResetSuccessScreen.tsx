@@ -12,11 +12,11 @@ import AuthStarDivider from '../../Components/AuthStarDivider';
 import AuthWelcomeGlow from '../../Components/AuthWelcomeGlow';
 import PrimaryButton from '../../Components/PrimaryButton';
 import { Images } from '../../Assets';
-import { AuthStyles } from '../../Constant/AuthStyles';
+import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
-import { hp } from '../../Functions/responsive';
+import { hp, wp } from '../../Functions/responsive';
 
 type Props = {
   navigation: {
@@ -104,77 +104,77 @@ const styles = StyleSheet.create({
   },
   brandSection: {
     alignItems: 'center',
-    marginBottom: 28,
+    marginBottom: hp('3.5%'),
   },
   logoBadge: {
-    width: 72,
-    height: 72,
-    borderRadius: 18,
+    width: AuthStyles.logoSize,
+    height: AuthStyles.logoSize,
+    borderRadius: AuthStyles.logoRadius,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
+    marginBottom: hp('1.5%'),
     shadowColor: Colors.gold,
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: AuthStyles.shadowOffsetY },
     shadowOpacity: 0.25,
     shadowRadius: 8,
     elevation: 4,
   },
   handshakeIcon: {
-    width: 38,
-    height: 38,
+    width: wp('10.1%'),
+    height: wp('10.1%'),
   },
   appName: {
-    fontSize: 24,
+    fontSize: FontSizes.h3,
     color: Colors.primary,
     fontFamily: Fonts.bold,
     letterSpacing: 0.2,
-    marginBottom: 2,
+    marginBottom: hp('0.25%'),
   },
   tagline: {
-    fontSize: 13,
+    fontSize: FontSizes.bodySmall,
     color: Colors.gold,
     fontFamily: Fonts.medium,
     fontStyle: 'italic',
-    marginTop: 2,
+    marginTop: hp('0.25%'),
   },
   title: {
-    fontSize: 28,
+    fontSize: FontSizes.h1,
     color: Colors.primary,
     fontFamily: Fonts.bold,
-    marginBottom: 12,
+    marginBottom: hp('1.5%'),
     letterSpacing: -0.3,
     textAlign: 'center',
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: FontSizes.body,
     color: Colors.textSecondary,
     fontFamily: Fonts.regular,
-    lineHeight: 22,
+    lineHeight: hp('2.75%'),
     textAlign: 'center',
-    paddingHorizontal: 8,
-    marginBottom: 24,
-    maxWidth: 320,
+    paddingHorizontal: wp('2%'),
+    marginBottom: hp('3%'),
+    maxWidth: AuthStyles.maxContentWidth,
   },
   successBox: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFF0F3',
-    borderRadius: 14,
-    paddingVertical: 16,
-    paddingHorizontal: 16,
+    borderRadius: AuthStyles.successBoxRadius,
+    paddingVertical: hp('2%'),
+    paddingHorizontal: wp('4%'),
     width: '100%',
   },
   successIcon: {
-    width: 36,
-    height: 36,
-    marginRight: 12,
+    width: wp('9.6%'),
+    height: wp('9.6%'),
+    marginRight: wp('3%'),
   },
   successText: {
     flex: 1,
-    fontSize: 15,
+    fontSize: FontSizes.bodyLarge,
     color: Colors.primary,
     fontFamily: Fonts.semiBold,
-    lineHeight: 20,
+    lineHeight: hp('2.5%'),
   },
   bottomSection: {
     width: '100%',
@@ -182,23 +182,23 @@ const styles = StyleSheet.create({
   },
   button: {
     shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 6 },
+    shadowOffset: { width: 0, height: AuthStyles.shadowOffsetY },
     shadowOpacity: 0.22,
     shadowRadius: 10,
     elevation: 6,
   },
   supportBtn: {
     alignItems: 'center',
-    marginTop: 18,
+    marginTop: hp('2.25%'),
   },
   supportText: {
-    fontSize: 14,
+    fontSize: FontSizes.body,
     color: Colors.gold,
     fontFamily: Fonts.semiBold,
   },
   footerDivider: {
-    marginTop: 18,
-    marginBottom: 4,
+    marginTop: hp('2.25%'),
+    marginBottom: hp('0.5%'),
   },
 });
 

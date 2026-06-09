@@ -1,9 +1,11 @@
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { FontSizes } from '../Constant/AuthStyles';
 import { Colors } from '../Constant/Colors';
 import { Fonts } from '../Constant/Fonts';
 import { Strings } from '../Constant/Strings';
+import { fs, hp, wp } from '../Functions/responsive';
 
 type Props = {
   checked: boolean;
@@ -25,7 +27,7 @@ const TermsCheckbox = ({
         activeOpacity={0.8}
         hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
         <View style={[styles.box, checked && styles.boxChecked]}>
-          {checked && <Icon name="check" size={12} color={Colors.white} />}
+          {checked && <Icon name="check" size={fs(12)} color={Colors.white} />}
         </View>
       </TouchableOpacity>
       <Text style={styles.text}>
@@ -46,19 +48,19 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: 24,
-    paddingRight: 8,
+    marginBottom: hp('3%'),
+    paddingRight: wp('2%'),
   },
   box: {
-    width: 18,
-    height: 18,
-    borderRadius: 4,
+    width: wp('4.8%'),
+    height: wp('4.8%'),
+    borderRadius: wp('1%'),
     borderWidth: 1.5,
     borderColor: Colors.checkboxBorder,
     backgroundColor: Colors.white,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 2,
+    marginTop: hp('0.25%'),
   },
   boxChecked: {
     backgroundColor: Colors.primary,
@@ -66,10 +68,10 @@ const styles = StyleSheet.create({
   },
   text: {
     flex: 1,
-    marginLeft: 10,
-    fontSize: 13,
+    marginLeft: wp('2.7%'),
+    fontSize: FontSizes.bodySmall,
     color: Colors.textSecondary,
-    lineHeight: 20,
+    lineHeight: hp('2.5%'),
     fontFamily: Fonts.regular,
   },
   link: {

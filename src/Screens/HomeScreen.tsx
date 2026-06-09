@@ -1,6 +1,8 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Colors, Strings } from '../Constant';
+import { FontSizes } from '../Constant/AuthStyles';
+import { hp } from '../Functions/responsive';
 
 const HomeScreen = () => {
   return (
@@ -19,13 +21,13 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   title: {
-    fontSize: 28,
+    fontSize: FontSizes.h1,
     fontWeight: '700',
     color: Colors.primary,
-    marginBottom: 8,
+    marginBottom: hp('1%'),
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: FontSizes.button,
     color: Colors.textLight,
   },
 });

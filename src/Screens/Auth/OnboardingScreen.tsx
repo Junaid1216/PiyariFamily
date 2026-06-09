@@ -17,7 +17,7 @@ import OnboardingDots from '../../Components/OnboardingDots';
 import OnboardingFeatureCard from '../../Components/OnboardingFeatureCard';
 import PrimaryButton from '../../Components/PrimaryButton';
 import { Images } from '../../Assets';
-import { AuthStyles } from '../../Constant/AuthStyles';
+import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
@@ -191,36 +191,36 @@ const styles = StyleSheet.create({
   illustrationWrapper: {
     width: '100%',
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: hp('1.75%'),
   },
   illustration: {
     width: wp('92%'),
     height: hp('36%'),
   },
   title: {
-    fontSize: 26,
+    fontSize: FontSizes.h2,
     color: Colors.primary,
     fontFamily: Fonts.bold,
     textAlign: 'center',
     letterSpacing: -0.3,
-    marginBottom: 10,
-    paddingHorizontal: 4,
+    marginBottom: hp('1.25%'),
+    paddingHorizontal: wp('1%'),
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: FontSizes.body,
     color: Colors.textSecondary,
     fontFamily: Fonts.regular,
     textAlign: 'center',
-    lineHeight: 21,
-    paddingHorizontal: 10,
+    lineHeight: hp('2.6%'),
+    paddingHorizontal: wp('2.5%'),
   },
   dots: {
-    marginVertical: 16,
+    marginVertical: hp('2%'),
   },
   featuresRow: {
     flexDirection: 'row',
     width: '100%',
-    marginTop: 4,
+    marginTop: hp('0.5%'),
   },
   bottomSection: {
     paddingHorizontal: AuthStyles.horizontalPadding,
@@ -229,7 +229,7 @@ const styles = StyleSheet.create({
   },
   button: {
     shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 6 },
+    shadowOffset: { width: 0, height: AuthStyles.shadowOffsetY },
     shadowOpacity: 0.2,
     shadowRadius: 10,
     elevation: 6,

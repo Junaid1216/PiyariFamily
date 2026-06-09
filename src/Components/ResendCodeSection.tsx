@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { FontSizes } from '../Constant/AuthStyles';
 import { Colors } from '../Constant/Colors';
 import { Fonts } from '../Constant/Fonts';
+import { fs, hp, wp } from '../Functions/responsive';
 
 type Props = {
   initialSeconds?: number;
@@ -43,7 +45,7 @@ const ResendCodeSection = ({ initialSeconds = 45, onResend }: Props) => {
     <View style={styles.container}>
       {!canResend && (
         <View style={styles.timerRow}>
-          <Icon name="timer-outline" size={16} color={Colors.textLight} />
+          <Icon name="timer-outline" size={fs(16)} color={Colors.textLight} />
           <Text style={styles.timerText}>
             Resend code in {formatTime(seconds)}
           </Text>
@@ -54,8 +56,7 @@ const ResendCodeSection = ({ initialSeconds = 45, onResend }: Props) => {
         <Text
           style={[styles.resendLink, !canResend && styles.resendDisabled]}
           onPress={handleResend}
-          suppressHighlighting
-        >
+          suppressHighlighting>
           Resend
         </Text>
       </Text>
@@ -70,16 +71,16 @@ const styles = StyleSheet.create({
   timerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: hp('1%'),
   },
   timerText: {
-    fontSize: 13,
-    color: Colors.textSecondary,
+    fontSize: FontSizes.bodySmall,
+    color: Colors.textLight,
     fontFamily: Fonts.regular,
-    marginLeft: 6,
+    marginLeft: wp('1.6%'),
   },
   prompt: {
-    fontSize: 14,
+    fontSize: FontSizes.body,
     color: Colors.textSecondary,
     fontFamily: Fonts.regular,
   },

@@ -8,10 +8,10 @@ import {
   View,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { AuthStyles, FontSizes } from '../Constant/AuthStyles';
 import { Colors } from '../Constant/Colors';
-import { AuthStyles } from '../Constant/AuthStyles';
 import { Fonts } from '../Constant/Fonts';
-import { wp } from '../Functions/responsive';
+import { fs, hp, wp } from '../Functions/responsive';
 
 type Props = TextInputProps & {
   label: string;
@@ -36,7 +36,7 @@ const AuthInput = ({
       <View style={styles.inputRow}>
         <Icon
           name={iconName}
-          size={20}
+          size={fs(20)}
           color={iconColor}
           style={styles.leftIcon}
         />
@@ -53,7 +53,7 @@ const AuthInput = ({
             style={styles.eyeBtn}>
             <Icon
               name={hidden ? 'eye-off-outline' : 'eye-outline'}
-              size={20}
+              size={fs(20)}
               color={Colors.primary}
             />
           </TouchableOpacity>
@@ -65,12 +65,12 @@ const AuthInput = ({
 
 const styles = StyleSheet.create({
   wrapper: {
-    marginBottom: 18,
+    marginBottom: hp('2.2%'),
   },
   label: {
-    fontSize: 14,
+    fontSize: FontSizes.body,
     color: Colors.label,
-    marginBottom: 8,
+    marginBottom: hp('1%'),
     fontFamily: Fonts.medium,
   },
   inputRow: {
@@ -80,22 +80,22 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     borderRadius: AuthStyles.inputRadius,
     backgroundColor: Colors.inputBg,
-    paddingHorizontal: 14,
+    paddingHorizontal: wp('3.7%'),
     height: AuthStyles.inputHeight,
   },
   leftIcon: {
-    marginRight: 10,
+    marginRight: wp('2.7%'),
   },
   input: {
     flex: 1,
-    fontSize: 15,
+    fontSize: FontSizes.bodyLarge,
     color: Colors.text,
     fontFamily: Fonts.regular,
     paddingVertical: 0,
     height: '100%',
   },
   eyeBtn: {
-    paddingLeft: 8,
+    paddingLeft: wp('2%'),
   },
 });
 

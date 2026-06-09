@@ -5,11 +5,11 @@ import AuthSoftGlow from '../../Components/AuthSoftGlow';
 import AuthStarDivider from '../../Components/AuthStarDivider';
 import PrimaryButton from '../../Components/PrimaryButton';
 import { Images } from '../../Assets';
-import { AuthStyles } from '../../Constant/AuthStyles';
+import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
-import { hp } from '../../Functions/responsive';
+import { hp, wp } from '../../Functions/responsive';
 
 type Props = {
   navigation: {
@@ -61,26 +61,26 @@ const styles = StyleSheet.create({
     paddingBottom: hp('2%'),
   },
   illustration: {
-    width: 200,
-    height: 200,
-    marginBottom: 20,
+    width: AuthStyles.illustrationSize,
+    height: AuthStyles.illustrationSize,
+    marginBottom: hp('2.5%'),
   },
   title: {
-    fontSize: 26,
+    fontSize: FontSizes.h2,
     color: Colors.primary,
     fontFamily: Fonts.bold,
-    marginBottom: 12,
+    marginBottom: hp('1.5%'),
     letterSpacing: -0.3,
     textAlign: 'center',
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: FontSizes.body,
     color: Colors.textSecondary,
     fontFamily: Fonts.regular,
-    lineHeight: 22,
+    lineHeight: hp('2.75%'),
     textAlign: 'center',
-    paddingHorizontal: 16,
-    maxWidth: 320,
+    paddingHorizontal: wp('4%'),
+    maxWidth: AuthStyles.maxContentWidth,
   },
   bottomSection: {
     width: '100%',
@@ -88,17 +88,17 @@ const styles = StyleSheet.create({
   },
   button: {
     shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 6 },
+    shadowOffset: { width: 0, height: AuthStyles.shadowOffsetY },
     shadowOpacity: 0.22,
     shadowRadius: 10,
     elevation: 6,
   },
   stepText: {
-    fontSize: 13,
+    fontSize: FontSizes.bodySmall,
     color: Colors.textSecondary,
     fontFamily: Fonts.regular,
     textAlign: 'center',
-    marginTop: 16,
+    marginTop: hp('2%'),
   },
 });
 

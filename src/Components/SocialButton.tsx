@@ -2,9 +2,10 @@ import React from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome5';
 import { Images } from '../Assets';
+import { AuthStyles, FontSizes } from '../Constant/AuthStyles';
 import { Colors } from '../Constant/Colors';
-import { AuthStyles } from '../Constant/AuthStyles';
 import { Fonts } from '../Constant/Fonts';
+import { fs, hp, wp } from '../Functions/responsive';
 
 type Provider = 'google' | 'apple';
 
@@ -24,7 +25,7 @@ const SocialButton = ({ provider, title, onPress }: Props) => {
         {provider === 'google' ? (
           <Image source={Images.googleIcon} style={styles.googleIcon} />
         ) : (
-          <Icon name="apple" size={20} color={Colors.black} brand />
+          <Icon name="apple" size={fs(20)} color={Colors.black} brand />
         )}
       </View>
       <Text style={styles.text}>{title}</Text>
@@ -42,21 +43,21 @@ const styles = StyleSheet.create({
     borderRadius: AuthStyles.buttonRadius,
     backgroundColor: Colors.socialButtonBg,
     height: AuthStyles.buttonHeight,
-    marginBottom: 12,
+    marginBottom: hp('1.5%'),
   },
   iconWrap: {
-    width: 24,
+    width: wp('6.4%'),
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 10,
+    marginRight: wp('2.7%'),
   },
   googleIcon: {
-    width: 20,
-    height: 20,
+    width: wp('5.3%'),
+    height: wp('5.3%'),
     resizeMode: 'contain',
   },
   text: {
-    fontSize: 15,
+    fontSize: FontSizes.bodyLarge,
     color: Colors.text,
     fontFamily: Fonts.medium,
   },

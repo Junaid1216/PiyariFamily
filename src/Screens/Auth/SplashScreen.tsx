@@ -2,7 +2,9 @@ import React, { useEffect } from 'react';
 import { Image, StatusBar, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Images } from '../../Assets';
+import { AuthStyles } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
+import { hp } from '../../Functions/responsive';
 
 type Props = {
   navigation: {
@@ -41,11 +43,11 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: '5%',
+    paddingHorizontal: AuthStyles.horizontalPadding,
   },
   splashImage: {
     width: '100%',
-    height: '85%',
+    height: hp('85%'),
   },
 });
 

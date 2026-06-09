@@ -1,8 +1,10 @@
 import React from 'react';
 import { StyleSheet, Text, View, ViewStyle } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { FontSizes } from '../Constant/AuthStyles';
 import { Colors } from '../Constant/Colors';
 import { Fonts } from '../Constant/Fonts';
+import { fs, wp } from '../Functions/responsive';
 
 type Props = {
   text: string;
@@ -14,7 +16,7 @@ const AuthFooterHint = ({ text, style }: Props) => {
     <View style={[styles.container, style]}>
       <Icon
         name="information-outline"
-        size={14}
+        size={fs(14)}
         color={Colors.textLight}
         style={styles.icon}
       />
@@ -28,13 +30,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: wp('3.2%'),
   },
   icon: {
-    marginRight: 6,
+    marginRight: wp('1.6%'),
   },
   text: {
-    fontSize: 12,
+    fontSize: FontSizes.caption,
     color: Colors.textLight,
     fontFamily: Fonts.regular,
     textAlign: 'center',

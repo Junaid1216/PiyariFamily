@@ -1,14 +1,30 @@
-import { hp, wp } from '../Functions/responsive';
+import { FontSizes, hp, normalize, wp } from '../Functions/responsive';
 
 export const AuthStyles = {
   horizontalPadding: wp('6.4%'),
-  inputRadius: 12,
-  buttonRadius: 12,
-  inputHeight: 52,
-  buttonHeight: 52,
-  logoSize: 64,
-  logoRadius: 16,
+  inputRadius: wp('3.2%'),
+  buttonRadius: wp('3.2%'),
+  inputHeight: hp('6.4%'),
+  buttonHeight: hp('6.4%'),
+  logoSize: wp('17%'),
+  logoRadius: wp('4.3%'),
   bottomSectionPadding: hp('8%'),
-  bottomLinkTop: 16,
-  footerHintTop: 14,
+  bottomLinkTop: hp('2%'),
+  footerHintTop: hp('1.8%'),
+  backButtonSize: wp('10.7%'),
+  iconBadgeSize: wp('19%'),
+  iconBadgeRadius: wp('4.8%'),
+  starBadgeSize: wp('5.9%'),
+  otpCellWidth: wp('12.3%'),
+  otpCellHeight: hp('6.4%'),
+  featureCardRadius: wp('3.7%'),
+  successBoxRadius: wp('3.7%'),
+  illustrationSize: wp('53%'),
+  maxContentWidth: wp('85%'),
+  dividerWidth: wp('42%'),
+  starIconSize: normalize(14),
+  heartIconSize: normalize(16),
+  shadowOffsetY: hp('0.7%'),
 };
+
+export { FontSizes };

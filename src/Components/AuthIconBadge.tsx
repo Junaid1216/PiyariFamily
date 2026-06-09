@@ -2,14 +2,16 @@ import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { AuthStyles } from '../Constant/AuthStyles';
 import { Colors } from '../Constant/Colors';
+import { fs, hp, wp } from '../Functions/responsive';
 
 type Props = {
   iconName: string;
   iconSize?: number;
 };
 
-const AuthIconBadge = ({ iconName, iconSize = 34 }: Props) => {
+const AuthIconBadge = ({ iconName, iconSize = fs(34) }: Props) => {
   return (
     <View style={styles.wrapper}>
       <LinearGradient
@@ -20,7 +22,7 @@ const AuthIconBadge = ({ iconName, iconSize = 34 }: Props) => {
         <Icon name={iconName} size={iconSize} color={Colors.white} />
       </LinearGradient>
       <View style={styles.starBadge}>
-        <Icon name="star-four-points" size={9} color={Colors.white} />
+        <Icon name="star-four-points" size={fs(9)} color={Colors.white} />
       </View>
     </View>
   );
@@ -29,23 +31,23 @@ const AuthIconBadge = ({ iconName, iconSize = 34 }: Props) => {
 const styles = StyleSheet.create({
   wrapper: {
     alignSelf: 'center',
-    marginBottom: 20,
+    marginBottom: hp('2.5%'),
     position: 'relative',
   },
   badge: {
-    width: 72,
-    height: 72,
-    borderRadius: 18,
+    width: AuthStyles.iconBadgeSize,
+    height: AuthStyles.iconBadgeSize,
+    borderRadius: AuthStyles.iconBadgeRadius,
     alignItems: 'center',
     justifyContent: 'center',
   },
   starBadge: {
     position: 'absolute',
-    top: -4,
-    right: -4,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    top: -wp('1%'),
+    right: -wp('1%'),
+    width: AuthStyles.starBadgeSize,
+    height: AuthStyles.starBadgeSize,
+    borderRadius: AuthStyles.starBadgeSize / 2,
     backgroundColor: Colors.gold,
     alignItems: 'center',
     justifyContent: 'center',

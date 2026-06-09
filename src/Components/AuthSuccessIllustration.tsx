@@ -1,7 +1,9 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { AuthStyles } from '../Constant/AuthStyles';
 import { Colors } from '../Constant/Colors';
+import { fs, hp, wp } from '../Functions/responsive';
 
 type Props = {
   iconName: string;
@@ -9,16 +11,16 @@ type Props = {
 };
 
 const starPositions = [
-  { top: 8, left: 24, size: 14 },
-  { top: 20, right: 20, size: 10 },
-  { top: 70, right: 8, size: 12 },
-  { bottom: 30, left: 16, size: 10 },
-  { bottom: 16, right: 28, size: 14 },
+  { top: hp('1%'), left: wp('6%'), size: fs(14) },
+  { top: hp('2.5%'), right: wp('5%'), size: fs(10) },
+  { top: hp('8.5%'), right: wp('2%'), size: fs(12) },
+  { bottom: hp('3.5%'), left: wp('4%'), size: fs(10) },
+  { bottom: hp('2%'), right: wp('7%'), size: fs(14) },
 ];
 
 const AuthSuccessIllustration = ({
   iconName,
-  iconSize = 36,
+  iconSize = fs(36),
 }: Props) => {
   return (
     <View style={styles.wrapper}>
@@ -49,17 +51,17 @@ const AuthSuccessIllustration = ({
 const styles = StyleSheet.create({
   wrapper: {
     alignSelf: 'center',
-    width: 160,
-    height: 160,
+    width: wp('43%'),
+    height: wp('43%'),
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 24,
+    marginBottom: hp('3%'),
     position: 'relative',
   },
   circle: {
-    width: 110,
-    height: 110,
-    borderRadius: 55,
+    width: wp('29%'),
+    height: wp('29%'),
+    borderRadius: wp('14.5%'),
     backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',

@@ -16,7 +16,7 @@ import AuthInput from '../../Components/AuthInput';
 import DividerOr from '../../Components/DividerOr';
 import PrimaryButton from '../../Components/PrimaryButton';
 import SocialButton from '../../Components/SocialButton';
-import { AuthStyles } from '../../Constant/AuthStyles';
+import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
@@ -131,26 +131,26 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   title: {
-    fontSize: 28,
+    fontSize: FontSizes.h1,
     color: Colors.primary,
     fontFamily: Fonts.bold,
-    marginBottom: 6,
+    marginBottom: hp('0.75%'),
     letterSpacing: -0.3,
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: FontSizes.body,
     color: Colors.textSecondary,
-    marginBottom: 24,
+    marginBottom: hp('3%'),
     fontFamily: Fonts.regular,
-    lineHeight: 20,
+    lineHeight: hp('2.5%'),
   },
   forgotBtn: {
     alignSelf: 'flex-end',
-    marginTop: -6,
-    marginBottom: 20,
+    marginTop: hp('-0.75%'),
+    marginBottom: hp('2.5%'),
   },
   forgotText: {
-    fontSize: 14,
+    fontSize: FontSizes.body,
     color: Colors.gold,
     fontFamily: Fonts.medium,
   },

@@ -6,9 +6,10 @@ import {
   useBlurOnFulfill,
   useClearByFocusCell,
 } from 'react-native-confirmation-code-field';
+import { AuthStyles, FontSizes } from '../Constant/AuthStyles';
 import { Colors } from '../Constant/Colors';
-import { AuthStyles } from '../Constant/AuthStyles';
 import { Fonts } from '../Constant/Fonts';
+import { hp } from '../Functions/responsive';
 
 const CELL_COUNT = 6;
 
@@ -50,12 +51,12 @@ const OtpCodeInput = ({ value, onChangeText }: Props) => {
 
 const styles = StyleSheet.create({
   codeFieldRoot: {
-    marginBottom: 24,
+    marginBottom: hp('3%'),
     justifyContent: 'space-between',
   },
   cell: {
-    width: 46,
-    height: 52,
+    width: AuthStyles.otpCellWidth,
+    height: AuthStyles.otpCellHeight,
     borderWidth: 1.2,
     borderColor: Colors.border,
     borderRadius: AuthStyles.inputRadius,
@@ -68,7 +69,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
   },
   cellText: {
-    fontSize: 22,
+    fontSize: FontSizes.otp,
     color: Colors.primary,
     fontFamily: Fonts.semiBold,
     textAlign: 'center',

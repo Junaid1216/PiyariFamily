@@ -1,8 +1,10 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { FontSizes } from '../Constant/AuthStyles';
 import { Colors } from '../Constant/Colors';
 import { Fonts } from '../Constant/Fonts';
+import { fs, hp, wp } from '../Functions/responsive';
 
 type Props = {
   password: string;
@@ -27,7 +29,7 @@ const PasswordRequirements = ({ password }: Props) => {
           <View key={item.label} style={styles.row}>
             <Icon
               name={met ? 'check-circle' : 'circle-outline'}
-              size={16}
+              size={fs(16)}
               color={met ? '#4CAF50' : Colors.border}
               style={styles.icon}
             />
@@ -41,18 +43,18 @@ const PasswordRequirements = ({ password }: Props) => {
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 20,
+    marginBottom: hp('2.5%'),
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: hp('1%'),
   },
   icon: {
-    marginRight: 8,
+    marginRight: wp('2%'),
   },
   text: {
-    fontSize: 13,
+    fontSize: FontSizes.bodySmall,
     color: Colors.textSecondary,
     fontFamily: Fonts.regular,
     flex: 1,

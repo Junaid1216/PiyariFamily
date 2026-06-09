@@ -14,7 +14,7 @@ import AuthInput from '../../Components/AuthInput';
 import BackButton from '../../Components/BackButton';
 import PrimaryButton from '../../Components/PrimaryButton';
 import TermsCheckbox from '../../Components/TermsCheckbox';
-import { AuthStyles } from '../../Constant/AuthStyles';
+import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
@@ -64,7 +64,8 @@ const SignUpScreen = ({ navigation }: Props) => {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
           enableOnAndroid
-          bounces={false}>
+          bounces={false}
+        >
           <BackButton onPress={() => navigation.goBack()} />
 
           <View style={styles.formSection}>
@@ -143,18 +144,20 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   title: {
-    fontSize: 26,
+    fontSize: FontSizes.h2,
     color: Colors.primary,
     fontFamily: Fonts.bold,
-    marginBottom: 6,
+    marginBottom: hp('0.75%'),
     letterSpacing: -0.3,
+    textAlign: 'center',
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: FontSizes.body,
+    textAlign: 'center',
     color: Colors.gold,
-    marginBottom: 24,
+    marginBottom: hp('3%'),
     fontFamily: Fonts.regular,
-    lineHeight: 20,
+    lineHeight: hp('2.5%'),
   },
   bottomSpacer: {
     height: hp('2%'),

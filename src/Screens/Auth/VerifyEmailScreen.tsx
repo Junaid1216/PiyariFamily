@@ -15,11 +15,11 @@ import BackButton from '../../Components/BackButton';
 import OtpCodeInput from '../../Components/OtpCodeInput';
 import PrimaryButton from '../../Components/PrimaryButton';
 import ResendCodeSection from '../../Components/ResendCodeSection';
-import { AuthStyles } from '../../Constant/AuthStyles';
+import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
-import { hp } from '../../Functions/responsive';
+import { hp, wp } from '../../Functions/responsive';
 
 type Props = {
   navigation: {
@@ -102,21 +102,21 @@ const styles = StyleSheet.create({
     paddingTop: hp('1%'),
   },
   title: {
-    fontSize: 26,
+    fontSize: FontSizes.h2,
     color: Colors.primary,
     fontFamily: Fonts.bold,
-    marginBottom: 8,
+    marginBottom: hp('1%'),
     letterSpacing: -0.3,
     textAlign: 'center',
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: FontSizes.body,
     color: Colors.textSecondary,
-    marginBottom: 28,
+    marginBottom: hp('3.5%'),
     fontFamily: Fonts.regular,
-    lineHeight: 20,
+    lineHeight: hp('2.5%'),
     textAlign: 'center',
-    paddingHorizontal: 8,
+    paddingHorizontal: wp('2%'),
   },
   flexSpacer: {
     flex: 1,

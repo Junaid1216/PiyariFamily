@@ -1,10 +1,11 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { FontSizes } from '../Constant/AuthStyles';
 import { Colors } from '../Constant/Colors';
 import { Fonts } from '../Constant/Fonts';
 import { Strings } from '../Constant/Strings';
-import { hp } from '../Functions/responsive';
+import { fs, hp, wp } from '../Functions/responsive';
 import AppLogo from './AppLogo';
 
 const AuthHeader = () => {
@@ -17,7 +18,7 @@ const AuthHeader = () => {
         <View style={styles.dividerLine} />
         <Icon
           name="star-four-points"
-          size={10}
+          size={fs(10)}
           color={Colors.gold}
           style={styles.starIcon}
         />
@@ -36,18 +37,18 @@ const styles = StyleSheet.create({
     marginBottom: hp('2.8%'),
   },
   appName: {
-    fontSize: 24,
+    fontSize: FontSizes.h3,
     color: Colors.primary,
     fontFamily: Fonts.bold,
-    marginTop: 12,
+    marginTop: hp('1.5%'),
     letterSpacing: 0.2,
   },
   starDivider: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 8,
-    marginBottom: 6,
-    width: 160,
+    marginTop: hp('1%'),
+    marginBottom: hp('0.7%'),
+    width: wp('42%'),
   },
   dividerLine: {
     flex: 1,
@@ -56,10 +57,10 @@ const styles = StyleSheet.create({
     opacity: 0.75,
   },
   starIcon: {
-    marginHorizontal: 8,
+    marginHorizontal: wp('2%'),
   },
   tagline: {
-    fontSize: 13,
+    fontSize: FontSizes.bodySmall,
     color: Colors.gold,
     fontFamily: Fonts.medium,
     textAlign: 'center',

@@ -15,11 +15,11 @@ import AuthIconBadge from '../../Components/AuthIconBadge';
 import AuthInput from '../../Components/AuthInput';
 import BackButton from '../../Components/BackButton';
 import PrimaryButton from '../../Components/PrimaryButton';
-import { AuthStyles } from '../../Constant/AuthStyles';
+import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
-import { hp } from '../../Functions/responsive';
+import { hp, wp } from '../../Functions/responsive';
 
 type Props = {
   navigation: {
@@ -79,7 +79,7 @@ const ForgotPasswordScreen = ({ navigation }: Props) => {
             <View style={styles.hintRow}>
               <Icon
                 name="shield-check-outline"
-                size={15}
+                size={FontSizes.bodyLarge}
                 color={Colors.gold}
                 style={styles.hintIcon}
               />
@@ -126,36 +126,36 @@ const styles = StyleSheet.create({
     paddingTop: hp('1%'),
   },
   title: {
-    fontSize: 26,
+    fontSize: FontSizes.h2,
     color: Colors.primary,
     fontFamily: Fonts.bold,
-    marginBottom: 8,
+    marginBottom: hp('1%'),
     letterSpacing: -0.3,
     textAlign: 'left',
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: FontSizes.body,
     color: Colors.textSecondary,
-    marginBottom: 28,
+    marginBottom: hp('3.5%'),
     fontFamily: Fonts.regular,
-    lineHeight: 20,
+    lineHeight: hp('2.5%'),
     textAlign: 'left',
   },
   hintRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: -10,
+    marginTop: hp('-1.2%'),
   },
   hintIcon: {
-    marginRight: 6,
+    marginRight: wp('1.5%'),
   },
   hintText: {
     flex: 1,
-    fontSize: 12,
+    fontSize: FontSizes.caption,
     color: Colors.textSecondary,
     fontFamily: Fonts.regular,
     fontStyle: 'italic',
-    lineHeight: 17,
+    lineHeight: hp('2.1%'),
   },
   flexSpacer: {
     flex: 1,
@@ -170,7 +170,7 @@ const styles = StyleSheet.create({
     marginTop: AuthStyles.bottomLinkTop,
   },
   backToLoginText: {
-    fontSize: 15,
+    fontSize: FontSizes.bodyLarge,
     color: Colors.gold,
     fontFamily: Fonts.semiBold,
   },
