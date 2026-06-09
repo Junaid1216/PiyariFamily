@@ -5,16 +5,28 @@ import { Colors } from '../Constant/Colors';
 
 type Props = {
   onPress: () => void;
+  variant?: 'default' | 'gray' | 'pink';
 };
 
-const BackButton = ({ onPress }: Props) => {
+const BackButton = ({ onPress, variant = 'default' }: Props) => {
+  const isPink = variant === 'pink';
+  const isGray = variant === 'gray';
+
   return (
     <TouchableOpacity
-      style={styles.button}
+      style={[
+        styles.button,
+        isPink && styles.buttonPink,
+        isGray && styles.buttonGray,
+      ]}
       onPress={onPress}
       activeOpacity={0.8}
       hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-      <Icon name="chevron-left" size={22} color={Colors.primary} />
+      <Icon
+        name="chevron-left"
+        size={22}
+        color={isGray ? Colors.iconMuted : Colors.primary}
+      />
     </TouchableOpacity>
   );
 };
@@ -30,6 +42,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 20,
+  },
+  buttonPink: {
+    backgroundColor: Colors.backButtonPink,
+    borderColor: Colors.backButtonPink,
+  },
+  buttonGray: {
+    borderColor: Colors.border,
+    backgroundColor: Colors.white,
   },
 });
 

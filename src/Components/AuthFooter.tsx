@@ -13,7 +13,10 @@ const AuthFooter = ({ prefix, linkText, onPress }: Props) => {
   return (
     <View style={styles.container}>
       <Text style={styles.prefix}>{prefix} </Text>
-      <TouchableOpacity onPress={onPress} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}>
+      <TouchableOpacity
+        onPress={onPress}
+        hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+      >
         <Text style={styles.link}>{linkText}</Text>
       </TouchableOpacity>
     </View>
@@ -25,7 +28,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 5,
     flexWrap: 'wrap',
   },
   prefix: {

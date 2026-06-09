@@ -1,10 +1,14 @@
 export { default as AppLogo } from './AppLogo';
 export { default as AuthBackground } from './AuthBackground';
+export { default as AuthFooterHint } from './AuthFooterHint';
 export { default as AuthFooter } from './AuthFooter';
+export { default as AuthIconBadge } from './AuthIconBadge';
 export { default as AuthHeader } from './AuthHeader';
 export { default as AuthInput } from './AuthInput';
 export { default as BackButton } from './BackButton';
 export { default as DividerOr } from './DividerOr';
+export { default as OtpCodeInput } from './OtpCodeInput';
 export { default as PrimaryButton } from './PrimaryButton';
+export { default as ResendCodeSection } from './ResendCodeSection';
 export { default as SocialButton } from './SocialButton';
 export { default as TermsCheckbox } from './TermsCheckbox';

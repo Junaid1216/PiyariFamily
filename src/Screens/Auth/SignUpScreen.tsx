@@ -52,7 +52,7 @@ const SignUpScreen = ({ navigation }: Props) => {
     setTimeout(() => {
       setLoading(false);
       Toast.show('Account created successfully');
-      navigation.navigate('Login');
+      navigation.navigate('VerifyEmail');
     }, 1000);
   };
 

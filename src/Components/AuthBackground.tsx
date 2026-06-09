@@ -8,16 +8,21 @@ import { hp } from '../Functions/responsive';
 type Props = {
   children: React.ReactNode;
   style?: ViewStyle;
+  variant?: 'gradient' | 'white';
 };
 
-const AuthBackground = ({ children, style }: Props) => {
+const AuthBackground = ({ children, style, variant = 'gradient' }: Props) => {
+  const isWhite = variant === 'white';
+
   return (
-    <View style={styles.root}>
-      <LinearGradient
-        colors={[Colors.gradientStart, Colors.gradientMid, Colors.gradientEnd]}
-        locations={[0, 0.55, 1]}
-        style={styles.gradient}
-      />
+    <View style={[styles.root, isWhite && styles.rootWhite]}>
+      {!isWhite && (
+        <LinearGradient
+          colors={[Colors.gradientStart, Colors.gradientMid, Colors.gradientEnd]}
+          locations={[0, 0.55, 1]}
+          style={styles.gradient}
+        />
+      )}
       <SafeAreaView
         style={[styles.safeArea, style]}
         edges={['top', 'left', 'right']}>
@@ -31,6 +36,9 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: Colors.background,
+  },
+  rootWhite: {
+    backgroundColor: Colors.white,
   },
   gradient: {
     position: 'absolute',

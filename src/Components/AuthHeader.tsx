@@ -62,6 +62,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.gold,
     fontFamily: Fonts.medium,
+    textAlign: 'center',
     fontStyle: 'italic',
   },
 });

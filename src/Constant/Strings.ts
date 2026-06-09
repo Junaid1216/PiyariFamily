@@ -31,4 +31,22 @@ export const Strings = {
   privacyPolicy: 'Privacy Policy',
   alreadyHaveAccount: 'Already have an account?',
   logInLink: 'Log In',
+
+  verifyYourEmail: 'Verify Your Email',
+  verifyEmailSubtitle:
+    "We've sent a 6-digit code to your email address. Please enter it below.",
+  verifyAndContinue: 'Verify & Continue',
+  spamFolderHint: "Check your spam folder if you don't see the email.",
+
+  forgotPasswordTitle: 'Forgot Password?',
+  forgotPasswordSubtitle:
+    "No worries! Enter your registered email and we'll send you a reset code.",
+  secureOtpHint: "We'll send a secure OTP to this email",
+  sendResetCode: 'Send Reset Code',
+  backToLogIn: 'Back to Log In',
+
+  checkYourEmail: 'Check Your Email',
+  checkEmailSubtitle:
+    "We've sent a 6-digit verification code to your email address. Enter it below to continue.",
+  verifyCode: 'Verify Code',
 };

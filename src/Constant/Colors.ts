@@ -20,4 +20,7 @@ export const Colors = {
   socialButtonBg: '#FFFFFF',
   checkboxBorder: '#C8C8C8',
   divider: '#D4D4D4',
+  focusBorder: '#E8889A',
+  backButtonPink: '#FFCDD9',
+  iconMuted: '#9E9E9E',
 };

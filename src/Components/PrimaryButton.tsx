@@ -4,8 +4,10 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  View,
   ViewStyle,
 } from 'react-native';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Colors } from '../Constant/Colors';
 import { AuthStyles } from '../Constant/AuthStyles';
 import { Fonts } from '../Constant/Fonts';
@@ -15,6 +17,7 @@ type Props = {
   onPress: () => void;
   loading?: boolean;
   disabled?: boolean;
+  showArrow?: boolean;
   style?: ViewStyle;
 };
 
@@ -23,6 +26,7 @@ const PrimaryButton = ({
   onPress,
   loading = false,
   disabled = false,
+  showArrow = false,
   style,
 }: Props) => {
   return (
@@ -34,7 +38,17 @@ const PrimaryButton = ({
       {loading ? (
         <ActivityIndicator color={Colors.white} />
       ) : (
-        <Text style={styles.text}>{title}</Text>
+        <View style={styles.content}>
+          <Text style={styles.text}>{title}</Text>
+          {showArrow && (
+            <Icon
+              name="arrow-right"
+              size={20}
+              color={Colors.white}
+              style={styles.arrow}
+            />
+          )}
+        </View>
       )}
     </TouchableOpacity>
   );
@@ -51,6 +65,14 @@ const styles = StyleSheet.create({
   },
   disabled: {
     opacity: 0.55,
+  },
+  content: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  arrow: {
+    marginLeft: 8,
   },
   text: {
     color: Colors.white,

@@ -17,12 +17,14 @@ type Props = TextInputProps & {
   label: string;
   iconName: string;
   showToggle?: boolean;
+  iconColor?: string;
 };
 
 const AuthInput = ({
   label,
   iconName,
   showToggle = false,
+  iconColor = Colors.primary,
   secureTextEntry,
   ...rest
 }: Props) => {
@@ -35,7 +37,7 @@ const AuthInput = ({
         <Icon
           name={iconName}
           size={20}
-          color={Colors.primary}
+          color={iconColor}
           style={styles.leftIcon}
         />
         <TextInput

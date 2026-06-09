@@ -81,7 +81,10 @@ const LoginScreen = ({ navigation }: Props) => {
               secureTextEntry
             />
 
-            <TouchableOpacity style={styles.forgotBtn} activeOpacity={0.7}>
+            <TouchableOpacity
+              style={styles.forgotBtn}
+              activeOpacity={0.7}
+              onPress={() => navigation.navigate('ForgotPassword')}>
               <Text style={styles.forgotText}>{Strings.forgotPassword}</Text>
             </TouchableOpacity>
 
