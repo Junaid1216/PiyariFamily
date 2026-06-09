@@ -66,6 +66,9 @@ yarn-error.log
 # testing
 /coverage
 
+# Local credentials
+src/Credentials.txt
+
 # Yarn
 .yarn/*
 !.yarn/patches
