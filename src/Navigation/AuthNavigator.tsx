@@ -8,6 +8,9 @@ import {
   VerifyEmailScreen,
   ForgotPasswordScreen,
   CheckEmailScreen,
+  CodeVerifiedScreen,
+  SetNewPasswordScreen,
+  PasswordResetSuccessScreen,
 } from '../Screens/Auth';
 
 export type AuthStackParamList = {
@@ -17,6 +20,9 @@ export type AuthStackParamList = {
   VerifyEmail: undefined;
   ForgotPassword: undefined;
   CheckEmail: { email?: string };
+  CodeVerified: undefined;
+  SetNewPassword: undefined;
+  PasswordResetSuccess: undefined;
 };
 
 const Stack = createNativeStackNavigator<AuthStackParamList>();
@@ -36,6 +42,12 @@ const AuthNavigator = () => {
         <Stack.Screen name="VerifyEmail" component={VerifyEmailScreen} />
         <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
         <Stack.Screen name="CheckEmail" component={CheckEmailScreen} />
+        <Stack.Screen name="CodeVerified" component={CodeVerifiedScreen} />
+        <Stack.Screen name="SetNewPassword" component={SetNewPasswordScreen} />
+        <Stack.Screen
+          name="PasswordResetSuccess"
+          component={PasswordResetSuccessScreen}
+        />
       </Stack.Navigator>
     </NavigationContainer>
   );

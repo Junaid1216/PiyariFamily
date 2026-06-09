@@ -56,7 +56,7 @@ const ForgotPasswordScreen = ({ navigation }: Props) => {
             enableOnAndroid
             bounces={false}
           >
-            <BackButton variant="gray" onPress={() => navigation.goBack()} />
+            <BackButton variant="pink" onPress={() => navigation.goBack()} />
 
             <AuthIconBadge iconName="lock-outline" />
 

@@ -9,12 +9,12 @@ import {
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import Toast from 'react-native-simple-toast';
 import AuthBackground from '../../Components/AuthBackground';
-import AuthFooterHint from '../../Components/AuthFooterHint';
 import AuthIconBadge from '../../Components/AuthIconBadge';
+import AuthInput from '../../Components/AuthInput';
 import BackButton from '../../Components/BackButton';
-import OtpCodeInput from '../../Components/OtpCodeInput';
+import PasswordRequirements from '../../Components/PasswordRequirements';
+import PasswordStrengthMeter from '../../Components/PasswordStrengthMeter';
 import PrimaryButton from '../../Components/PrimaryButton';
-import ResendCodeSection from '../../Components/ResendCodeSection';
 import { AuthStyles } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
@@ -28,19 +28,34 @@ type Props = {
   };
 };
 
-const CheckEmailScreen = ({ navigation }: Props) => {
-  const [code, setCode] = useState('');
+const isPasswordValid = (password: string) =>
+  password.length >= 8 &&
+  /[A-Z]/.test(password) &&
+  /[0-9]/.test(password) &&
+  /[^A-Za-z0-9]/.test(password);
+
+const SetNewPasswordScreen = ({ navigation }: Props) => {
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleVerify = () => {
-    if (code.length !== 6) {
-      Toast.show('Please enter the 6-digit code');
+  const handleReset = () => {
+    if (!password || !confirmPassword) {
+      Toast.show('Please fill in all fields');
+      return;
+    }
+    if (!isPasswordValid(password)) {
+      Toast.show('Please meet all password requirements');
+      return;
+    }
+    if (password !== confirmPassword) {
+      Toast.show('Passwords do not match');
       return;
     }
     setLoading(true);
     setTimeout(() => {
       setLoading(false);
-      navigation.navigate('CodeVerified');
+      navigation.navigate('PasswordResetSuccess');
     }, 1000);
   };
 
@@ -54,32 +69,48 @@ const CheckEmailScreen = ({ navigation }: Props) => {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
             enableOnAndroid
-            bounces={false}>
+            bounces={false}
+          >
             <BackButton variant="pink" onPress={() => navigation.goBack()} />
 
-            <AuthIconBadge iconName="lock-outline" />
+            <AuthIconBadge iconName="hand-heart" iconSize={32} />
 
-            <Text style={styles.title}>{Strings.checkYourEmail}</Text>
-            <Text style={styles.subtitle}>{Strings.checkEmailSubtitle}</Text>
+            <Text style={styles.title}>{Strings.setNewPasswordTitle}</Text>
+            <Text style={styles.subtitle}>
+              {Strings.setNewPasswordSubtitle}
+            </Text>
 
-            <OtpCodeInput value={code} onChangeText={setCode} />
-
-            <ResendCodeSection
-              onResend={() => Toast.show('Reset code resent')}
+            <AuthInput
+              label={Strings.newPasswordLabel}
+              iconName="lock-outline"
+              placeholder={Strings.newPasswordPlaceholder}
+              value={password}
+              onChangeText={setPassword}
+              showToggle
+              secureTextEntry
             />
+
+            <AuthInput
+              label={Strings.confirmNewPasswordLabel}
+              iconName="shield-check-outline"
+              placeholder={Strings.confirmNewPasswordPlaceholder}
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              showToggle
+              secureTextEntry
+            />
+
+            <PasswordStrengthMeter password={password} />
+            <PasswordRequirements password={password} />
 
             <View style={styles.flexSpacer} />
 
             <View style={styles.bottomSection}>
               <PrimaryButton
-                title={Strings.verifyCode}
-                onPress={handleVerify}
+                title={Strings.resetPassword}
+                onPress={handleReset}
                 loading={loading}
                 showArrow
-              />
-              <AuthFooterHint
-                text={Strings.spamFolderHint}
-                style={styles.footerHint}
               />
             </View>
           </KeyboardAwareScrollView>
@@ -112,7 +143,7 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 14,
     color: Colors.textSecondary,
-    marginBottom: 28,
+    marginBottom: 24,
     fontFamily: Fonts.regular,
     lineHeight: 20,
     textAlign: 'center',
@@ -120,15 +151,12 @@ const styles = StyleSheet.create({
   },
   flexSpacer: {
     flex: 1,
-    minHeight: hp('10%'),
+    minHeight: hp('6%'),
   },
   bottomSection: {
     width: '100%',
     paddingBottom: AuthStyles.bottomSectionPadding,
   },
-  footerHint: {
-    marginTop: AuthStyles.footerHintTop,
-  },
 });
 
-export default CheckEmailScreen;
+export default SetNewPasswordScreen;
