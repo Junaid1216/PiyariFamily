@@ -47,7 +47,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: FontSizes.caption,
-    color: Colors.primary,
+    color: Colors.textSecondary,
     fontFamily: Fonts.medium,
     marginTop: hp('1%'),
   },

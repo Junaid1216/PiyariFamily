@@ -21,20 +21,26 @@ const SplashScreen = ({ navigation }: Props) => {
   }, [navigation]);
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={Colors.white} />
-      <View style={styles.content}>
+    <View style={styles.root}>
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" backgroundColor={Colors.white} />
+        <View style={styles.content}>
         <Image
           source={Images.splashIllustration}
           style={styles.splashImage}
           resizeMode="contain"
         />
-      </View>
-    </SafeAreaView>
+        </View>
+      </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: Colors.white,
+  },
   container: {
     flex: 1,
     backgroundColor: Colors.white,
@@ -44,6 +50,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: AuthStyles.horizontalPadding,
+    backgroundColor: Colors.white,
   },
   splashImage: {
     width: '100%',

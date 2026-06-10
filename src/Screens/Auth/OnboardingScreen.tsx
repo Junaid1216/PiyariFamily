@@ -12,7 +12,10 @@ import {
   View,
   ViewToken,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from 'react-native-safe-area-context';
 import AuthFooter from '../../Components/AuthFooter';
 import OnboardingDots from '../../Components/OnboardingDots';
 import OnboardingFeatureCard from '../../Components/OnboardingFeatureCard';
@@ -80,6 +83,7 @@ const SLIDES: Slide[] = [
 ];
 
 const OnboardingScreen = ({ navigation }: Props) => {
+  const insets = useSafeAreaInsets();
   const [activeIndex, setActiveIndex] = useState(0);
   const listRef = useRef<FlatList<Slide>>(null);
 
@@ -104,7 +108,7 @@ const OnboardingScreen = ({ navigation }: Props) => {
     <View style={styles.slide}>
       <View style={styles.illustrationWrapper}>
         <Image
-          source={Images.onboardingIllustration}
+          source={Images.OnBoardingPic}
           style={styles.illustration}
           resizeMode="contain"
         />
@@ -133,72 +137,88 @@ const OnboardingScreen = ({ navigation }: Props) => {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={Colors.white} />
+    <View style={styles.root}>
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" backgroundColor={Colors.white} />
 
-      <FlatList
-        ref={listRef}
-        data={SLIDES}
-        renderItem={renderSlide}
-        keyExtractor={item => item.id}
-        horizontal
-        pagingEnabled
-        bounces={false}
-        showsHorizontalScrollIndicator={false}
-        onMomentumScrollEnd={onScrollEnd}
-        onViewableItemsChanged={onViewableItemsChanged}
-        viewabilityConfig={viewabilityConfig}
-        getItemLayout={(_, index) => ({
-          length: SCREEN_WIDTH,
-          offset: SCREEN_WIDTH * index,
-          index,
-        })}
-        style={styles.list}
-        contentContainerStyle={styles.listContent}
-      />
-
-      <View style={styles.bottomSection}>
-        <PrimaryButton
-          title={Strings.getStarted}
-          onPress={() => navigation.replace('SignUp')}
-          showArrow
-          style={styles.button}
+        <FlatList
+          ref={listRef}
+          data={SLIDES}
+          renderItem={renderSlide}
+          keyExtractor={item => item.id}
+          horizontal
+          pagingEnabled
+          bounces={false}
+          showsHorizontalScrollIndicator={false}
+          onMomentumScrollEnd={onScrollEnd}
+          onViewableItemsChanged={onViewableItemsChanged}
+          viewabilityConfig={viewabilityConfig}
+          getItemLayout={(_, index) => ({
+            length: SCREEN_WIDTH,
+            offset: SCREEN_WIDTH * index,
+            index,
+          })}
+          style={styles.list}
+          contentContainerStyle={styles.listContent}
         />
 
-        <AuthFooter
-          prefix={Strings.alreadyHaveAccount}
-          linkText={Strings.logInLink}
-          onPress={() => navigation.replace('Login')}
-        />
-      </View>
-    </SafeAreaView>
+        <View
+          style={[
+            styles.bottomSection,
+            { paddingBottom: Math.max(insets.bottom, hp('2%')) },
+          ]}
+        >
+          <PrimaryButton
+            title={Strings.getStarted}
+            onPress={() => navigation.replace('SignUp')}
+            showArrow
+            style={styles.button}
+          />
+
+          <AuthFooter
+            prefix={Strings.alreadyHaveAccount}
+            linkText={Strings.logInLink}
+            onPress={() => navigation.replace('Login')}
+          />
+        </View>
+      </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: Colors.white,
+  },
   container: {
     flex: 1,
     backgroundColor: Colors.white,
   },
   list: {
     flex: 1,
+    backgroundColor: Colors.white,
   },
   listContent: {
     flexGrow: 1,
+    backgroundColor: Colors.white,
   },
   slide: {
     width: SCREEN_WIDTH,
     paddingHorizontal: AuthStyles.horizontalPadding,
     paddingTop: hp('0.5%'),
+    backgroundColor: Colors.white,
   },
   illustrationWrapper: {
     width: '100%',
+    height: hp('36%'),
     alignItems: 'center',
-    marginBottom: hp('1.75%'),
+    justifyContent: 'center',
+    marginBottom: hp('1.5%'),
   },
   illustration: {
-    width: wp('92%'),
-    height: hp('36%'),
+    width: wp('88%'),
+    height: '100%',
   },
   title: {
     fontSize: FontSizes.h2,
@@ -227,8 +247,8 @@ const styles = StyleSheet.create({
   },
   bottomSection: {
     paddingHorizontal: AuthStyles.horizontalPadding,
-    paddingBottom: AuthStyles.bottomSectionPadding,
     paddingTop: hp('1%'),
+    backgroundColor: Colors.white,
   },
   button: {
     shadowColor: Colors.primary,

@@ -9,6 +9,7 @@ export const Images = {
   heartIcon: require('./images/heart.png'),
   resetSuccessCheck: require('./images/Background (3).png'),
   onboardingIllustration: require('./images/image 3 (4).png'),
+  OnBoardingPic: require('./images/OnBoarding.png'),
   verifiedIcon: require('./images/Verified.png'),
   millionsIcon: require('./images/Millions.png'),
   privateIcon: require('./images/Private.png'),
