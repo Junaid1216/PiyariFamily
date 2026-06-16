@@ -7,7 +7,7 @@ export const Colors = {
   gradientStart: '#FFCDD9',
   gradientMid: '#FFE5EC',
   gradientEnd: '#FFFFFF',
-  text: '#1A1A1A',
+  text: '#71717B',
   textSecondary: '#6B6B6B',
   textLight: '#9E9E9E',
   label: '#2C2C2C',

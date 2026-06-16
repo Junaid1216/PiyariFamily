@@ -250,7 +250,6 @@ const styles = StyleSheet.create({
     width: wp('18%'),
     height: wp('18%'),
     borderRadius: wp('5%'),
-    // backgroundColor: Colors.gold,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: hp('2.5%'),

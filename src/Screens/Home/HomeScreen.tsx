@@ -13,12 +13,20 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Images } from '../../Assets';
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
+import { HomeStackParamList } from '../../Navigation/HomeStackNavigator';
 import { fs, hp, wp } from '../../Functions/responsive';
+
+type HomeNavigationProp = NativeStackNavigationProp<
+  HomeStackParamList,
+  'HomeMain'
+>;
 
 type MatchTag = {
   icon: string;
@@ -102,7 +110,7 @@ const SUGGESTED_MATCHES: SuggestedMatch[] = [
     name: 'Rohan',
     age: 29,
     location: 'Karachi',
-    profession: 'Engineer',
+    profession: 'Software Engineer',
     image: Images.maleProfile,
   },
 ];
@@ -112,6 +120,7 @@ const HORIZONTAL_PADDING = wp('5.5%');
 const CARD_WIDTH = SCREEN_WIDTH - HORIZONTAL_PADDING * 2;
 
 const HomeScreen = () => {
+  const navigation = useNavigation<HomeNavigationProp>();
   const [activeIndex, setActiveIndex] = useState(0);
   const sliderRef = useRef<FlatList<FeaturedMatch>>(null);
 
@@ -288,7 +297,14 @@ const HomeScreen = () => {
           contentContainerStyle={styles.suggestedList}
         >
           {SUGGESTED_MATCHES.map(match => (
-            <View key={match.id} style={styles.suggestedCard}>
+            <TouchableOpacity
+              key={match.id}
+              style={styles.suggestedCard}
+              activeOpacity={0.9}
+              onPress={() =>
+                navigation.navigate('ProfileDetail', { profileId: match.id })
+              }
+            >
               <View style={styles.suggestedImageWrap}>
                 <Image
                   source={match.image}
@@ -342,7 +358,7 @@ const HomeScreen = () => {
                   </View>
                 </View>
               </View>
-            </View>
+            </TouchableOpacity>
           ))}
         </ScrollView>
 

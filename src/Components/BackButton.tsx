@@ -8,9 +8,10 @@ import { fs, hp } from '../Functions/responsive';
 type Props = {
   onPress: () => void;
   variant?: 'default' | 'gray' | 'pink';
+  compact?: boolean;
 };
 
-const BackButton = ({ onPress, variant = 'default' }: Props) => {
+const BackButton = ({ onPress, variant = 'default', compact = false }: Props) => {
   const isPink = variant === 'pink';
   const isGray = variant === 'gray';
 
@@ -20,6 +21,7 @@ const BackButton = ({ onPress, variant = 'default' }: Props) => {
         styles.button,
         isPink && styles.buttonPink,
         isGray && styles.buttonGray,
+        compact && styles.buttonCompact,
       ]}
       onPress={onPress}
       activeOpacity={0.8}
@@ -52,6 +54,9 @@ const styles = StyleSheet.create({
   buttonGray: {
     borderColor: Colors.border,
     backgroundColor: Colors.white,
+  },
+  buttonCompact: {
+    marginBottom: 0,
   },
   icon: {
     width: fs(22),

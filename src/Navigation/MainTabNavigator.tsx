@@ -7,7 +7,8 @@ import { Colors } from '../Constant/Colors';
 import { Fonts } from '../Constant/Fonts';
 import { Strings } from '../Constant/Strings';
 import { fs, hp, wp } from '../Functions/responsive';
-import HomeScreen from '../Screens/Home/HomeScreen';
+import HomeStackNavigator from './HomeStackNavigator';
+import LikeStackNavigator from './LikeStackNavigator';
 import PlaceholderScreen from '../Screens/Main/PlaceholderScreen';
 
 export type MainTabParamList = {
@@ -28,7 +29,7 @@ type TabIconProps = {
 };
 
 const TabIcon = ({ name, focused, color }: TabIconProps) => {
-  if (focused && name === 'home') {
+  if (focused && (name === 'home' || name === 'heart-outline')) {
     return (
       <View style={styles.activeIconWrap}>
         <Icon name={name} size={fs(22)} color={Colors.primary} />
@@ -81,7 +82,7 @@ const MainTabNavigator = () => {
     >
       <Tab.Screen
         name="Home"
-        component={HomeScreen}
+        component={HomeStackNavigator}
         options={{ tabBarLabel: Strings.tabHome }}
       />
       <Tab.Screen name="Search" options={{ tabBarLabel: Strings.tabSearch }}>
@@ -94,7 +95,7 @@ const MainTabNavigator = () => {
         {() => <PlaceholderScreen title={Strings.tabMessages} />}
       </Tab.Screen>
       <Tab.Screen name="Like" options={{ tabBarLabel: Strings.tabLike }}>
-        {() => <PlaceholderScreen title={Strings.tabLike} />}
+        {() => <LikeStackNavigator />}
       </Tab.Screen>
       <Tab.Screen name="Profile" options={{ tabBarLabel: Strings.tabProfile }}>
         {() => <PlaceholderScreen title={Strings.tabProfile} />}
