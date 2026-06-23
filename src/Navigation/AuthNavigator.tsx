@@ -53,11 +53,12 @@ const AuthNavigator = () => {
   return (
     <NavigationContainer>
       <Stack.Navigator
-        initialRouteName="Splash"
+        initialRouteName="Main"
         screenOptions={{
           headerShown: false,
           animation: 'slide_from_right',
-        }}>
+        }}
+      >
         <Stack.Screen name="Splash" component={SplashScreen} />
         <Stack.Screen name="Onboarding" component={OnboardingScreen} />
         <Stack.Screen name="Login" component={LoginScreen} />
@@ -79,10 +80,7 @@ const AuthNavigator = () => {
           name="PhysicalDetails"
           component={PhysicalDetailsScreen}
         />
-        <Stack.Screen
-          name="FaithCommunity"
-          component={FaithCommunityScreen}
-        />
+        <Stack.Screen name="FaithCommunity" component={FaithCommunityScreen} />
         <Stack.Screen name="AddPhotos" component={AddPhotosScreen} />
         <Stack.Screen name="ProfileReady" component={ProfileReadyScreen} />
         <Stack.Screen

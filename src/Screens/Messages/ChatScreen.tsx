@@ -17,15 +17,22 @@ import {
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import Toast from 'react-native-simple-toast';
 import BackButton from '../../Components/BackButton';
+import BlockReportModal from '../../Components/BlockReportModal';
+import ProfilePreviewSheet from '../../Components/ProfilePreviewSheet';
 import { Images } from '../../Assets';
 import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
+import { PROFILE_DETAILS } from '../../Constant/MatchProfiles';
 import { AYESHA_CHAT_MESSAGES } from '../../Constant/Messages';
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
+import { FREE_DAILY_MESSAGE_LIMIT } from '../../Constant/Subscription';
 import { Strings } from '../../Constant/Strings';
 import { MessagesStackParamList } from '../../Navigation/MessagesStackNavigator';
 import { getFooterBottomPadding } from '../../Functions/safeArea';
+import { navigateToSubscription } from '../../Functions/subscriptionNavigation';
+import { useHideTabBar } from '../../Functions/useHideTabBar';
 import { fs, hp, wp } from '../../Functions/responsive';
 
 type ChatRouteProp = RouteProp<MessagesStackParamList, 'Chat'>;
@@ -35,10 +42,47 @@ const ChatScreen = () => {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<ChatRouteProp>();
   const insets = useSafeAreaInsets();
+  useHideTabBar();
   const [message, setMessage] = useState('');
+  const [showProfilePreview, setShowProfilePreview] = useState(false);
+  const [showBlockReport, setShowBlockReport] = useState(false);
+  const [sentCount, setSentCount] = useState(
+    AYESHA_CHAT_MESSAGES.filter(item => item.isMine).length,
+  );
 
   const contactName = route.params.name || 'Ayesha Khan';
   const messages = AYESHA_CHAT_MESSAGES;
+  const profile = PROFILE_DETAILS['1'];
+
+  const handleSend = () => {
+    const trimmed = message.trim();
+    if (!trimmed) {
+      return;
+    }
+
+    if (sentCount >= FREE_DAILY_MESSAGE_LIMIT) {
+      navigateToSubscription(navigation, 'PremiumPaywall');
+      return;
+    }
+
+    setSentCount(prev => prev + 1);
+    setMessage('');
+    Toast.show('Message sent');
+  };
+
+  const handleViewFullProfile = () => {
+    setShowProfilePreview(false);
+    navigation.getParent()?.navigate('Home', {
+      screen: 'ProfileDetail',
+      params: { profileId: '1' },
+    });
+  };
+
+  const handleBlockReport = (_reasonId: string, _details: string) => {
+    setShowBlockReport(false);
+    Toast.show(Strings.reportSubmitted);
+    navigation.goBack();
+  };
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
@@ -48,23 +92,33 @@ const ChatScreen = () => {
           compact
           onPress={() => navigation.goBack()}
         />
-        <Image
-          source={Images.femaleProfile}
-          style={styles.headerAvatar}
-          resizeMode="cover"
-        />
-        <View style={styles.headerInfo}>
-          <Text style={styles.headerName}>{contactName}</Text>
-          <View style={styles.onlineRow}>
-            <View style={styles.onlineDot} />
-            <Text style={styles.onlineText}>{Strings.onlineNow}</Text>
+        <TouchableOpacity
+          style={styles.headerProfileTap}
+          activeOpacity={0.85}
+          onPress={() => setShowProfilePreview(true)}
+        >
+          <Image
+            source={Images.femaleProfile}
+            style={styles.headerAvatar}
+            resizeMode="cover"
+          />
+          <View style={styles.headerInfo}>
+            <Text style={styles.headerName}>{contactName}</Text>
+            <View style={styles.onlineRow}>
+              <View style={styles.onlineDot} />
+              <Text style={styles.onlineText}>{Strings.onlineNow}</Text>
+            </View>
           </View>
-        </View>
+        </TouchableOpacity>
         <View style={styles.headerActions}>
           <TouchableOpacity style={styles.headerActionBtn} activeOpacity={0.85}>
             <Icon name="phone-outline" size={fs(20)} color={Colors.primary} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.headerActionBtn} activeOpacity={0.85}>
+          <TouchableOpacity
+            style={styles.headerActionBtn}
+            activeOpacity={0.85}
+            onPress={() => setShowBlockReport(true)}
+          >
             <Icon
               name="block-helper"
               size={fs(20)}
@@ -158,11 +212,31 @@ const ChatScreen = () => {
             onChangeText={setMessage}
             multiline
           />
-          <TouchableOpacity style={styles.sendBtn} activeOpacity={0.85}>
+          <TouchableOpacity
+            style={styles.sendBtn}
+            activeOpacity={0.85}
+            onPress={handleSend}
+          >
             <Icon name="send" size={fs(18)} color={Colors.white} />
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      {profile ? (
+        <ProfilePreviewSheet
+          visible={showProfilePreview}
+          profile={profile}
+          onClose={() => setShowProfilePreview(false)}
+          onViewFullProfile={handleViewFullProfile}
+        />
+      ) : null}
+
+      <BlockReportModal
+        visible={showBlockReport}
+        contactName={contactName.split(' ')[0]}
+        onClose={() => setShowBlockReport(false)}
+        onSubmit={handleBlockReport}
+      />
     </SafeAreaView>
   );
 };
@@ -183,11 +257,16 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.divider,
   },
+  headerProfileTap: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: wp('2%'),
+  },
   headerAvatar: {
     width: wp('11%'),
     height: wp('11%'),
     borderRadius: wp('5.5%'),
-    marginLeft: wp('2%'),
     marginRight: wp('2.5%'),
   },
   headerInfo: {

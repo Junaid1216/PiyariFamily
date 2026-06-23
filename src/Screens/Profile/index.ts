@@ -1,2 +1,10 @@
 export { default as SettingsScreen } from './SettingsScreen';
 export { default as EditProfileScreen } from './EditProfileScreen';
+export { default as VerifyProfileScreen } from './VerifyProfileScreen';
+export { default as VerifyProfileCodeScreen } from './VerifyProfileCodeScreen';
+export { default as ProfileVerifiedScreen } from './ProfileVerifiedScreen';
+export { default as NotificationsScreen } from './NotificationsScreen';
+export { default as ChangePasswordScreen } from './ChangePasswordScreen';
+export { default as AccountOptionsScreen } from './AccountOptionsScreen';
+export { default as ReferralProgramScreen } from './ReferralProgramScreen';
+export { default as MyRewardsScreen } from './MyRewardsScreen';

@@ -19,6 +19,7 @@ import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
 import { MessagesStackParamList } from '../../Navigation/MessagesStackNavigator';
+import { navigateToProfileScreen } from '../../Functions/profileNavigation';
 import { fs, hp, wp } from '../../Functions/responsive';
 
 type NavigationProp = NativeStackNavigationProp<
@@ -37,7 +38,11 @@ const MessagesScreen = () => {
       <View style={styles.header}>
         <BackButton variant="pink" compact onPress={() => navigation.goBack()} />
         <Text style={styles.headerTitle}>{Strings.messagesTitle}</Text>
-        <TouchableOpacity style={styles.notificationBtn} activeOpacity={0.8}>
+        <TouchableOpacity
+          style={styles.notificationBtn}
+          activeOpacity={0.8}
+          onPress={() => navigateToProfileScreen(navigation, 'Notifications')}
+        >
           <Icon name="bell-outline" size={fs(20)} color={Colors.primary} />
           <View style={styles.notificationDot} />
         </TouchableOpacity>

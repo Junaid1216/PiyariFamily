@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React from 'react';
 import {
   Image,
   ScrollView,
@@ -10,7 +10,6 @@ import {
 import LinearGradient from 'react-native-linear-gradient';
 import {
   RouteProp,
-  useFocusEffect,
   useNavigation,
   useRoute,
 } from '@react-navigation/native';
@@ -36,14 +35,6 @@ const ProfileDetailScreen = () => {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<RouteProps>();
   const profile = PROFILE_DETAILS[route.params.profileId];
-
-  useFocusEffect(
-    useCallback(() => {
-      const parent = navigation.getParent();
-      parent?.setOptions({ tabBarStyle: { display: 'none' } });
-      return () => parent?.setOptions({ tabBarStyle: undefined });
-    }, [navigation]),
-  );
 
   if (!profile) {
     return null;

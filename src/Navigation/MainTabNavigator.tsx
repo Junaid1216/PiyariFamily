@@ -1,25 +1,29 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
+import { NavigatorScreenParams } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Colors } from '../Constant/Colors';
 import { Fonts } from '../Constant/Fonts';
 import { Strings } from '../Constant/Strings';
 import { getTabBarBottomPadding, resolveInsets } from '../Functions/safeArea';
+import { getTabBarStyle } from '../Functions/tabBarVisibility';
 import { fs, hp, wp } from '../Functions/responsive';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import HomeStackNavigator from './HomeStackNavigator';
 import LikeStackNavigator from './LikeStackNavigator';
 import SearchStackNavigator from './SearchStackNavigator';
 import MessagesStackNavigator from './MessagesStackNavigator';
-import ProfileStackNavigator from './ProfileStackNavigator';
+import ProfileStackNavigator, {
+  ProfileStackParamList,
+} from './ProfileStackNavigator';
 
 export type MainTabParamList = {
   Home: undefined;
   Search: undefined;
   Messages: undefined;
   Like: undefined;
-  Profile: undefined;
+  Profile: NavigatorScreenParams<ProfileStackParamList>;
 };
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -53,6 +57,13 @@ const TabIcon = ({ name, focused, color }: TabIconProps) => {
 const MainTabNavigator = () => {
   const insets = resolveInsets(useSafeAreaInsets());
   const bottomPadding = getTabBarBottomPadding(insets.bottom);
+  const visibleTabBarStyle = [
+    styles.tabBar,
+    {
+      height: TAB_BAR_CONTENT_HEIGHT + bottomPadding,
+      paddingBottom: bottomPadding,
+    },
+  ];
 
   return (
     <Tab.Navigator
@@ -61,13 +72,7 @@ const MainTabNavigator = () => {
         tabBarActiveTintColor: Colors.primary,
         tabBarInactiveTintColor: Colors.textLight,
         tabBarLabelStyle: styles.tabLabel,
-        tabBarStyle: [
-          styles.tabBar,
-          {
-            height: TAB_BAR_CONTENT_HEIGHT + bottomPadding,
-            paddingBottom: bottomPadding,
-          },
-        ],
+        tabBarStyle: getTabBarStyle(route, visibleTabBarStyle),
         tabBarIcon: ({ focused, color }) => {
           const iconMap: Record<keyof MainTabParamList, string> = {
             Home: 'home',
@@ -104,7 +109,15 @@ const MainTabNavigator = () => {
       <Tab.Screen name="Like" options={{ tabBarLabel: Strings.tabLike }}>
         {() => <LikeStackNavigator />}
       </Tab.Screen>
-      <Tab.Screen name="Profile" options={{ tabBarLabel: Strings.tabProfile }}>
+      <Tab.Screen
+        name="Profile"
+        options={{ tabBarLabel: Strings.tabProfile }}
+        listeners={({ navigation }) => ({
+          tabPress: () => {
+            navigation.navigate('Profile', { screen: 'Settings' });
+          },
+        })}
+      >
         {() => <ProfileStackNavigator />}
       </Tab.Screen>
     </Tab.Navigator>

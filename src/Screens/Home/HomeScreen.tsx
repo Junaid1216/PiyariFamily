@@ -21,6 +21,8 @@ import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
 import { HomeStackParamList } from '../../Navigation/HomeStackNavigator';
+import { navigateToSubscription } from '../../Functions/subscriptionNavigation';
+import { navigateToProfileScreen } from '../../Functions/profileNavigation';
 import { fs, hp, wp } from '../../Functions/responsive';
 
 type HomeNavigationProp = NativeStackNavigationProp<
@@ -222,7 +224,11 @@ const HomeScreen = () => {
             {Strings.appName}
           </Text>
 
-          <TouchableOpacity style={styles.notificationBtn} activeOpacity={0.8}>
+          <TouchableOpacity
+            style={styles.notificationBtn}
+            activeOpacity={0.8}
+            onPress={() => navigateToProfileScreen(navigation, 'Notifications')}
+          >
             <Icon name="bell-outline" size={fs(20)} color={Colors.primary} />
             <View style={styles.notificationDot} />
           </TouchableOpacity>
@@ -230,6 +236,27 @@ const HomeScreen = () => {
 
         <Text style={styles.greeting}>{Strings.homeGreeting}</Text>
         <Text style={styles.subtitle}>{Strings.homeSubtitle}</Text>
+
+        <TouchableOpacity
+          style={styles.premiumBanner}
+          activeOpacity={0.88}
+          onPress={() => navigateToSubscription(navigation, 'ChooseYourPlan')}
+        >
+          <View style={styles.premiumBannerLeft}>
+            <View style={styles.premiumIconWrap}>
+              <Icon name="crown" size={fs(20)} color={Colors.gold} />
+            </View>
+            <View>
+              <Text style={styles.premiumBannerTitle}>
+                {Strings.premiumBannerTitle}
+              </Text>
+              <Text style={styles.premiumBannerSubtitle}>
+                {Strings.premiumBannerSubtitle}
+              </Text>
+            </View>
+          </View>
+          <Icon name="chevron-right" size={fs(22)} color={Colors.primary} />
+        </TouchableOpacity>
 
         <FlatList
           ref={sliderRef}
@@ -446,7 +473,44 @@ const styles = StyleSheet.create({
     fontSize: fs(13),
     fontFamily: Fonts.regular,
     color: Colors.textLight,
+    marginBottom: hp('1.5%'),
+  },
+  premiumBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.tabActiveBg,
+    borderRadius: wp('4%'),
+    borderWidth: 1,
+    borderColor: Colors.focusBorder,
+    paddingHorizontal: wp('4%'),
+    paddingVertical: hp('1.4%'),
     marginBottom: hp('2%'),
+  },
+  premiumBannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: wp('3%'),
+    flex: 1,
+  },
+  premiumIconWrap: {
+    width: wp('10%'),
+    height: wp('10%'),
+    borderRadius: wp('3%'),
+    backgroundColor: '#FFF8E7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  premiumBannerTitle: {
+    fontSize: fs(14),
+    fontFamily: Fonts.bold,
+    color: Colors.primary,
+    marginBottom: hp('0.2%'),
+  },
+  premiumBannerSubtitle: {
+    fontSize: fs(11),
+    fontFamily: Fonts.regular,
+    color: Colors.textLight,
   },
   featuredSlider: {
     width: CARD_WIDTH,

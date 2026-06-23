@@ -99,27 +99,32 @@ const CareerScreen = ({ navigation }: Props) => {
           <Text style={styles.subtitle}>{Strings.yourCareerSubtitle}</Text>
 
           <Text style={styles.fieldLabel}>{Strings.employmentTypeLabel}</Text>
-          <View style={styles.segmentRow}>
-            {EMPLOYMENT_TYPE_OPTIONS.map(option => (
-              <TouchableOpacity
-                key={option}
-                style={[
-                  styles.segmentBtn,
-                  employmentType === option && styles.segmentBtnActive,
-                ]}
-                activeOpacity={0.85}
-                onPress={() => setEmploymentType(option)}
-              >
-                <Text
+          <View style={styles.segmentContainer}>
+            <View style={styles.segmentRow}>
+              {EMPLOYMENT_TYPE_OPTIONS.map(option => (
+                <TouchableOpacity
+                  key={option}
                   style={[
-                    styles.segmentText,
-                    employmentType === option && styles.segmentTextActive,
+                    styles.segmentBtn,
+                    employmentType === option && styles.segmentBtnActive,
                   ]}
+                  activeOpacity={0.85}
+                  onPress={() => setEmploymentType(option)}
                 >
-                  {EMPLOYMENT_LABELS[option]}
-                </Text>
-              </TouchableOpacity>
-            ))}
+                  <Text
+                    style={[
+                      styles.segmentText,
+                      employmentType === option && styles.segmentTextActive,
+                    ]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.8}
+                  >
+                    {EMPLOYMENT_LABELS[option]}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
 
           <AuthInput
@@ -223,29 +228,33 @@ const styles = StyleSheet.create({
     marginBottom: hp('1%'),
     fontFamily: Fonts.medium,
   },
+  segmentContainer: {
+    backgroundColor: Colors.tabActiveBg,
+    borderRadius: AuthStyles.inputRadius,
+    borderWidth: 1,
+    borderColor: Colors.focusBorder,
+    padding: wp('1.5%'),
+    marginBottom: hp('2.2%'),
+  },
   segmentRow: {
     flexDirection: 'row',
-    gap: wp('2%'),
-    marginBottom: hp('2.2%'),
+    gap: wp('1.5%'),
   },
   segmentBtn: {
     flex: 1,
-    // height: hp('6'),
-    paddingVertical: hp('1.5%'),
-    borderRadius: AuthStyles.inputRadius,
-    borderWidth: 1.2,
-    borderColor: Colors.focusBorder,
+    minHeight: hp('5.2%'),
+    paddingVertical: hp('1.2%'),
+    paddingHorizontal: wp('1%'),
+    borderRadius: wp('2.5%'),
     backgroundColor: Colors.white,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: wp('1%'),
   },
   segmentBtnActive: {
     backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
   },
   segmentText: {
-    fontSize: fs(11),
+    fontSize: fs(12),
     fontFamily: Fonts.semiBold,
     color: Colors.primary,
     textAlign: 'center',

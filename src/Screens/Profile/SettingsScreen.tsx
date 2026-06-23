@@ -104,7 +104,11 @@ const SettingsScreen = () => {
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity style={styles.referCard} activeOpacity={0.85}>
+        <TouchableOpacity
+          style={styles.referCard}
+          activeOpacity={0.85}
+          onPress={() => navigation.navigate('ReferralProgram')}
+        >
           <View style={styles.referIconWrap}>
             <View style={styles.referIconBox}>
               <Icon name="gift-outline" size={fs(22)} color={Colors.white} />
@@ -175,6 +179,7 @@ const SettingsScreen = () => {
             icon="shield-check-outline"
             title={Strings.verifyYourProfile}
             subtitle={Strings.verifyProfileSubtitle}
+            onPress={() => navigation.navigate('VerifyProfile')}
           />
         </View>
 
@@ -184,6 +189,7 @@ const SettingsScreen = () => {
             icon="lock-outline"
             title={Strings.changePassword}
             subtitle={Strings.updateLoginPassword}
+            onPress={() => navigation.navigate('ChangePassword')}
           />
         </View>
 
@@ -195,6 +201,16 @@ const SettingsScreen = () => {
             iconColor={Colors.gold}
             title={Strings.myPlan}
             subtitle={Strings.vipPlanActive}
+            onPress={() => navigation.navigate('ManageSubscription')}
+          />
+          <View style={styles.itemDivider} />
+          <SettingItem
+            icon="star-outline"
+            iconBg={Colors.tabActiveBg}
+            iconColor={Colors.gold}
+            title={Strings.chooseYourPlan}
+            subtitle={Strings.premiumBannerSubtitle}
+            onPress={() => navigation.navigate('ChooseYourPlan')}
           />
         </View>
 
@@ -232,6 +248,7 @@ const SettingsScreen = () => {
             title={Strings.deactivateAccount}
             subtitle={Strings.deactivateSubtitle}
             danger
+            onPress={() => navigation.navigate('AccountOptions')}
           />
         </View>
       </ScrollView>

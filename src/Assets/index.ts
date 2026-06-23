@@ -29,4 +29,5 @@ export const Images = {
   profileReadyIllustration: require('./images/ProfileReady.png'),
   communityIcon: require('./images/community.png'),
   msgTextIcon: require('./images/msgtext.png'),
+  profileBoostIcon: require('./images/profileBoast.png'),
 };

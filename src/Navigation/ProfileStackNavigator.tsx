@@ -1,10 +1,50 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { EditProfileScreen, SettingsScreen } from '../Screens/Profile';
+import {
+  AccountOptionsScreen,
+  ChangePasswordScreen,
+  EditProfileScreen,
+  MyRewardsScreen,
+  NotificationsScreen,
+  ProfileVerifiedScreen,
+  ReferralProgramScreen,
+  SettingsScreen,
+  VerifyProfileCodeScreen,
+  VerifyProfileScreen,
+} from '../Screens/Profile';
+import {
+  ChooseYourPlanScreen,
+  ComparePlansScreen,
+  CompletePaymentScreen,
+  ManageSubscriptionScreen,
+  PremiumPaywallScreen,
+  PremiumSuccessScreen,
+} from '../Screens/Subscription';
 
 export type ProfileStackParamList = {
   Settings: undefined;
   EditProfile: undefined;
+  VerifyProfile: undefined;
+  VerifyProfileCode: { phone: string };
+  ProfileVerified: { phone: string };
+  Notifications: undefined;
+  ChangePassword: undefined;
+  AccountOptions: undefined;
+  ReferralProgram: undefined;
+  MyRewards: undefined;
+  ChooseYourPlan: undefined;
+  ComparePlans: undefined;
+  PremiumPaywall: undefined;
+  CompletePayment: {
+    plan: 'VIP' | 'VVIP';
+    price: number;
+    priceLabel: string;
+  };
+  PremiumSuccess: {
+    plan: 'VIP' | 'VVIP';
+    priceLabel: string;
+  };
+  ManageSubscription: undefined;
 };
 
 const Stack = createNativeStackNavigator<ProfileStackParamList>();
@@ -19,6 +59,30 @@ const ProfileStackNavigator = () => {
     >
       <Stack.Screen name="Settings" component={SettingsScreen} />
       <Stack.Screen name="EditProfile" component={EditProfileScreen} />
+      <Stack.Screen name="VerifyProfile" component={VerifyProfileScreen} />
+      <Stack.Screen
+        name="VerifyProfileCode"
+        component={VerifyProfileCodeScreen}
+      />
+      <Stack.Screen
+        name="ProfileVerified"
+        component={ProfileVerifiedScreen}
+        options={{ animation: 'fade' }}
+      />
+      <Stack.Screen name="Notifications" component={NotificationsScreen} />
+      <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
+      <Stack.Screen name="AccountOptions" component={AccountOptionsScreen} />
+      <Stack.Screen name="ReferralProgram" component={ReferralProgramScreen} />
+      <Stack.Screen name="MyRewards" component={MyRewardsScreen} />
+      <Stack.Screen name="ChooseYourPlan" component={ChooseYourPlanScreen} />
+      <Stack.Screen name="ComparePlans" component={ComparePlansScreen} />
+      <Stack.Screen name="PremiumPaywall" component={PremiumPaywallScreen} />
+      <Stack.Screen name="CompletePayment" component={CompletePaymentScreen} />
+      <Stack.Screen name="PremiumSuccess" component={PremiumSuccessScreen} />
+      <Stack.Screen
+        name="ManageSubscription"
+        component={ManageSubscriptionScreen}
+      />
     </Stack.Navigator>
   );
 };

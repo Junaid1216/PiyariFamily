@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React from 'react';
 import {
   Image,
   ScrollView,
@@ -10,7 +10,6 @@ import {
 import LinearGradient from 'react-native-linear-gradient';
 import {
   RouteProp,
-  useFocusEffect,
   useNavigation,
   useRoute,
 } from '@react-navigation/native';
@@ -44,14 +43,6 @@ const MatchSuccessScreen = () => {
 
   const matchSubtitle = Strings.matchSubtitle.replace('{name}', name);
   const interestNotice = Strings.interestSentNotice.replace('{name}', fullName);
-
-  useFocusEffect(
-    useCallback(() => {
-      const parent = navigation.getParent();
-      parent?.setOptions({ tabBarStyle: { display: 'none' } });
-      return () => parent?.setOptions({ tabBarStyle: undefined });
-    }, [navigation]),
-  );
 
   return (
     <LinearGradient

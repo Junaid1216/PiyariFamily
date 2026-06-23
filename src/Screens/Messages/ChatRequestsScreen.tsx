@@ -18,6 +18,7 @@ import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
 import { MessagesStackParamList } from '../../Navigation/MessagesStackNavigator';
+import { useHideTabBar } from '../../Functions/useHideTabBar';
 import { fs, hp, wp } from '../../Functions/responsive';
 
 type NavigationProp = NativeStackNavigationProp<
@@ -27,6 +28,7 @@ type NavigationProp = NativeStackNavigationProp<
 
 const ChatRequestsScreen = () => {
   const navigation = useNavigation<NavigationProp>();
+  useHideTabBar();
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
