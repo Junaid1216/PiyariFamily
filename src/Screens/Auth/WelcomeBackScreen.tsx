@@ -165,7 +165,6 @@ const styles = StyleSheet.create({
     color: Colors.primaryDark,
     fontFamily: Fonts.medium,
     textAlign: 'center',
-    fontStyle: 'italic',
   },
   title: {
     fontSize: FontSizes.h1,

@@ -272,7 +272,6 @@ const styles = StyleSheet.create({
     color: Colors.primaryDark,
     fontFamily: Fonts.medium,
     textAlign: 'center',
-    fontStyle: 'italic',
     marginBottom: hp('1.2%'),
   },
   subtitle: {

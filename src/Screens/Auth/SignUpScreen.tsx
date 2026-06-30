@@ -78,6 +78,7 @@ const SignUpScreen = ({ navigation }: Props) => {
 
       Toast.show(response.message || 'Registration failed. Please try again.');
     } catch (error) {
+      console.log(error);
       Toast.show(getApiErrorMessage(error));
     } finally {
       setLoading(false);

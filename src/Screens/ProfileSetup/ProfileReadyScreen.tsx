@@ -24,7 +24,10 @@ const ProfileReadyScreen = ({ navigation }: Props) => {
   const insets = useSafeAreaInsets();
 
   return (
-    <SafeAreaView style={styles.root} edges={['top', 'left', 'right', 'bottom']}>
+    <SafeAreaView
+      style={styles.root}
+      edges={['top', 'left', 'right', 'bottom']}
+    >
       <View style={styles.content}>
         <View style={styles.centerArea}>
           <Image
@@ -112,7 +115,6 @@ const styles = StyleSheet.create({
     color: Colors.primaryDark,
     fontFamily: Fonts.medium,
     textAlign: 'center',
-    fontStyle: 'italic',
     marginBottom: hp('2.5%'),
   },
   title: {
