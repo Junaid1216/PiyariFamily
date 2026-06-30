@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import Modal from 'react-native-modal';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Images } from '../Assets';
 import { AuthStyles, FontSizes } from '../Constant/AuthStyles';
@@ -17,6 +18,7 @@ import { ProfileDetail } from '../Constant/MatchProfiles';
 import { Colors } from '../Constant/Colors';
 import { Fonts } from '../Constant/Fonts';
 import { Strings } from '../Constant/Strings';
+import { getFooterBottomPadding } from '../Functions/safeArea';
 import { fs, hp, wp } from '../Functions/responsive';
 
 type Props = {
@@ -35,6 +37,7 @@ const ProfilePreviewSheet = ({
   onClose,
   onViewFullProfile,
 }: Props) => {
+  const insets = useSafeAreaInsets();
   const scrollViewRef = useRef<ScrollView>(null);
   const [scrollOffset, setScrollOffset] = useState(0);
   const quickChips = profile.quickInfo.slice(0, 3);
@@ -106,7 +109,18 @@ const ProfilePreviewSheet = ({
               />
             </View>
 
-            <View style={styles.badgeColumn}>
+            <Text style={styles.name}>{profile.fullName}</Text>
+
+            <View style={styles.metaRow}>
+              <View style={styles.tierBadge}>
+                <Icon
+                  name={profile.tier === 'VIP' ? 'star' : 'crown'}
+                  size={fs(10)}
+                  color={Colors.white}
+                />
+                <Text style={styles.tierText}>{profile.tier}</Text>
+              </View>
+
               {profile.isVerified ? (
                 <View style={styles.verifiedBadge}>
                   <Image
@@ -120,23 +134,12 @@ const ProfilePreviewSheet = ({
                 </View>
               ) : null}
 
-              <View style={styles.tierBadge}>
-                <Icon
-                  name={profile.tier === 'VIP' ? 'star' : 'crown'}
-                  size={fs(10)}
-                  color={Colors.white}
-                />
-                <Text style={styles.tierText}>{profile.tier}</Text>
+              <View style={styles.locationRow}>
+                <Icon name="map-marker" size={fs(14)} color={Colors.gold} />
+                <Text style={styles.locationText}>
+                  {profile.location}, Pakistan
+                </Text>
               </View>
-            </View>
-
-            <Text style={styles.name}>{profile.fullName}</Text>
-
-            <View style={styles.locationRow}>
-              <Icon name="map-marker" size={fs(14)} color={Colors.gold} />
-              <Text style={styles.locationText}>
-                {profile.location}, Pakistan
-              </Text>
             </View>
           </View>
 
@@ -188,7 +191,12 @@ const ProfilePreviewSheet = ({
           </View>
         </ScrollView>
 
-        <View style={styles.footer}>
+        <View
+          style={[
+            styles.footer,
+            { paddingBottom: getFooterBottomPadding(insets.bottom) },
+          ]}
+        >
           <TouchableOpacity
             style={styles.primaryBtn}
             activeOpacity={0.88}
@@ -278,11 +286,12 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: wp('14.5%'),
   },
-  badgeColumn: {
+  metaRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: hp('0.4%'),
-    marginTop: -hp('1.2%'),
-    marginBottom: hp('0.8%'),
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+    gap: wp('2.5%'),
   },
   tierBadge: {
     flexDirection: 'row',
@@ -302,7 +311,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: wp('1%'),
-    backgroundColor: Colors.white,
+    backgroundColor: '#FFF3D0',
     paddingHorizontal: wp('2%'),
     paddingVertical: hp('0.35%'),
     borderRadius: wp('5.5%'),
@@ -312,12 +321,12 @@ const styles = StyleSheet.create({
   verifiedIcon: {
     width: fs(11),
     height: fs(11),
-    tintColor: Colors.gold,
+    tintColor: '#DD9314',
   },
   verifiedText: {
     fontSize: fs(9),
     fontFamily: Fonts.medium,
-    color: Colors.black,
+    color: '#DD9314',
   },
   name: {
     fontSize: fs(20),
@@ -432,7 +441,6 @@ const styles = StyleSheet.create({
   footer: {
     paddingHorizontal: AuthStyles.horizontalPadding,
     paddingTop: hp('1%'),
-    paddingBottom: hp('2%'),
     gap: hp('0.9%'),
     borderTopWidth: 1,
     borderTopColor: '#F3E8EB',

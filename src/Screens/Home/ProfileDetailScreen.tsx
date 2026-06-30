@@ -18,6 +18,7 @@ import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
 import { HomeStackParamList } from '../../Navigation/HomeStackNavigator';
+import { getFooterBottomPadding } from '../../Functions/safeArea';
 import { fs, hp, wp } from '../../Functions/responsive';
 
 type RouteProps = RouteProp<HomeStackParamList, 'ProfileDetail'>;
@@ -199,7 +200,7 @@ const ProfileDetailScreen = () => {
       <View
         style={[
           styles.footer,
-          { paddingBottom: Math.max(insets.bottom, hp('1.5%')) },
+          { paddingBottom: getFooterBottomPadding(insets.bottom) },
         ]}
       >
         <TouchableOpacity

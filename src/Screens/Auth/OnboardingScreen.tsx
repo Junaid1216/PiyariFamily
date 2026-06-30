@@ -25,6 +25,7 @@ import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
+import { getFooterBottomPadding } from '../../Functions/safeArea';
 import { hp, wp } from '../../Functions/responsive';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -165,7 +166,7 @@ const OnboardingScreen = ({ navigation }: Props) => {
         <View
           style={[
             styles.bottomSection,
-            { paddingBottom: Math.max(insets.bottom, hp('2%')) },
+            { paddingBottom: getFooterBottomPadding(insets.bottom) },
           ]}
         >
           <PrimaryButton

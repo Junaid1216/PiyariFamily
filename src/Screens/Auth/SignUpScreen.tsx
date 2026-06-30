@@ -131,6 +131,7 @@ const SignUpScreen = ({ navigation }: Props) => {
                 iconSource={Images.confirmPasswordIcon}
                 placeholder={Strings.confirmPasswordPlaceholder}
                 value={confirmPassword}
+                showToggle
                 onChangeText={setConfirmPassword}
                 secureTextEntry
               />

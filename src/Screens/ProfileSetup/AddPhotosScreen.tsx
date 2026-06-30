@@ -22,6 +22,7 @@ import { Colors } from '../../Constant/Colors';
 import { PROFILE_PHOTO_SLOTS, PROFILE_SETUP_TOTAL_STEPS } from '../../Constant/ProfileSetup';
 import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
+import { getFooterBottomPadding } from '../../Functions/safeArea';
 import { fs, hp, wp } from '../../Functions/responsive';
 
 type Props = {
@@ -166,7 +167,7 @@ const AddPhotosScreen = ({ navigation }: Props) => {
       <View
         style={[
           styles.footer,
-          { paddingBottom: Math.max(insets.bottom, hp('2%')) },
+          { paddingBottom: getFooterBottomPadding(insets.bottom) },
         ]}
       >
         <PrimaryButton

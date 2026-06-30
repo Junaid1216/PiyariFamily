@@ -26,7 +26,7 @@ export const getTabBarBottomPadding = (insetBottom: number): number => {
 };
 
 export const getFooterBottomPadding = (insetBottom: number): number =>
-  Math.max(insetBottom, hp('2%'));
+  Math.max(insetBottom + hp('1%'), hp('3%'));
 
 export const getSafeAreaInitialMetrics = (
   metrics: Metrics | null,

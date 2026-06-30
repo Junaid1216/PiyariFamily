@@ -20,6 +20,7 @@ import { Colors } from '../../Constant/Colors';
 import { PROFILE_COUNTRIES } from '../../Constant/ProfileSetup';
 import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
+import { getFooterBottomPadding } from '../../Functions/safeArea';
 import { fs, hp, wp } from '../../Functions/responsive';
 
 type Props = {
@@ -126,7 +127,7 @@ const SelectCountryScreen = ({ navigation }: Props) => {
       <View
         style={[
           styles.footer,
-          { paddingBottom: Math.max(insets.bottom, hp('2%')) },
+          { paddingBottom: getFooterBottomPadding(insets.bottom) },
         ]}
       >
         <PrimaryButton
