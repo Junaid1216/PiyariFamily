@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   Image,
   ScrollView,
@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -18,6 +18,7 @@ import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
+import { Api, ENDPOINTS, mapProfileToSettings, resolveProfileData } from '../../API';
 import { ProfileStackParamList } from '../../Navigation/ProfileStackNavigator';
 import { fs, hp, wp } from '../../Functions/responsive';
 
@@ -65,8 +66,43 @@ const SettingItem = ({
 
 const SettingsScreen = () => {
   const navigation = useNavigation<NavigationProp>();
+  const [profileName, setProfileName] = useState('');
+  const [profileMeta, setProfileMeta] = useState('');
+  const [isVerified, setIsVerified] = useState(false);
+  const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [profilePictureVisible, setProfilePictureVisible] = useState(true);
   const [additionalPhotosVisible, setAdditionalPhotosVisible] = useState(true);
+
+  const fetchProfile = useCallback(async () => {
+    try {
+      console.log('Profile Request:', ENDPOINTS.PROFILE);
+      const res = await Api.getProfile();
+      console.log('Profile Response:', JSON.stringify(res?.data, null, 2));
+
+      if (res?.status == 200) {
+        const rawProfile = resolveProfileData(res?.data);
+        const profile = mapProfileToSettings(rawProfile);
+        console.log('Profile Success:', JSON.stringify(profile, null, 2));
+
+        setProfileName(profile.name);
+        setProfileMeta(profile.meta);
+        setIsVerified(profile.isVerified);
+        setProfilePhoto(profile.profilePhoto);
+        setProfilePictureVisible(profile.profilePictureVisible);
+        setAdditionalPhotosVisible(profile.additionalPhotosVisible);
+      } else {
+        console.log('Profile Failed:', JSON.stringify(res?.data, null, 2));
+      }
+    } catch (error: any) {
+      console.log('Profile API Error:', error?.response?.data);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchProfile();
+    }, [fetchProfile]),
+  );
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
@@ -81,17 +117,21 @@ const SettingsScreen = () => {
       >
         <View style={styles.profileCard}>
           <Image
-            source={Images.femaleProfile}
+            source={
+              profilePhoto ? { uri: profilePhoto } : Images.femaleProfile
+            }
             style={styles.profileImage}
             resizeMode="cover"
           />
           <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>Ayesha Khan</Text>
-            <Text style={styles.profileMeta}>28 · Lahore, Pakistan</Text>
-            <View style={styles.verifiedBadge}>
-              <Icon name="shield-check" size={fs(11)} color={Colors.gold} />
-              <Text style={styles.verifiedText}>{Strings.verifiedLabel}</Text>
-            </View>
+            <Text style={styles.profileName}>{profileName || '-'}</Text>
+            <Text style={styles.profileMeta}>{profileMeta || '-'}</Text>
+            {isVerified ? (
+              <View style={styles.verifiedBadge}>
+                <Icon name="shield-check" size={fs(11)} color={Colors.gold} />
+                <Text style={styles.verifiedText}>{Strings.verifiedLabel}</Text>
+              </View>
+            ) : null}
           </View>
           <TouchableOpacity
             activeOpacity={0.85}

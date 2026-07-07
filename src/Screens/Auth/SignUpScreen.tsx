@@ -61,14 +61,23 @@ const SignUpScreen = ({ navigation }: Props) => {
     }
 
     setLoading(true);
+    const payload = {
+      name: fullName.trim(),
+      email: email.trim(),
+      phone: phoneNumber.trim(),
+      password,
+      password_confirmation: confirmPassword,
+    };
+
+    console.log('[SignUp API] Request:', payload);
+
     try {
-      const response = await authService.register({
-        name: fullName.trim(),
-        email: email.trim(),
-        phone: phoneNumber.trim(),
-        password,
-        password_confirmation: confirmPassword,
-      });
+      const response = await authService.register(payload);
+
+      console.log('[SignUp API] Response:', JSON.stringify(response, null, 2));
+      console.log('[SignUp API] Status:', response.status);
+      console.log('[SignUp API] Success:', response.success);
+      console.log('[SignUp API] Message:', response.message);
 
       if (isSuccessStatus(response.status) && response.success) {
         Toast.show(response.message || 'Account created successfully');
@@ -76,9 +85,11 @@ const SignUpScreen = ({ navigation }: Props) => {
         return;
       }
 
+      console.log('[SignUp API] Failed:', response);
       Toast.show(response.message || 'Registration failed. Please try again.');
     } catch (error) {
-      console.log(error);
+      console.log('[SignUp API] Error:', error);
+      console.log('[SignUp API] Error Message:', getApiErrorMessage(error));
       Toast.show(getApiErrorMessage(error));
     } finally {
       setLoading(false);

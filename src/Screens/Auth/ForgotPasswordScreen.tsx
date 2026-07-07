@@ -19,7 +19,7 @@ import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
-import { authService, getApiErrorMessage, isSuccessStatus } from '../../API';
+import { authService, ENDPOINTS } from '../../API';
 import { hp, wp } from '../../Functions/responsive';
 
 type Props = {
@@ -36,26 +36,46 @@ const ForgotPasswordScreen = ({ navigation }: Props) => {
   const handleSendCode = async () => {
     if (!email.trim()) {
       Toast.show('Please enter your email address');
-      return;
-    }
+    } else {
+      setLoading(true);
 
-    setLoading(true);
-    try {
-      const response = await authService.forgotPassword({
-        email: email.trim(),
-      });
+      try {
+        console.log('Forgot Password Request:', ENDPOINTS.AUTH.FORGOT_PASSWORD, {
+          email: email.trim(),
+        });
 
-      if (isSuccessStatus(response.status) && response.success) {
-        Toast.show(response.message || 'Reset code sent to your email');
-        navigation.navigate('CheckEmail', { email: email.trim() });
-        return;
+        const res = await authService.forgotPassword({
+          email: email.trim(),
+        });
+
+        console.log(
+          'Forgot Password Response:',
+          JSON.stringify(res, null, 2),
+        );
+
+        if (res?.status == 200) {
+          console.log(
+            'Forgot Password Success:',
+            JSON.stringify(res, null, 2),
+          );
+          Toast.show(res?.message || 'Reset code sent to your email');
+          navigation.navigate('CheckEmail', { email: email.trim() });
+        } else {
+          console.log(
+            'Forgot Password Failed:',
+            JSON.stringify(res, null, 2),
+          );
+          Toast.show(res?.message || 'Failed to send reset code. Please try again.');
+        }
+      } catch (error: any) {
+        console.log('Forgot Password API Error:', error?.response?.data);
+        Toast.show(
+          error?.response?.data?.message ||
+            'Failed to send reset code. Please try again.',
+        );
+      } finally {
+        setLoading(false);
       }
-
-      Toast.show(response.message || 'Failed to send reset code. Please try again.');
-    } catch (error) {
-      Toast.show(getApiErrorMessage(error));
-    } finally {
-      setLoading(false);
     }
   };
 

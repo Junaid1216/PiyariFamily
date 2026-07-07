@@ -9,7 +9,6 @@ export const getApiErrorMessage = (
     const data = error.response?.data as ApiErrorResponse | undefined;
 
     if (data?.message) {
-      console.log('@error', data);
       return data.message;
     }
 

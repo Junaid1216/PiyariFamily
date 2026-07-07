@@ -3,12 +3,15 @@ export type User = {
   name: string;
   email: string;
   phone: string;
+  is_verified?: boolean;
 };
 
 export type AuthResponse = {
   success: boolean;
   message: string;
   user: User;
+  token?: string;
+  access_token?: string;
 };
 
 export type ApiResult<T> = {

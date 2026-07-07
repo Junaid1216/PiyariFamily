@@ -50,6 +50,8 @@ const LoginScreen = ({ navigation }: Props) => {
         password,
       });
 
+      console.log('Login Response:', JSON.stringify(response, null, 2));
+
       if (isSuccessStatus(response.status) && response.success) {
         Toast.show(response.message || 'Login successful');
         navigation.replace('SelectCountry');

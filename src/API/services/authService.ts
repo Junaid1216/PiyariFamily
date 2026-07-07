@@ -1,5 +1,6 @@
 import { apiClient } from '../apiClient';
 import { ENDPOINTS } from '../endpoints';
+import { profileStorage } from '../profileStorage';
 import { tokenStorage } from '../tokenStorage';
 import { userStorage } from '../userStorage';
 import type { AuthResponse, MessageResponse, OtpActionResponse } from '../types';
@@ -36,12 +37,29 @@ export type SetNewPasswordPayload = {
   password: string;
 };
 
+export type ChangePasswordPayload = {
+  current_password: string;
+  password: string;
+};
+
 const postAuth = async <T>(
   endpoint: string,
   payload: Record<string, string | number>,
 ) => {
   const { status, data } = await apiClient.postForm<T>(endpoint, payload);
   return { status, ...data };
+};
+
+const saveAuthSession = (response: AuthResponse) => {
+  if (response.user) {
+    userStorage.setUser(response.user);
+  }
+
+  const token = response.token ?? response.access_token;
+
+  if (token) {
+    tokenStorage.setAccessToken(token);
+  }
 };
 
 export const authService = {
@@ -51,8 +69,8 @@ export const authService = {
       payload,
     );
 
-    if (response.user) {
-      userStorage.setUser(response.user);
+    if (response.success) {
+      saveAuthSession(response);
     }
 
     return response;
@@ -64,8 +82,8 @@ export const authService = {
       payload,
     );
 
-    if (response.user) {
-      userStorage.setUser(response.user);
+    if (response.success) {
+      saveAuthSession(response);
     }
 
     return response;
@@ -77,8 +95,8 @@ export const authService = {
       payload,
     );
 
-    if (response.user) {
-      userStorage.setUser(response.user);
+    if (response.success) {
+      saveAuthSession(response);
     }
 
     return response;
@@ -96,8 +114,12 @@ export const authService = {
   setNewPassword: (payload: SetNewPasswordPayload) =>
     postAuth<MessageResponse>(ENDPOINTS.AUTH.SET_NEW_PASSWORD, payload),
 
+  changePassword: (payload: ChangePasswordPayload) =>
+    postAuth<MessageResponse>(ENDPOINTS.AUTH.CHANGE_PASSWORD, payload),
+
   logout: () => {
     tokenStorage.clear();
     userStorage.clear();
+    profileStorage.clear();
   },
 };

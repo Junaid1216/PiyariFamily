@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -25,22 +26,20 @@ import SetupDropdown from '../../Components/SetupDropdown';
 import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import {
   COMMUNITY_OPTIONS,
-  Community,
   EDIT_MARITAL_STATUS_OPTIONS,
-  EditMaritalStatus,
   HEIGHT_FEET_OPTIONS,
   HEIGHT_INCHES_OPTIONS,
   MAX_OTHER_LANGUAGES,
   MOTHER_TONGUE_OPTIONS,
-  MotherTongue,
   OTHER_LANGUAGE_OPTIONS,
   OtherLanguage,
   RESIDENCE_STATUS_OPTIONS,
-  ResidenceStatus,
 } from '../../Constant/ProfileSetup';
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
+import { Api, ENDPOINTS, mapFormToProfilePayload, mapProfileToForm, resolveProfileData, saveProfileCache } from '../../API';
+import type { EditProfileFormData } from '../../API';
 import { ProfileStackParamList } from '../../Navigation/ProfileStackNavigator';
 import { getFooterBottomPadding } from '../../Functions/safeArea';
 import { fs, hp, wp } from '../../Functions/responsive';
@@ -50,35 +49,34 @@ type NavigationProp = NativeStackNavigationProp<
   'EditProfile'
 >;
 
-type Gender = 'male' | 'female';
 
 const ABOUT_MAX_LENGTH = 300;
-const DEFAULT_ABOUT =
-  'I am a family-oriented person who values honesty, kindness, and meaningful connections. I enjoy reading, traveling, and spending quality time with loved ones.';
+
+const EMPTY_FORM: EditProfileFormData = {
+  fullName: '',
+  birthday: '',
+  dateOfBirth: '',
+  gender: 'female',
+  aboutMe: '',
+  email: '',
+  phone: '',
+  city: '',
+  heightFeet: '',
+  heightInches: '',
+  motherTongue: '',
+  otherLanguages: [],
+  maritalStatus: '',
+  community: '',
+  residenceStatus: '',
+  age: null,
+  profilePhoto: null,
+};
 
 const EditProfileScreen = () => {
   const navigation = useNavigation<NavigationProp>();
   const insets = useSafeAreaInsets();
 
-  const [fullName, setFullName] = useState('Ayesha');
-  const [dateOfBirth] = useState('14 March 1999');
-  const [gender, setGender] = useState<Gender>('female');
-  const [aboutMe, setAboutMe] = useState(DEFAULT_ABOUT.slice(0, 128));
-  const [email] = useState('Ayesh@gmail.com');
-  const [phone, setPhone] = useState('+92 34865 43210');
-  const [city, setCity] = useState('Lahore, Pakistan');
-  const [heightFeet, setHeightFeet] = useState('5');
-  const [heightInches, setHeightInches] = useState('4');
-  const [motherTongue, setMotherTongue] = useState<MotherTongue>('Urdu');
-  const [otherLanguages, setOtherLanguages] = useState<OtherLanguage[]>([
-    'Urdu',
-    'English',
-  ]);
-  const [maritalStatus, setMaritalStatus] =
-    useState<EditMaritalStatus>('Never Married');
-  const [community, setCommunity] = useState<Community>('Sunni');
-  const [residenceStatus, setResidenceStatus] =
-    useState<ResidenceStatus>('Owned');
+  const [form, setForm] = useState<EditProfileFormData>(EMPTY_FORM);
   const [openDropdown, setOpenDropdown] = useState<
     | 'feet'
     | 'inches'
@@ -89,38 +87,120 @@ const EditProfileScreen = () => {
     | 'residence'
     | null
   >(null);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const toggleLanguage = (language: OtherLanguage) => {
-    setOtherLanguages(prev => {
-      if (prev.includes(language)) {
-        return prev.filter(item => item !== language);
+  const updateForm = <K extends keyof EditProfileFormData>(
+    key: K,
+    value: EditProfileFormData[K],
+  ) => {
+    setForm(prev => ({ ...prev, [key]: value }));
+  };
+
+  const fetchProfile = useCallback(async () => {
+    setLoading(true);
+
+    try {
+      console.log('Profile Request:', ENDPOINTS.PROFILE);
+      const res = await Api.getProfile();
+      console.log('Profile Response:', JSON.stringify(res?.data, null, 2));
+
+      if (res?.status == 200) {
+        const profile = mapProfileToForm(resolveProfileData(res?.data));
+        console.log('Profile Success:', JSON.stringify(profile, null, 2));
+        setForm(profile);
+      } else {
+        console.log('Profile Failed:', JSON.stringify(res?.data, null, 2));
+        Toast.show(res?.data?.message || 'Failed to load profile', Toast.LONG);
       }
-      if (prev.length >= MAX_OTHER_LANGUAGES) {
+    } catch (error: any) {
+      console.log('Profile API Error:', error?.response?.data);
+      Toast.show(
+        error?.response?.data?.message || 'Failed to load profile',
+        Toast.LONG,
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchProfile();
+  }, [fetchProfile]);
+
+  const toggleLanguage = (language: OtherLanguage) => {
+    setForm(prev => {
+      if (prev.otherLanguages.includes(language)) {
+        return {
+          ...prev,
+          otherLanguages: prev.otherLanguages.filter(item => item !== language),
+        };
+      }
+
+      if (prev.otherLanguages.length >= MAX_OTHER_LANGUAGES) {
         Toast.show(Strings.maxLanguagesHint);
         return prev;
       }
-      return [...prev, language];
+
+      return {
+        ...prev,
+        otherLanguages: [...prev.otherLanguages, language],
+      };
     });
   };
 
   const removeLanguage = (language: OtherLanguage) => {
-    setOtherLanguages(prev => prev.filter(item => item !== language));
+    setForm(prev => ({
+      ...prev,
+      otherLanguages: prev.otherLanguages.filter(item => item !== language),
+    }));
   };
 
-  const handleSave = () => {
-    if (saving) {
+  const handleSave = async () => {
+    if (saving || loading) {
       return;
-    }
+    } else if (!form.fullName.trim()) {
+      Toast.show('Please enter your name');
+    } else {
+      setSaving(true);
 
-    setSaving(true);
-    setTimeout(() => {
-      setSaving(false);
-      Toast.show(Strings.profileSaved, Toast.LONG);
-      setTimeout(() => {
-        navigation.goBack();
-      }, 600);
-    }, 800);
+      try {
+        const payload = mapFormToProfilePayload(form);
+
+        console.log('Update Profile Request:', ENDPOINTS.PROFILE_UPDATE, payload);
+
+        const res = await Api.updateProfile(payload);
+
+        console.log(
+          'Update Profile Response:',
+          JSON.stringify(res, null, 2),
+        );
+
+        if (res?.status == 200) {
+          console.log(
+            'Update Profile Success:',
+            JSON.stringify(res, null, 2),
+          );
+          setForm(mapProfileToForm(saveProfileCache(res?.user)));
+          Toast.show(res?.message || Strings.profileSaved, Toast.LONG);
+          navigation.goBack();
+        } else {
+          console.log(
+            'Update Profile Failed:',
+            JSON.stringify(res, null, 2),
+          );
+          Toast.show(res?.message || 'Failed to save profile', Toast.LONG);
+        }
+      } catch (error: any) {
+        console.log('Update Profile API Error:', error?.response?.data);
+        Toast.show(
+          error?.response?.data?.message || 'Failed to save profile',
+          Toast.LONG,
+        );
+      } finally {
+        setSaving(false);
+      }
+    }
   };
 
   const renderSectionHeader = (icon: string, title: string) => (
@@ -143,7 +223,7 @@ const EditProfileScreen = () => {
           <TouchableOpacity
             activeOpacity={0.85}
             onPress={handleSave}
-            disabled={saving}
+            disabled={saving || loading}
           >
             <Text style={[styles.saveText, saving && styles.saveTextDisabled]}>
               {Strings.save}
@@ -152,6 +232,11 @@ const EditProfileScreen = () => {
         }
       />
 
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+        </View>
+      ) : (
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -164,7 +249,11 @@ const EditProfileScreen = () => {
           <View style={styles.photoSection}>
             <View style={styles.photoWrap}>
               <Image
-                source={Images.femaleProfile}
+                source={
+                  form.profilePhoto
+                    ? { uri: form.profilePhoto }
+                    : Images.femaleProfile
+                }
                 style={styles.profilePhoto}
                 resizeMode="cover"
               />
@@ -189,8 +278,8 @@ const EditProfileScreen = () => {
             />
             <TextInput
               style={styles.input}
-              value={fullName}
-              onChangeText={setFullName}
+              value={form.fullName}
+              onChangeText={value => updateForm('fullName', value)}
               placeholderTextColor={Colors.placeholder}
             />
           </View>
@@ -203,10 +292,12 @@ const EditProfileScreen = () => {
               color={Colors.primary}
               style={styles.inputIcon}
             />
-            <Text style={styles.inputText}>{dateOfBirth}</Text>
-            <View style={styles.ageBadge}>
-              <Text style={styles.ageBadgeText}>Age: 25</Text>
-            </View>
+            <Text style={styles.inputText}>{form.dateOfBirth || '-'}</Text>
+            {form.age != null ? (
+              <View style={styles.ageBadge}>
+                <Text style={styles.ageBadgeText}>Age: {form.age}</Text>
+              </View>
+            ) : null}
           </View>
 
           {renderFieldLabel(Strings.genderLabel)}
@@ -214,15 +305,15 @@ const EditProfileScreen = () => {
             <TouchableOpacity
               style={[
                 styles.genderBtn,
-                gender === 'male' && styles.genderBtnActive,
+                form.gender === 'male' && styles.genderBtnActive,
               ]}
               activeOpacity={0.85}
-              onPress={() => setGender('male')}
+              onPress={() => updateForm('gender', 'male')}
             >
               <Text
                 style={[
                   styles.genderText,
-                  gender === 'male' && styles.genderTextActive,
+                  form.gender === 'male' && styles.genderTextActive,
                 ]}
               >
                 {Strings.genderMale}
@@ -231,15 +322,15 @@ const EditProfileScreen = () => {
             <TouchableOpacity
               style={[
                 styles.genderBtn,
-                gender === 'female' && styles.genderBtnActive,
+                form.gender === 'female' && styles.genderBtnActive,
               ]}
               activeOpacity={0.85}
-              onPress={() => setGender('female')}
+              onPress={() => updateForm('gender', 'female')}
             >
               <Text
                 style={[
                   styles.genderText,
-                  gender === 'female' && styles.genderTextActive,
+                  form.gender === 'female' && styles.genderTextActive,
                 ]}
               >
                 {Strings.genderFemale}
@@ -250,7 +341,7 @@ const EditProfileScreen = () => {
           <View style={styles.aboutHeader}>
             {renderFieldLabel(Strings.aboutMe)}
             <Text style={styles.charCount}>
-              {aboutMe.length}/{ABOUT_MAX_LENGTH}
+              {form.aboutMe.length}/{ABOUT_MAX_LENGTH}
             </Text>
           </View>
           <View style={styles.aboutRow}>
@@ -262,8 +353,10 @@ const EditProfileScreen = () => {
             />
             <TextInput
               style={styles.aboutInput}
-              value={aboutMe}
-              onChangeText={text => setAboutMe(text.slice(0, ABOUT_MAX_LENGTH))}
+              value={form.aboutMe}
+              onChangeText={value =>
+                updateForm('aboutMe', value.slice(0, ABOUT_MAX_LENGTH))
+              }
               placeholder={Strings.aboutMePlaceholder}
               placeholderTextColor={Colors.placeholder}
               multiline
@@ -274,14 +367,22 @@ const EditProfileScreen = () => {
           {renderSectionHeader('email-outline', Strings.contactInfoSection)}
 
           {renderFieldLabel(Strings.emailLabel)}
-          <View style={[styles.inputRow, styles.inputRowMuted]}>
+          <View style={styles.inputRow}>
             <Icon
               name="email-outline"
               size={fs(20)}
               color={Colors.primary}
               style={styles.inputIcon}
             />
-            <Text style={styles.inputText}>{email}</Text>
+            <TextInput
+              style={styles.input}
+              value={form.email}
+              onChangeText={value => updateForm('email', value)}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              placeholderTextColor={Colors.placeholder}
+            />
           </View>
 
           {renderFieldLabel(Strings.phoneNumberLabel)}
@@ -294,8 +395,8 @@ const EditProfileScreen = () => {
             />
             <TextInput
               style={styles.input}
-              value={phone}
-              onChangeText={setPhone}
+              value={form.phone}
+              onChangeText={value => updateForm('phone', value)}
               keyboardType="phone-pad"
               placeholderTextColor={Colors.placeholder}
             />
@@ -311,8 +412,8 @@ const EditProfileScreen = () => {
             />
             <TextInput
               style={styles.input}
-              value={city}
-              onChangeText={setCity}
+              value={form.city}
+              onChangeText={value => updateForm('city', value)}
               placeholderTextColor={Colors.placeholder}
             />
           </View>
@@ -324,14 +425,14 @@ const EditProfileScreen = () => {
             <SetupDropdown
               iconText="'"
               placeholder={Strings.selectFeetPlaceholder}
-              value={heightFeet ? `${heightFeet} ft` : ''}
+              value={form.heightFeet ? `${form.heightFeet} ft` : ''}
               options={HEIGHT_FEET_OPTIONS.map(option => `${option} ft`)}
               isOpen={openDropdown === 'feet'}
               onToggle={() =>
                 setOpenDropdown(prev => (prev === 'feet' ? null : 'feet'))
               }
               onSelect={value => {
-                setHeightFeet(value.replace(' ft', ''));
+                updateForm('heightFeet', value.replace(' ft', ''));
                 setOpenDropdown(null);
               }}
               style={styles.heightDropdown}
@@ -340,14 +441,14 @@ const EditProfileScreen = () => {
               iconSource={Images.inchesIcon}
               iconImageSize={fs(11)}
               placeholder={Strings.selectInchesPlaceholder}
-              value={heightInches ? `${heightInches} in` : ''}
+              value={form.heightInches ? `${form.heightInches} in` : ''}
               options={HEIGHT_INCHES_OPTIONS.map(option => `${option} in`)}
               isOpen={openDropdown === 'inches'}
               onToggle={() =>
                 setOpenDropdown(prev => (prev === 'inches' ? null : 'inches'))
               }
               onSelect={value => {
-                setHeightInches(value.replace(' in', ''));
+                updateForm('heightInches', value.replace(' in', ''));
                 setOpenDropdown(null);
               }}
               style={styles.heightDropdown}
@@ -358,7 +459,7 @@ const EditProfileScreen = () => {
             label={Strings.motherTongueDetail}
             iconSource={Images.msgTextIcon}
             placeholder={Strings.selectMotherTonguePlaceholder}
-            value={motherTongue}
+            value={form.motherTongue}
             options={MOTHER_TONGUE_OPTIONS}
             isOpen={openDropdown === 'motherTongue'}
             onToggle={() =>
@@ -367,7 +468,7 @@ const EditProfileScreen = () => {
               )
             }
             onSelect={value => {
-              setMotherTongue(value as MotherTongue);
+              updateForm('motherTongue', value);
               setOpenDropdown(null);
             }}
             style={styles.fieldSpacing}
@@ -402,7 +503,7 @@ const EditProfileScreen = () => {
           {openDropdown === 'languages' ? (
             <View style={styles.dropdownMenu}>
               {OTHER_LANGUAGE_OPTIONS.map(option => {
-                const isSelected = otherLanguages.includes(option);
+                const isSelected = form.otherLanguages.includes(option);
                 return (
                   <TouchableOpacity
                     key={option}
@@ -430,9 +531,9 @@ const EditProfileScreen = () => {
             </View>
           ) : null}
           <Text style={styles.hintText}>{Strings.maxLanguagesHint}</Text>
-          {otherLanguages.length > 0 ? (
+          {form.otherLanguages.length > 0 ? (
             <View style={styles.languagePillRow}>
-              {otherLanguages.map(language => (
+              {form.otherLanguages.map(language => (
                 <TouchableOpacity
                   key={language}
                   style={styles.languagePill}
@@ -450,14 +551,14 @@ const EditProfileScreen = () => {
             label={Strings.maritalStatusDetail}
             iconName="heart-outline"
             placeholder={Strings.maritalStatusPlaceholder}
-            value={maritalStatus}
+            value={form.maritalStatus}
             options={EDIT_MARITAL_STATUS_OPTIONS}
             isOpen={openDropdown === 'marital'}
             onToggle={() =>
               setOpenDropdown(prev => (prev === 'marital' ? null : 'marital'))
             }
             onSelect={value => {
-              setMaritalStatus(value as EditMaritalStatus);
+              updateForm('maritalStatus', value);
               setOpenDropdown(null);
             }}
             style={styles.fieldSpacing}
@@ -467,7 +568,7 @@ const EditProfileScreen = () => {
             label={Strings.community}
             iconSource={Images.communityIcon}
             placeholder={Strings.community}
-            value={community}
+            value={form.community}
             options={COMMUNITY_OPTIONS}
             isOpen={openDropdown === 'community'}
             onToggle={() =>
@@ -476,7 +577,7 @@ const EditProfileScreen = () => {
               )
             }
             onSelect={value => {
-              setCommunity(value as Community);
+              updateForm('community', value);
               setOpenDropdown(null);
             }}
             style={styles.fieldSpacing}
@@ -486,7 +587,7 @@ const EditProfileScreen = () => {
             label={Strings.residentialStatusLabel}
             iconName="home-outline"
             placeholder={Strings.residenceStatusPlaceholder}
-            value={residenceStatus}
+            value={form.residenceStatus}
             options={RESIDENCE_STATUS_OPTIONS}
             isOpen={openDropdown === 'residence'}
             onToggle={() =>
@@ -495,7 +596,7 @@ const EditProfileScreen = () => {
               )
             }
             onSelect={value => {
-              setResidenceStatus(value as ResidenceStatus);
+              updateForm('residenceStatus', value);
               setOpenDropdown(null);
             }}
           />
@@ -525,6 +626,7 @@ const EditProfileScreen = () => {
           />
         </View>
       </KeyboardAvoidingView>
+      )}
     </SafeAreaView>
   );
 };
@@ -536,6 +638,11 @@ const styles = StyleSheet.create({
   },
   flex: {
     flex: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   saveText: {
     fontSize: fs(14),

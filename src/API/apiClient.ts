@@ -1,6 +1,6 @@
 import axios, { AxiosError, AxiosRequestConfig } from 'axios';
 import { API_CONFIG } from './config';
-import { toFormData } from './formData';
+import { toFormData, type FormValue } from './formData';
 import { tokenStorage } from './tokenStorage';
 import type { ApiErrorResponse, ApiResult } from './types';
 
@@ -36,7 +36,7 @@ axiosInstance.interceptors.response.use(
 export const apiClient = {
   postForm: <T>(
     url: string,
-    data: Record<string, string | number>,
+    data: Record<string, FormValue>,
     config?: AxiosRequestConfig,
   ): Promise<ApiResult<T>> =>
     axiosInstance
@@ -46,8 +46,11 @@ export const apiClient = {
         data: response.data,
       })),
 
-  get: <T>(url: string, config?: AxiosRequestConfig) =>
-    axiosInstance.get<T>(url, config).then(response => response.data),
+  get: <T>(url: string, config?: AxiosRequestConfig): Promise<ApiResult<T>> =>
+    axiosInstance.get<T>(url, config).then(response => ({
+      status: response.status,
+      data: response.data,
+    })),
 
   post: <T>(url: string, data?: unknown, config?: AxiosRequestConfig) =>
     axiosInstance.post<T>(url, data, config).then(response => response.data),

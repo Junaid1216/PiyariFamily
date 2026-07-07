@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   FlatList,
   StyleSheet,
   Text,
@@ -13,13 +14,21 @@ import {
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import Toast from 'react-native-simple-toast';
 import BackButton from '../../Components/BackButton';
 import PrimaryButton from '../../Components/PrimaryButton';
 import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
-import { PROFILE_COUNTRIES } from '../../Constant/ProfileSetup';
+import { CountryOption } from '../../Constant/ProfileSetup';
 import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
+import { AxiosError } from 'axios';
+import {
+  Api,
+  ENDPOINTS,
+  mapCountries,
+} from '../../API';
+import type { ApiErrorResponse } from '../../API';
 import { getFooterBottomPadding } from '../../Functions/safeArea';
 import { fs, hp, wp } from '../../Functions/responsive';
 
@@ -42,17 +51,68 @@ const CountrySeparator = () => <View style={styles.separator} />;
 const SelectCountryScreen = ({ navigation }: Props) => {
   const insets = useSafeAreaInsets();
   const [search, setSearch] = useState('');
+  const [countries, setCountries] = useState<CountryOption[]>([]);
   const [selectedCode, setSelectedCode] = useState<CountryCode>('PK');
+  const [loading, setLoading] = useState(true);
+
+  const fetchCountries = useCallback(async () => {
+    setLoading(true);
+
+    try {
+      console.log('Countries Request:', ENDPOINTS.COUNTRIES);
+      const res = await Api.getCountries();
+      console.log('Countries Response:', JSON.stringify(res?.data, null, 2));
+
+      if (res?.status == 200) {
+        const mappedCountries = await mapCountries(res?.data?.data);
+        console.log(
+          'Countries Success:',
+          JSON.stringify(mappedCountries, null, 2),
+        );
+
+        if (mappedCountries.length > 0) {
+          setCountries(mappedCountries);
+
+          if (!mappedCountries.some(country => country.code === 'PK')) {
+            setSelectedCode(mappedCountries[0].code);
+          }
+        } else {
+          setCountries([]);
+        }
+      } else {
+        Toast.show(res?.data?.message ?? 'Failed to load countries', Toast.LONG);
+        setCountries([]);
+      }
+    } catch (error) {
+      const axiosError = error as AxiosError<ApiErrorResponse>;
+      console.log('Countries API Error:', {
+        status: axiosError?.response?.status,
+        url: ENDPOINTS.COUNTRIES,
+        data: axiosError?.response?.data || error,
+      });
+      Toast.show(
+        axiosError?.response?.data?.message ?? 'Failed to load countries',
+        Toast.LONG,
+      );
+      setCountries([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchCountries();
+  }, [fetchCountries]);
 
   const filteredCountries = useMemo(() => {
     const query = search.trim().toLowerCase();
     if (!query) {
-      return PROFILE_COUNTRIES;
+      return countries;
     }
-    return PROFILE_COUNTRIES.filter(country =>
+    return countries.filter(country =>
       country.name.toLowerCase().includes(query),
     );
-  }, [search]);
+  }, [countries, search]);
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
@@ -80,13 +140,21 @@ const SelectCountryScreen = ({ navigation }: Props) => {
           />
         </View>
 
-        <FlatList
-          data={filteredCountries}
-          keyExtractor={item => item.code}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.listContent}
-          ItemSeparatorComponent={CountrySeparator}
-          renderItem={({ item }) => {
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={Colors.primary} />
+          </View>
+        ) : (
+          <FlatList
+            data={filteredCountries}
+            keyExtractor={item => `${item.code}-${item.name}`}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.listContent}
+            ItemSeparatorComponent={CountrySeparator}
+            ListEmptyComponent={
+              <Text style={styles.emptyText}>No countries found</Text>
+            }
+            renderItem={({ item }) => {
             const isSelected = item.code === selectedCode;
 
             return (
@@ -121,7 +189,8 @@ const SelectCountryScreen = ({ navigation }: Props) => {
               </TouchableOpacity>
             );
           }}
-        />
+          />
+        )}
       </View>
 
       <View
@@ -187,6 +256,20 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingBottom: hp('1%'),
+    flexGrow: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: hp('8%'),
+  },
+  emptyText: {
+    textAlign: 'center',
+    fontSize: FontSizes.body,
+    fontFamily: Fonts.regular,
+    color: Colors.textLight,
+    paddingVertical: hp('8%'),
   },
   countryRow: {
     flexDirection: 'row',

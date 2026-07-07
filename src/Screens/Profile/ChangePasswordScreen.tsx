@@ -25,6 +25,10 @@ import PrimaryButton from '../../Components/PrimaryButton';
 import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
+import {
+  authService,
+  ENDPOINTS,
+} from '../../API';
 import { Strings } from '../../Constant/Strings';
 import { ProfileStackParamList } from '../../Navigation/ProfileStackNavigator';
 import { getFooterBottomPadding } from '../../Functions/safeArea';
@@ -96,28 +100,55 @@ const ChangePasswordScreen = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleUpdate = () => {
+  const handleUpdate = async () => {
     if (!currentPassword || !newPassword || !confirmPassword) {
       Toast.show('Please fill in all fields');
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
+    } else if (newPassword !== confirmPassword) {
       Toast.show('Passwords do not match');
-      return;
-    }
-
-    if (!isPasswordValid(newPassword)) {
+    } else if (currentPassword === newPassword) {
+      Toast.show('New password must be different from current password');
+    } else if (!isPasswordValid(newPassword)) {
       Toast.show('Please meet all password requirements');
-      return;
-    }
+    } else {
+      setLoading(true);
 
-    setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      Toast.show(Strings.passwordUpdated);
-      navigation.goBack();
-    }, 800);
+      try {
+        console.log('Change Password Request:', ENDPOINTS.AUTH.CHANGE_PASSWORD);
+
+        const res = await authService.changePassword({
+          current_password: currentPassword,
+          password: newPassword,
+        });
+
+        console.log(
+          'Change Password Response:',
+          JSON.stringify(res, null, 2),
+        );
+
+        if (res?.status == 200) {
+          console.log(
+            'Change Password Success:',
+            JSON.stringify(res, null, 2),
+          );
+          Toast.show(res?.message || Strings.passwordUpdated, Toast.LONG);
+          navigation.goBack();
+        } else {
+          console.log(
+            'Change Password Failed:',
+            JSON.stringify(res, null, 2),
+          );
+          Toast.show(res?.message || 'Failed to update password', Toast.LONG);
+        }
+      } catch (error: any) {
+        console.log('Change Password API Error:', error?.response?.data);
+        Toast.show(
+          error?.response?.data?.message || 'Failed to update password',
+          Toast.LONG,
+        );
+      } finally {
+        setLoading(false);
+      }
+    }
   };
 
   return (
