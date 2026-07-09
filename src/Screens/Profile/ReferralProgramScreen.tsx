@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import {
+  ActivityIndicator,
   ScrollView,
   StyleSheet,
   Text,
@@ -7,7 +8,7 @@ import {
   View,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
   SafeAreaView,
@@ -15,13 +16,18 @@ import {
 } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-simple-toast';
+import { AxiosError } from 'axios';
 import ScreenHeader from '../../Components/ScreenHeader';
 import PrimaryButton from '../../Components/PrimaryButton';
 import {
-  REFERRAL_LINK,
-  REFERRAL_REWARDS_TABLE,
-  REFERRAL_STATS,
-} from '../../Constant/Referrals';
+  Api,
+  ENDPOINTS,
+  getApiErrorMessage,
+  mapReferralStats,
+  type ApiErrorResponse,
+  type ReferralStats,
+} from '../../API';
+import { REFERRAL_LINK, REFERRAL_REWARDS_TABLE } from '../../Constant/Referrals';
 import { AuthStyles } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
@@ -37,9 +43,56 @@ type NavigationProp = NativeStackNavigationProp<
 
 const PINK_CARD = '#FFF5F7';
 
+const DEFAULT_STATS: ReferralStats = {
+  referralCode: '',
+  referralLink: REFERRAL_LINK,
+  registered: 0,
+  pointsEarned: 0,
+  rewardsTable: REFERRAL_REWARDS_TABLE,
+};
+
 const ReferralProgramScreen = () => {
   const navigation = useNavigation<NavigationProp>();
   const insets = useSafeAreaInsets();
+  const [stats, setStats] = useState<ReferralStats>(DEFAULT_STATS);
+  const [loading, setLoading] = useState(true);
+
+  const fetchReferralStats = useCallback(async () => {
+    setLoading(true);
+
+    try {
+      console.log('Referral Stats Request:', ENDPOINTS.REFERRALS_STATS);
+      const res = await Api.getReferralStats();
+
+      if (res?.status == 200) {
+        console.log('Referral Stats Success:', res?.data);
+        setStats(mapReferralStats(res?.data));
+      } else {
+        console.log('Referral Stats Failed:', res?.data);
+        setStats(DEFAULT_STATS);
+        Toast.show(
+          res?.data?.message ?? 'Failed to load referral stats',
+          Toast.LONG,
+        );
+      }
+    } catch (error) {
+      const axiosError = error as AxiosError<ApiErrorResponse>;
+      console.log('Referral Stats Error:', axiosError?.response?.data || error);
+      setStats(DEFAULT_STATS);
+      Toast.show(
+        getApiErrorMessage(error, 'Failed to load referral stats'),
+        Toast.LONG,
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchReferralStats();
+    }, [fetchReferralStats]),
+  );
 
   const handleCopy = () => {
     Toast.show(Strings.linkCopied);
@@ -60,6 +113,11 @@ const ReferralProgramScreen = () => {
       />
 
       <View style={styles.body}>
+        {loading ? (
+          <View style={styles.loaderWrap}>
+            <ActivityIndicator size="large" color={Colors.primary} />
+          </View>
+        ) : (
         <ScrollView
           style={styles.scroll}
           showsVerticalScrollIndicator={false}
@@ -89,7 +147,7 @@ const ReferralProgramScreen = () => {
           <Text style={styles.sectionLabel}>{Strings.yourReferralLink}</Text>
           <View style={styles.linkBox}>
             <Text style={styles.linkText} numberOfLines={1}>
-              {REFERRAL_LINK}
+              {stats.referralLink}
             </Text>
             <TouchableOpacity
               style={styles.linkCopyBtn}
@@ -127,7 +185,7 @@ const ReferralProgramScreen = () => {
               </Text>
             </View>
             <View style={styles.tableDivider} />
-            {REFERRAL_REWARDS_TABLE.map(row => (
+            {stats.rewardsTable.map(row => (
               <View key={row.id} style={styles.tableRow}>
                 <Text style={styles.tableCell}>{row.registrations}</Text>
                 <Text style={styles.tableCellBold}>{row.points}</Text>
@@ -145,7 +203,7 @@ const ReferralProgramScreen = () => {
                   color={Colors.gold}
                 />
               </View>
-              <Text style={styles.statValue}>{REFERRAL_STATS.registered}</Text>
+              <Text style={styles.statValue}>{stats.registered}</Text>
               <Text style={styles.statLabel}>{Strings.registered}</Text>
             </View>
 
@@ -154,7 +212,7 @@ const ReferralProgramScreen = () => {
                 <Icon name="star" size={fs(20)} color={Colors.gold} />
               </View>
               <Text style={styles.statValue}>
-                {REFERRAL_STATS.pointsEarned} pts
+                {stats.pointsEarned} pts
               </Text>
               <Text style={styles.statLabel}>{Strings.pointsEarnedStat}</Text>
             </View>
@@ -165,6 +223,7 @@ const ReferralProgramScreen = () => {
             <Text style={styles.noteText}>{Strings.referralPointsNote}</Text>
           </View>
         </ScrollView>
+        )}
 
         <View
           style={[
@@ -201,6 +260,11 @@ const styles = StyleSheet.create({
   },
   body: {
     flex: 1,
+  },
+  loaderWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   scroll: {
     flex: 1,

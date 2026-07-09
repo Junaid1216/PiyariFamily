@@ -16,11 +16,18 @@ import {
 } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-simple-toast';
+import { AxiosError } from 'axios';
 import { Images } from '../../Assets';
 import BackButton from '../../Components/BackButton';
 import PrimaryButton from '../../Components/PrimaryButton';
 import SetupDropdown from '../../Components/SetupDropdown';
 import SetupProgressBar from '../../Components/SetupProgressBar';
+import {
+  Api,
+  ENDPOINTS,
+  getApiErrorMessage,
+  type ApiErrorResponse,
+} from '../../API';
 import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import {
@@ -55,6 +62,57 @@ const FaithCommunityScreen = ({ navigation }: Props) => {
   const [openDropdown, setOpenDropdown] = useState<
     'religion' | 'motherTongue' | 'languages' | null
   >(null);
+  const [saving, setSaving] = useState(false);
+
+  const handleContinue = async () => {
+    if (!religion) {
+      Toast.show('Please select your religion');
+      return;
+    }
+    if (saving) {
+      return;
+    }
+
+    const payload: Record<string, string | string[]> = {
+      religion,
+      mother_tongue: motherTongue,
+    };
+
+    const communityValue = community.trim();
+    if (communityValue) {
+      payload.community = communityValue;
+    }
+
+    const sectValue = sect.trim();
+    if (sectValue) {
+      payload.sect = sectValue;
+    }
+
+    if (otherLanguages.length > 0) {
+      payload.other_languages = otherLanguages;
+    }
+
+    setSaving(true);
+
+    try {
+      console.log('Profile Faith Request:', ENDPOINTS.PROFILE_UPDATE);
+      const res = await Api.updateProfile(payload);
+
+      if (res?.status == 200) {
+        console.log('Profile Faith Success:', res);
+        navigation.navigate('AddPhotos');
+      } else {
+        console.log('Profile Faith Failed:', res);
+        Toast.show(res?.message ?? 'Failed to save faith details', Toast.LONG);
+      }
+    } catch (error) {
+      const axiosError = error as AxiosError<ApiErrorResponse>;
+      console.log('Profile Faith Error:', axiosError?.response?.data || error);
+      Toast.show(getApiErrorMessage(axiosError), Toast.LONG);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const toggleLanguage = (language: OtherLanguage) => {
     setOtherLanguages(prev => {
@@ -71,10 +129,6 @@ const FaithCommunityScreen = ({ navigation }: Props) => {
 
   const removeLanguage = (language: OtherLanguage) => {
     setOtherLanguages(prev => prev.filter(item => item !== language));
-  };
-
-  const handleContinue = () => {
-    navigation.navigate('AddPhotos');
   };
 
   return (
@@ -277,6 +331,7 @@ const FaithCommunityScreen = ({ navigation }: Props) => {
           <PrimaryButton
             title={Strings.continueBtn}
             onPress={handleContinue}
+            loading={saving}
             showArrow
           />
         </View>

@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import {
+  ActivityIndicator,
   Image,
   ScrollView,
   StyleSheet,
@@ -8,12 +9,26 @@ import {
   View,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
-import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
+import {
+  RouteProp,
+  useFocusEffect,
+  useNavigation,
+  useRoute,
+} from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import Toast from 'react-native-simple-toast';
+import { AxiosError } from 'axios';
 import { Images } from '../../Assets';
-import { PROFILE_DETAILS } from '../../Constant/MatchProfiles';
+import {
+  Api,
+  ENDPOINTS,
+  getApiErrorMessage,
+  mapMatchProfileDetail,
+  type ApiErrorResponse,
+} from '../../API';
+import { PROFILE_DETAILS, type ProfileDetail } from '../../Constant/MatchProfiles';
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
@@ -31,10 +46,70 @@ const ProfileDetailScreen = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<RouteProps>();
-  const profile = PROFILE_DETAILS[route.params.profileId];
+  const { profileId } = route.params;
+  const [profile, setProfile] = useState<ProfileDetail | null>(
+    PROFILE_DETAILS[profileId] ?? null,
+  );
+  const [loading, setLoading] = useState(!PROFILE_DETAILS[profileId]);
+
+  const fetchProfile = useCallback(async () => {
+    if (PROFILE_DETAILS[profileId]) {
+      setProfile(PROFILE_DETAILS[profileId]);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+     
+    try {
+      console.log('Match Profile Request:', `${ENDPOINTS.MATCHES}/${profileId}`);
+      const res = await Api.getMatchProfile(profileId);
+
+      if (res?.status == 200) {
+        console.log('Match Profile Success:', res?.data);
+        setProfile(mapMatchProfileDetail(res?.data, profileId));
+      } else {
+        console.log('Match Profile Failed:', res?.data);
+        setProfile(null);
+        Toast.show(res?.data?.message ?? 'Failed to load profile', Toast.LONG);
+      }
+    } catch (error) {
+      const axiosError = error as AxiosError<ApiErrorResponse>;
+      console.log('Match Profile Error:', axiosError?.response?.data || error);
+      setProfile(null);
+      Toast.show(getApiErrorMessage(error, 'Failed to load profile'), Toast.LONG);
+    } finally {
+      setLoading(false);
+    }
+  }, [profileId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchProfile();
+    }, [fetchProfile]),
+  );
+
+  if (loading) {
+    return (
+      <View style={styles.loaderRoot}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+      </View>
+    );
+  }
 
   if (!profile) {
-    return null;
+    return (
+      <View style={styles.loaderRoot}>
+        <TouchableOpacity
+          style={styles.backBtn}
+          activeOpacity={0.85}
+          onPress={() => navigation.goBack()}
+        >
+          <Icon name="chevron-left" size={fs(26)} color={Colors.primary} />
+        </TouchableOpacity>
+        <Text style={styles.emptyText}>Profile not found</Text>
+      </View>
+    );
   }
 
   const handleSendInterest = () => {
@@ -174,27 +249,31 @@ const ProfileDetailScreen = () => {
           </View>
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{Strings.otherLanguages}</Text>
-          <View style={styles.chipRow}>
-            {profile.languages.map(lang => (
-              <View key={lang} style={styles.chip}>
-                <Text style={styles.chipText}>{lang}</Text>
-              </View>
-            ))}
+        {profile.languages.length > 0 ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>{Strings.otherLanguages}</Text>
+            <View style={styles.chipRow}>
+              {profile.languages.map(lang => (
+                <View key={lang} style={styles.chip}>
+                  <Text style={styles.chipText}>{lang}</Text>
+                </View>
+              ))}
+            </View>
           </View>
-        </View>
+        ) : null}
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{Strings.interests}</Text>
-          <View style={styles.chipRow}>
-            {profile.interests.map(interest => (
-              <View key={interest} style={styles.chip}>
-                <Text style={styles.chipText}>{interest}</Text>
-              </View>
-            ))}
+        {profile.interests.length > 0 ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>{Strings.interests}</Text>
+            <View style={styles.chipRow}>
+              {profile.interests.map(interest => (
+                <View key={interest} style={styles.chip}>
+                  <Text style={styles.chipText}>{interest}</Text>
+                </View>
+              ))}
+            </View>
           </View>
-        </View>
+        ) : null}
       </ScrollView>
 
       <View
@@ -229,6 +308,28 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: '#FFF1F2',
+  },
+  loaderRoot: {
+    flex: 1,
+    backgroundColor: '#FFF1F2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backBtn: {
+    position: 'absolute',
+    top: hp('6%'),
+    left: wp('4%'),
+    width: wp('10.5%'),
+    height: wp('10.5%'),
+    borderRadius: wp('5.25%'),
+    backgroundColor: Colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyText: {
+    fontSize: fs(14),
+    fontFamily: Fonts.medium,
+    color: Colors.textLight,
   },
   scrollContent: {
     backgroundColor: '#FFF1F2',

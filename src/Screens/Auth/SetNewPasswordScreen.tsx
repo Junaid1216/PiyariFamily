@@ -21,7 +21,7 @@ import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
-import { authService, getApiErrorMessage, isSuccessStatus } from '../../API';
+import { authService, getApiErrorMessage } from '../../API';
 import { AuthStackParamList } from '../../Navigation/AuthNavigator';
 import { fs, hp, wp } from '../../Functions/responsive';
 
@@ -68,7 +68,7 @@ const SetNewPasswordScreen = () => {
         password,
       });
 
-      if (isSuccessStatus(response.status) && response.success) {
+      if (response?.status == 200) {
         Toast.show(response.message || 'Password updated successfully');
         navigation.replace('PasswordResetSuccess');
         return;

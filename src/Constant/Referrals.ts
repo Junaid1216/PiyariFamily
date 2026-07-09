@@ -1,8 +1,4 @@
-import { ImageSourcePropType } from 'react-native';
-import { Images } from '../Assets';
-
 export const REFERRAL_LINK = 'piyarifamily.com/ref/AYESHA2024';
-
 export const REFERRAL_STATS = {
   registered: 10,
   pointsEarned: 500,
@@ -42,15 +38,4 @@ export const REDEEM_OPTIONS: RedeemOption[] = [
   },
 ];
 
-export type ReferralHistoryItem = {
-  id: string;
-  name: string;
-  image: ImageSourcePropType;
-  points: string;
-};
-
-export const REFERRAL_HISTORY: ReferralHistoryItem[] = [
-  { id: '1', name: 'Ayesha', image: Images.femaleProfile, points: '+50 pts' },
-  { id: '2', name: 'Ali', image: Images.maleProfile, points: '+50 pts' },
-  { id: '3', name: 'Ahmed', image: Images.maleProfile, points: '+50 pts' },
-];
+export type { ReferralHistoryItem } from '../API/mappers/referralMapper';

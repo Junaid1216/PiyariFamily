@@ -20,7 +20,7 @@ import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
-import { authService, getApiErrorMessage, isSuccessStatus } from '../../API';
+import { authService, ENDPOINTS, getApiErrorMessage } from '../../API';
 import { hp, wp } from '../../Functions/responsive';
 
 type Props = {
@@ -61,35 +61,26 @@ const SignUpScreen = ({ navigation }: Props) => {
     }
 
     setLoading(true);
-    const payload = {
-      name: fullName.trim(),
-      email: email.trim(),
-      phone: phoneNumber.trim(),
-      password,
-      password_confirmation: confirmPassword,
-    };
-
-    console.log('[SignUp API] Request:', payload);
 
     try {
-      const response = await authService.register(payload);
+      console.log('Sign Up Request:', ENDPOINTS.AUTH.REGISTER);
+      const response = await authService.register({
+        name: fullName.trim(),
+        email: email.trim(),
+        phone: phoneNumber.trim(),
+        password,
+        password_confirmation: confirmPassword,
+      });
 
-      console.log('[SignUp API] Response:', JSON.stringify(response, null, 2));
-      console.log('[SignUp API] Status:', response.status);
-      console.log('[SignUp API] Success:', response.success);
-      console.log('[SignUp API] Message:', response.message);
-
-      if (isSuccessStatus(response.status) && response.success) {
-        Toast.show(response.message || 'Account created successfully');
+      if (response?.status == 200) {
+        console.log('Sign Up Success:', response);
         navigation.navigate('VerifyEmail', { email: email.trim() });
-        return;
+      } else {
+        console.log('Sign Up Failed:', response);
+        Toast.show(response.message || 'Registration failed. Please try again.');
       }
-
-      console.log('[SignUp API] Failed:', response);
-      Toast.show(response.message || 'Registration failed. Please try again.');
     } catch (error) {
-      console.log('[SignUp API] Error:', error);
-      console.log('[SignUp API] Error Message:', getApiErrorMessage(error));
+      console.log('Sign Up Error:', (error as any)?.response?.data || error);
       Toast.show(getApiErrorMessage(error));
     } finally {
       setLoading(false);

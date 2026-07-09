@@ -1,9 +1,9 @@
 import React, { useCallback, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Dimensions,
   FlatList,
   Image,
-  ImageSourcePropType,
   NativeScrollEvent,
   NativeSyntheticEvent,
   ScrollView,
@@ -13,10 +13,22 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import Toast from 'react-native-simple-toast';
+import { AxiosError } from 'axios';
 import { Images } from '../../Assets';
+import {
+  Api,
+  ENDPOINTS,
+  getApiErrorMessage,
+  mapHomeGreeting,
+  mapHomeMatches,
+  type ApiErrorResponse,
+  type FeaturedMatch,
+  type SuggestedMatch,
+} from '../../API';
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
@@ -30,119 +42,80 @@ type HomeNavigationProp = NativeStackNavigationProp<
   'HomeMain'
 >;
 
-type MatchTag = {
-  icon: string;
-  label: string;
-};
-
-type FeaturedMatch = {
-  id: string;
-  name: string;
-  age: number;
-  location: string;
-  image: ImageSourcePropType;
-  tags: MatchTag[];
-  isNew?: boolean;
-  isVerified?: boolean;
-};
-
-type SuggestedMatch = {
-  id: string;
-  name: string;
-  age: number;
-  location: string;
-  profession: string;
-  image: ImageSourcePropType;
-  tier: 'VIP' | 'VVIP';
-  isVerified: boolean;
-};
-
-const FEATURED_MATCHES: FeaturedMatch[] = [
-  {
-    id: '1',
-    name: 'Jannat',
-    age: 26,
-    location: 'Lahore, Pakistan',
-    image: Images.femaleProfile2,
-    isNew: true,
-    isVerified: true,
-    tags: [
-      { icon: 'school-outline', label: 'MBA' },
-      { icon: 'briefcase-outline', label: 'Software Engineer' },
-      { icon: 'heart-outline', label: 'Muslim' },
-    ],
-  },
-  {
-    id: '2',
-    name: 'Aisha',
-    age: 24,
-    location: 'Karachi, Pakistan',
-    image: Images.femaleProfile,
-    isVerified: true,
-    tags: [
-      { icon: 'school-outline', label: 'BBA' },
-      { icon: 'briefcase-outline', label: 'Designer' },
-      { icon: 'heart-outline', label: 'Muslim' },
-    ],
-  },
-  {
-    id: '3',
-    name: 'Rohan',
-    age: 29,
-    location: 'Islamabad, Pakistan',
-    image: Images.maleProfile,
-    isVerified: true,
-    tags: [
-      { icon: 'school-outline', label: 'BS CS' },
-      { icon: 'briefcase-outline', label: 'Engineer' },
-      { icon: 'heart-outline', label: 'Muslim' },
-    ],
-  },
-];
-
-const SUGGESTED_MATCHES: SuggestedMatch[] = [
-  {
-    id: '1',
-    name: 'Aisha',
-    age: 26,
-    location: 'Lahore',
-    profession: 'Designer',
-    image: Images.femaleProfile,
-    tier: 'VIP',
-    isVerified: true,
-  },
-  {
-    id: '2',
-    name: 'Rohan',
-    age: 29,
-    location: 'Karachi',
-    profession: 'Engineer',
-    image: Images.maleProfile,
-    tier: 'VVIP',
-    isVerified: true,
-  },
-];
-
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const HORIZONTAL_PADDING = wp('5.5%');
 const CARD_WIDTH = SCREEN_WIDTH - HORIZONTAL_PADDING * 2;
 
 const HomeScreen = () => {
   const navigation = useNavigation<HomeNavigationProp>();
+  const [featuredMatches, setFeaturedMatches] = useState<FeaturedMatch[]>([]);
+  const [suggestedMatches, setSuggestedMatches] = useState<SuggestedMatch[]>([]);
+  const [greeting, setGreeting] = useState(Strings.homeGreeting);
+  const [subtitle, setSubtitle] = useState(Strings.homeSubtitle);
+  const [loading, setLoading] = useState(true);
   const [activeIndex, setActiveIndex] = useState(0);
   const sliderRef = useRef<FlatList<FeaturedMatch>>(null);
 
-  const goToIndex = useCallback((index: number) => {
-    const nextIndex =
-      ((index % FEATURED_MATCHES.length) + FEATURED_MATCHES.length) %
-      FEATURED_MATCHES.length;
+  const fetchHomeMatches = useCallback(async () => {
+    setLoading(true);
 
-    sliderRef.current?.scrollToIndex({
-      index: nextIndex,
-      animated: true,
-    });
-    setActiveIndex(nextIndex);
+    try {
+      console.log('Home Matches Request:', ENDPOINTS.MATCHES_HOME);
+      const res = await Api.getHomeMatches();
+
+      if (res?.status == 200) {
+        console.log('Home Matches Success:', res?.data);
+        const mapped = mapHomeMatches(res?.data);
+        const greetingParts = mapHomeGreeting(mapped.greeting);
+        setGreeting(greetingParts.title || Strings.homeGreeting);
+        setSubtitle(greetingParts.subtitle || Strings.homeSubtitle);
+        setFeaturedMatches(mapped.featuredMatches);
+        setSuggestedMatches(mapped.suggestedMatches);
+        setActiveIndex(0);
+      } else {
+        console.log('Home Matches Failed:', res?.data);
+        setFeaturedMatches([]);
+        setSuggestedMatches([]);
+        Toast.show(
+          res?.data?.message ?? 'Failed to load matches',
+          Toast.LONG,
+        );
+      }
+    } catch (error) {
+      const axiosError = error as AxiosError<ApiErrorResponse>;
+      console.log('Home Matches Error:', axiosError?.response?.data || error);
+      setFeaturedMatches([]);
+      setSuggestedMatches([]);
+      Toast.show(getApiErrorMessage(error, 'Failed to load matches'), Toast.LONG);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchHomeMatches();
+    }, [fetchHomeMatches]),
+  );
+
+  const goToIndex = useCallback(
+    (index: number) => {
+      if (!featuredMatches.length) {
+        return;
+      }
+
+      const nextIndex =
+        ((index % featuredMatches.length) + featuredMatches.length) %
+        featuredMatches.length;
+
+      sliderRef.current?.scrollToIndex({
+        index: nextIndex,
+        animated: true,
+      });
+      setActiveIndex(nextIndex);
+    },
+    [featuredMatches.length],
+  );
 
   const handleDislike = () => {
     goToIndex(activeIndex + 1);
@@ -159,8 +132,19 @@ const HomeScreen = () => {
     setActiveIndex(index);
   };
 
+  const openProfileDetail = useCallback(
+    (profileId: string) => {
+      navigation.navigate('ProfileDetail', { profileId });
+    },
+    [navigation],
+  );
+
   const renderFeaturedCard = ({ item }: { item: FeaturedMatch }) => (
-    <View style={[styles.featuredCard, { width: CARD_WIDTH }]}>
+    <TouchableOpacity
+      style={[styles.featuredCard, { width: CARD_WIDTH }]}
+      activeOpacity={0.92}
+      onPress={() => openProfileDetail(item.id)}
+    >
       <Image
         source={item.image}
         style={styles.featuredImage}
@@ -206,7 +190,7 @@ const HomeScreen = () => {
           ))}
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 
   return (
@@ -238,8 +222,8 @@ const HomeScreen = () => {
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.greeting}>{Strings.homeGreeting}</Text>
-        <Text style={styles.subtitle}>{Strings.homeSubtitle}</Text>
+        <Text style={styles.greeting}>{greeting}</Text>
+        <Text style={styles.subtitle}>{subtitle}</Text>
 
         <TouchableOpacity
           style={styles.premiumBanner}
@@ -262,9 +246,17 @@ const HomeScreen = () => {
           <Icon name="chevron-right" size={fs(22)} color={Colors.primary} />
         </TouchableOpacity>
 
+        {loading ? (
+          <View style={styles.loaderWrap}>
+            <ActivityIndicator size="large" color={Colors.primary} />
+          </View>
+        ) : (
+          <>
+        {featuredMatches.length > 0 ? (
+          <>
         <FlatList
           ref={sliderRef}
-          data={FEATURED_MATCHES}
+          data={featuredMatches}
           renderItem={renderFeaturedCard}
           keyExtractor={item => item.id}
           horizontal
@@ -308,7 +300,7 @@ const HomeScreen = () => {
         </View>
 
         <View style={styles.pagination}>
-          {FEATURED_MATCHES.map((_, index) => (
+          {featuredMatches.map((_, index) => (
             <View
               key={index}
               style={[
@@ -320,6 +312,8 @@ const HomeScreen = () => {
             />
           ))}
         </View>
+          </>
+        ) : null}
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>{Strings.suggestedMatches}</Text>
@@ -333,14 +327,13 @@ const HomeScreen = () => {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.suggestedList}
         >
-          {SUGGESTED_MATCHES.map(match => (
+          {suggestedMatches.length > 0 ? (
+          suggestedMatches.map(match => (
             <TouchableOpacity
               key={match.id}
               style={styles.suggestedCard}
               activeOpacity={0.9}
-              onPress={() =>
-                navigation.navigate('ProfileDetail', { profileId: match.id })
-              }
+              onPress={() => openProfileDetail(match.id)}
             >
               <View style={styles.suggestedImageWrap}>
                 <Image
@@ -405,8 +398,13 @@ const HomeScreen = () => {
                 </View>
               </View>
             </TouchableOpacity>
-          ))}
+          ))
+          ) : (
+            <Text style={styles.emptyText}>No suggested matches found</Text>
+          )}
         </ScrollView>
+          </>
+        )}
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
@@ -423,6 +421,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: wp('5.5%'),
     paddingTop: hp('0.5%'),
     paddingBottom: hp('1.5%'),
+  },
+  loaderWrap: {
+    minHeight: hp('30%'),
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyText: {
+    fontSize: fs(12),
+    fontFamily: Fonts.regular,
+    color: Colors.textLight,
+    paddingVertical: hp('1%'),
   },
   header: {
     flexDirection: 'row',

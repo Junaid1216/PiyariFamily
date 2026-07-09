@@ -20,7 +20,7 @@ import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
-import { authService, getApiErrorMessage, isSuccessStatus } from '../../API';
+import { authService, getApiErrorMessage } from '../../API';
 import { AuthStackParamList } from '../../Navigation/AuthNavigator';
 import { hp, wp } from '../../Functions/responsive';
 
@@ -54,7 +54,7 @@ const CheckEmailScreen = ({ navigation }: Props) => {
         otp: code,
       });
 
-      if (isSuccessStatus(response.status) && response.success) {
+      if (response?.status == 200) {
         Toast.show(response.message || 'OTP verified successfully');
         navigation.navigate('CodeVerified', { email });
         return;
@@ -72,7 +72,7 @@ const CheckEmailScreen = ({ navigation }: Props) => {
     try {
       const response = await authService.forgotPassword({ email });
 
-      if (isSuccessStatus(response.status) && response.success) {
+      if (response?.status == 200) {
         Toast.show(response.message || 'Reset code resent');
         setResendCooldown(response.resend_after_seconds ?? 45);
         return;

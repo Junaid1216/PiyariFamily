@@ -40,35 +40,21 @@ const ForgotPasswordScreen = ({ navigation }: Props) => {
       setLoading(true);
 
       try {
-        console.log('Forgot Password Request:', ENDPOINTS.AUTH.FORGOT_PASSWORD, {
-          email: email.trim(),
-        });
+        console.log('Forgot Password Request:', ENDPOINTS.AUTH.FORGOT_PASSWORD);
 
         const res = await authService.forgotPassword({
           email: email.trim(),
         });
 
-        console.log(
-          'Forgot Password Response:',
-          JSON.stringify(res, null, 2),
-        );
-
         if (res?.status == 200) {
-          console.log(
-            'Forgot Password Success:',
-            JSON.stringify(res, null, 2),
-          );
-          Toast.show(res?.message || 'Reset code sent to your email');
+          console.log('Forgot Password Success:', res);
           navigation.navigate('CheckEmail', { email: email.trim() });
         } else {
-          console.log(
-            'Forgot Password Failed:',
-            JSON.stringify(res, null, 2),
-          );
+          console.log('Forgot Password Failed:', res);
           Toast.show(res?.message || 'Failed to send reset code. Please try again.');
         }
       } catch (error: any) {
-        console.log('Forgot Password API Error:', error?.response?.data);
+        console.log('Forgot Password Error:', error?.response?.data || error);
         Toast.show(
           error?.response?.data?.message ||
             'Failed to send reset code. Please try again.',

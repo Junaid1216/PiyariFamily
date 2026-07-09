@@ -352,6 +352,8 @@ export const Strings = {
   rateTheApp: 'Rate the App',
   rateAppSubtitle: 'Share your experience',
   dangerZone: 'DANGER ZONE',
+  logOut: 'Log Out',
+  logOutSubtitle: 'Sign out of your account',
   deactivateAccount: 'Deactivate / Delete Account',
   deactivateSubtitle: 'Permanently remove your data',
 

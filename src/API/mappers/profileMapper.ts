@@ -16,6 +16,10 @@ export type ProfileApiData = {
   country?: string | null;
   state?: string | null;
   height?: string | null;
+  weight?: string | null;
+  body_type?: string | null;
+  complexion?: string | null;
+  physical_disability?: boolean | number | string | null;
   mother_tongue?: string | null;
   other_languages?: string | string[] | null;
   marital_status?: string | null;
@@ -24,6 +28,7 @@ export type ProfileApiData = {
   residence_status?: string | null;
   age?: number | null;
   is_verified?: boolean;
+  phone_verified?: boolean;
   location?: string | null;
   profile_photo?: string | null;
   image?: string | null;

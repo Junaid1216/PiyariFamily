@@ -8,17 +8,19 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, CommonActions } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import Toast from 'react-native-simple-toast';
+import { AxiosError } from 'axios';
 import { Images } from '../../Assets';
 import ScreenHeader from '../../Components/ScreenHeader';
 import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
-import { Api, ENDPOINTS, mapProfileToSettings, resolveProfileData } from '../../API';
+import { Api, ENDPOINTS, authService, getApiErrorMessage, mapProfileToSettings, resolveProfileData, type ApiErrorResponse } from '../../API';
 import { ProfileStackParamList } from '../../Navigation/ProfileStackNavigator';
 import { fs, hp, wp } from '../../Functions/responsive';
 
@@ -72,18 +74,17 @@ const SettingsScreen = () => {
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [profilePictureVisible, setProfilePictureVisible] = useState(true);
   const [additionalPhotosVisible, setAdditionalPhotosVisible] = useState(true);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const fetchProfile = useCallback(async () => {
     try {
       console.log('Profile Request:', ENDPOINTS.PROFILE);
       const res = await Api.getProfile();
-      console.log('Profile Response:', JSON.stringify(res?.data, null, 2));
 
       if (res?.status == 200) {
+        console.log('Profile Success:', res?.data);
         const rawProfile = resolveProfileData(res?.data);
         const profile = mapProfileToSettings(rawProfile);
-        console.log('Profile Success:', JSON.stringify(profile, null, 2));
-
         setProfileName(profile.name);
         setProfileMeta(profile.meta);
         setIsVerified(profile.isVerified);
@@ -91,10 +92,10 @@ const SettingsScreen = () => {
         setProfilePictureVisible(profile.profilePictureVisible);
         setAdditionalPhotosVisible(profile.additionalPhotosVisible);
       } else {
-        console.log('Profile Failed:', JSON.stringify(res?.data, null, 2));
+        console.log('Profile Failed:', res?.data);
       }
     } catch (error: any) {
-      console.log('Profile API Error:', error?.response?.data);
+      console.log('Profile Error:', error?.response?.data || error);
     }
   }, []);
 
@@ -103,6 +104,38 @@ const SettingsScreen = () => {
       fetchProfile();
     }, [fetchProfile]),
   );
+
+  const handleLogout = async () => {
+    if (loggingOut) {
+      return;
+    }
+
+    setLoggingOut(true);
+
+    try {
+      console.log('Logout Request:', ENDPOINTS.AUTH.LOGOUT);
+      const res = await authService.logout();
+
+      if (res?.status == 200) {
+        console.log('Logout Success:', res);
+        navigation.getParent()?.getParent()?.getParent()?.dispatch(
+          CommonActions.reset({
+            index: 0,
+            routes: [{ name: 'Login' }],
+          }),
+        );
+      } else {
+        console.log('Logout Failed:', res);
+        Toast.show(res?.message ?? 'Failed to log out', Toast.LONG);
+      }
+    } catch (error) {
+      const axiosError = error as AxiosError<ApiErrorResponse>;
+      console.log('Logout Error:', axiosError?.response?.data || error);
+      Toast.show(getApiErrorMessage(axiosError, 'Failed to log out'), Toast.LONG);
+    } finally {
+      setLoggingOut(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
@@ -282,6 +315,14 @@ const SettingsScreen = () => {
 
         <Text style={styles.sectionLabel}>{Strings.dangerZone}</Text>
         <View style={styles.settingGroup}>
+          <SettingItem
+            icon="logout"
+            title={Strings.logOut}
+            subtitle={loggingOut ? 'Logging out...' : Strings.logOutSubtitle}
+            danger
+            onPress={handleLogout}
+          />
+          <View style={styles.itemDivider} />
           <SettingItem
             icon="alert-outline"
             title={Strings.deactivateAccount}

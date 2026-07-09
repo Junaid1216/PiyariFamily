@@ -38,29 +38,31 @@ const PrimaryButton = ({
       onPress={onPress}
       disabled={disabled || loading}
       activeOpacity={0.88}>
-      {loading ? (
-        <ActivityIndicator color={Colors.white} />
-      ) : (
-        <View style={styles.content}>
-          {leftIcon ? (
-            <Icon
-              name={leftIcon}
-              size={fs(20)}
-              color={Colors.white}
-              style={styles.leftIcon}
-            />
-          ) : null}
-          <Text style={styles.text}>{title}</Text>
-          {showArrow && (
-            <Icon
-              name="arrow-right"
-              size={fs(20)}
-              color={Colors.white}
-              style={styles.arrow}
-            />
-          )}
-        </View>
-      )}
+      <View style={styles.content}>
+        {loading ? (
+          <ActivityIndicator
+            color={Colors.white}
+            size="small"
+            style={styles.loader}
+          />
+        ) : leftIcon ? (
+          <Icon
+            name={leftIcon}
+            size={fs(20)}
+            color={Colors.white}
+            style={styles.leftIcon}
+          />
+        ) : null}
+        <Text style={styles.text}>{title}</Text>
+        {!loading && showArrow ? (
+          <Icon
+            name="arrow-right"
+            size={fs(20)}
+            color={Colors.white}
+            style={styles.arrow}
+          />
+        ) : null}
+      </View>
     </TouchableOpacity>
   );
 };
@@ -81,6 +83,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  loader: {
+    marginRight: wp('2.5%'),
   },
   leftIcon: {
     marginRight: wp('2%'),

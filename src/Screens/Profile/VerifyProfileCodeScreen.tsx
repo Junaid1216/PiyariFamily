@@ -11,6 +11,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-simple-toast';
+import { AxiosError } from 'axios';
 import AuthBackground from '../../Components/AuthBackground';
 import AuthFooterHint from '../../Components/AuthFooterHint';
 import AuthIconBadge from '../../Components/AuthIconBadge';
@@ -18,6 +19,12 @@ import BackButton from '../../Components/BackButton';
 import OtpCodeInput from '../../Components/OtpCodeInput';
 import PrimaryButton from '../../Components/PrimaryButton';
 import ResendCodeSection from '../../Components/ResendCodeSection';
+import {
+  Api,
+  ENDPOINTS,
+  getApiErrorMessage,
+  type ApiErrorResponse,
+} from '../../API';
 import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
@@ -36,18 +43,67 @@ const VerifyProfileCodeScreen = () => {
   const route = useRoute<RouteProps>();
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
 
-  const handleVerify = () => {
+  const handleVerify = async () => {
     if (code.length !== 6) {
       Toast.show('Please enter the 6-digit code');
       return;
     }
+    if (loading) {
+      return;
+    }
 
     setLoading(true);
-    setTimeout(() => {
+
+    try {
+      console.log('Verify Phone Request:', ENDPOINTS.VERIFY_PHONE_VERIFY);
+      const res = await Api.verifyPhone({
+        phone: route.params.phone,
+        otp: code,
+      });
+
+      if (res?.status == 200) {
+        console.log('Verify Phone Success:', res);
+        navigation.navigate('ProfileVerified', { phone: route.params.phone });
+      } else {
+        console.log('Verify Phone Failed:', res);
+        Toast.show(res?.message ?? 'Invalid verification code', Toast.LONG);
+      }
+    } catch (error) {
+      const axiosError = error as AxiosError<ApiErrorResponse>;
+      console.log('Verify Phone Error:', axiosError?.response?.data || error);
+      Toast.show(getApiErrorMessage(axiosError), Toast.LONG);
+    } finally {
       setLoading(false);
-      navigation.navigate('ProfileVerified', { phone: route.params.phone });
-    }, 800);
+    }
+  };
+
+  const handleResend = async () => {
+    if (resending) {
+      return;
+    }
+
+    setResending(true);
+
+    try {
+      console.log('Verify Phone Resend Request:', ENDPOINTS.VERIFY_PHONE_SEND);
+      const res = await Api.sendVerifyPhone({ phone: route.params.phone });
+
+      if (res?.status == 200) {
+        console.log('Verify Phone Resend Success:', res);
+        Toast.show(res?.message ?? 'Verification code resent');
+      } else {
+        console.log('Verify Phone Resend Failed:', res);
+        Toast.show(res?.message ?? 'Failed to resend code', Toast.LONG);
+      }
+    } catch (error) {
+      const axiosError = error as AxiosError<ApiErrorResponse>;
+      console.log('Verify Phone Resend Error:', axiosError?.response?.data || error);
+      Toast.show(getApiErrorMessage(axiosError), Toast.LONG);
+    } finally {
+      setResending(false);
+    }
   };
 
   return (
@@ -86,9 +142,7 @@ const VerifyProfileCodeScreen = () => {
 
             <OtpCodeInput value={code} onChangeText={setCode} />
 
-            <ResendCodeSection
-              onResend={() => Toast.show('Verification code resent')}
-            />
+            <ResendCodeSection loading={resending} onResend={handleResend} />
 
             <View style={styles.flexSpacer} />
 

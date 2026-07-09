@@ -13,18 +13,27 @@ import {
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
 import Toast from 'react-native-simple-toast';
+import { AxiosError } from 'axios';
 import { Images } from '../../Assets';
 import AuthInput from '../../Components/AuthInput';
 import BackButton from '../../Components/BackButton';
 import PrimaryButton from '../../Components/PrimaryButton';
 import SetupDropdown from '../../Components/SetupDropdown';
 import SetupProgressBar from '../../Components/SetupProgressBar';
+import {
+  Api,
+  ENDPOINTS,
+  getApiErrorMessage,
+  type ApiErrorResponse,
+} from '../../API';
 import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import {
   EMPLOYMENT_TYPE_OPTIONS,
+  EMPLOYMENT_TYPE_TO_API,
   EmploymentType,
   INCOME_RANGE_OPTIONS,
+  INCOME_RANGE_TO_API,
   IncomeRange,
   PROFILE_SETUP_TOTAL_STEPS,
   RESIDENCE_STATUS_OPTIONS,
@@ -60,8 +69,9 @@ const CareerScreen = ({ navigation }: Props) => {
   const [openDropdown, setOpenDropdown] = useState<
     'income' | 'residence' | null
   >(null);
+  const [saving, setSaving] = useState(false);
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     if (!jobTitle.trim()) {
       Toast.show('Please enter your job title');
       return;
@@ -74,7 +84,35 @@ const CareerScreen = ({ navigation }: Props) => {
       Toast.show('Please select your income range');
       return;
     }
-    navigation.navigate('PhysicalDetails');
+    if (saving) {
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      console.log('Profile Career Request:', ENDPOINTS.PROFILE_CAREER);
+      const res = await Api.updateProfileCareer({
+        occupation: jobTitle.trim(),
+        employment_type: EMPLOYMENT_TYPE_TO_API[employmentType],
+        company: company.trim(),
+        annual_income: INCOME_RANGE_TO_API[incomeRange],
+      });
+
+      if (res?.status == 200) {
+        console.log('Profile Career Success:', res);
+        navigation.navigate('PhysicalDetails');
+      } else {
+        console.log('Profile Career Failed:', res);
+        Toast.show(res?.message ?? 'Failed to save career details', Toast.LONG);
+      }
+    } catch (error) {
+      const axiosError = error as AxiosError<ApiErrorResponse>;
+      console.log('Profile Career Error:', axiosError?.response?.data || error);
+      Toast.show(getApiErrorMessage(axiosError), Toast.LONG);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -189,6 +227,7 @@ const CareerScreen = ({ navigation }: Props) => {
           <PrimaryButton
             title={Strings.continueBtn}
             onPress={handleContinue}
+            loading={saving}
             showArrow
           />
         </View>

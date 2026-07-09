@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   Keyboard,
   StyleSheet,
@@ -6,17 +6,27 @@ import {
   TouchableWithoutFeedback,
   View,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-simple-toast';
+import { AxiosError } from 'axios';
 import AuthBackground from '../../Components/AuthBackground';
 import AuthFooterHint from '../../Components/AuthFooterHint';
 import AuthIconBadge from '../../Components/AuthIconBadge';
 import AuthInput from '../../Components/AuthInput';
 import BackButton from '../../Components/BackButton';
 import PrimaryButton from '../../Components/PrimaryButton';
+import {
+  Api,
+  ENDPOINTS,
+  getApiErrorMessage,
+  profileStorage,
+  resolveProfileData,
+  userStorage,
+  type ApiErrorResponse,
+} from '../../API';
 import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
@@ -33,19 +43,78 @@ const VerifyProfileScreen = () => {
   const navigation = useNavigation<NavigationProp>();
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
+  const [prefilling, setPrefilling] = useState(true);
 
-  const handleSendCode = () => {
+  const fetchProfilePhone = useCallback(async () => {
+    setPrefilling(true);
+
+    try {
+      console.log('Verify Phone Prefill Request:', ENDPOINTS.PROFILE);
+      const res = await Api.getProfile();
+
+      if (res?.status == 200) {
+        console.log('Verify Phone Prefill Success:', res?.data);
+        const profile = resolveProfileData(res?.data);
+        const savedPhone =
+          profile.phone ??
+          profileStorage.get()?.phone ??
+          userStorage.getUser()?.phone ??
+          '';
+
+        if (savedPhone) {
+          setPhone(savedPhone);
+        }
+
+        if (profile.phone_verified) {
+          navigation.replace('ProfileVerified', { phone: savedPhone });
+        }
+      } else {
+        console.log('Verify Phone Prefill Failed:', res?.data);
+      }
+    } catch (error) {
+      const axiosError = error as AxiosError<ApiErrorResponse>;
+      console.log('Verify Phone Prefill Error:', axiosError?.response?.data || error);
+    } finally {
+      setPrefilling(false);
+    }
+  }, [navigation]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchProfilePhone();
+    }, [fetchProfilePhone]),
+  );
+
+  const handleSendCode = async () => {
     const trimmed = phone.trim();
     if (!trimmed) {
       Toast.show('Please enter your phone number');
       return;
     }
+    if (loading) {
+      return;
+    }
 
     setLoading(true);
-    setTimeout(() => {
+
+    try {
+      console.log('Verify Phone Send Request:', ENDPOINTS.VERIFY_PHONE_SEND);
+      const res = await Api.sendVerifyPhone({ phone: trimmed });
+
+      if (res?.status == 200) {
+        console.log('Verify Phone Send Success:', res);
+        navigation.navigate('VerifyProfileCode', { phone: trimmed });
+      } else {
+        console.log('Verify Phone Send Failed:', res);
+        Toast.show(res?.message ?? 'Failed to send verification code', Toast.LONG);
+      }
+    } catch (error) {
+      const axiosError = error as AxiosError<ApiErrorResponse>;
+      console.log('Verify Phone Send Error:', axiosError?.response?.data || error);
+      Toast.show(getApiErrorMessage(axiosError), Toast.LONG);
+    } finally {
       setLoading(false);
-      navigation.navigate('VerifyProfileCode', { phone: trimmed });
-    }, 800);
+    }
   };
 
   return (
@@ -107,7 +176,7 @@ const VerifyProfileScreen = () => {
               <PrimaryButton
                 title={Strings.sendVerificationCode}
                 onPress={handleSendCode}
-                loading={loading}
+                loading={loading || prefilling}
                 showArrow
               />
               <AuthFooterHint

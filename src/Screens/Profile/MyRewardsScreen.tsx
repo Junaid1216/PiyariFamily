@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import {
+  ActivityIndicator,
   Image,
   ScrollView,
   StyleSheet,
@@ -8,17 +9,24 @@ import {
   View,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-simple-toast';
+import { AxiosError } from 'axios';
 import ScreenHeader from '../../Components/ScreenHeader';
 import {
-  REDEEM_OPTIONS,
-  REFERRAL_HISTORY,
-  REFERRAL_STATS,
-} from '../../Constant/Referrals';
+  Api,
+  ENDPOINTS,
+  getApiErrorMessage,
+  mapReferralHistory,
+  mapReferralStats,
+  type ApiErrorResponse,
+  type ReferralHistoryItem,
+  type ReferralStats,
+} from '../../API';
+import { REDEEM_OPTIONS, REFERRAL_LINK } from '../../Constant/Referrals';
 import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
@@ -31,8 +39,86 @@ type NavigationProp = NativeStackNavigationProp<
   'MyRewards'
 >;
 
+const DEFAULT_STATS: ReferralStats = {
+  referralCode: '',
+  referralLink: REFERRAL_LINK,
+  registered: 0,
+  pointsEarned: 0,
+  rewardsTable: [],
+};
+
 const MyRewardsScreen = () => {
   const navigation = useNavigation<NavigationProp>();
+  const [stats, setStats] = useState<ReferralStats>(DEFAULT_STATS);
+  const [referralHistory, setReferralHistory] = useState<ReferralHistoryItem[]>(
+    [],
+  );
+  const [historyLoading, setHistoryLoading] = useState(true);
+
+  const fetchReferralStats = useCallback(async () => {
+    try {
+      console.log('Referral Stats Request:', ENDPOINTS.REFERRALS_STATS);
+      const res = await Api.getReferralStats();
+
+      if (res?.status == 200) {
+        console.log('Referral Stats Success:', res?.data);
+        setStats(mapReferralStats(res?.data));
+      } else {
+        console.log('Referral Stats Failed:', res?.data);
+        setStats(DEFAULT_STATS);
+        Toast.show(
+          res?.data?.message ?? 'Failed to load referral stats',
+          Toast.LONG,
+        );
+      }
+    } catch (error) {
+      const axiosError = error as AxiosError<ApiErrorResponse>;
+      console.log('Referral Stats Error:', axiosError?.response?.data || error);
+      setStats(DEFAULT_STATS);
+      Toast.show(
+        getApiErrorMessage(error, 'Failed to load referral stats'),
+        Toast.LONG,
+      );
+    }
+  }, []);
+
+  const fetchReferralHistory = useCallback(async () => {
+    setHistoryLoading(true);
+
+    try {
+      console.log('Referral History Request:', ENDPOINTS.REFERRALS_HISTORY);
+      const res = await Api.getReferralHistory();
+
+      if (res?.status == 200) {
+        console.log('Referral History Success:', res?.data);
+        setReferralHistory(mapReferralHistory(res?.data));
+      } else {
+        console.log('Referral History Failed:', res?.data);
+        setReferralHistory([]);
+        Toast.show(
+          res?.data?.message ?? 'Failed to load referral history',
+          Toast.LONG,
+        );
+      }
+    } catch (error) {
+      const axiosError = error as AxiosError<ApiErrorResponse>;
+      console.log('Referral History Error:', axiosError?.response?.data || error);
+      setReferralHistory([]);
+      Toast.show(
+        getApiErrorMessage(error, 'Failed to load referral history'),
+        Toast.LONG,
+      );
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchReferralStats();
+      fetchReferralHistory();
+    }, [fetchReferralStats, fetchReferralHistory]),
+  );
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
@@ -57,28 +143,24 @@ const MyRewardsScreen = () => {
         >
           <Icon name="crown" size={fs(26)} color={Colors.gold} />
           <Text style={styles.heroLabel}>{Strings.totalPoints}</Text>
-          <Text style={styles.heroPoints}>{REFERRAL_STATS.totalPoints} pts</Text>
+          <Text style={styles.heroPoints}>{stats.pointsEarned} pts</Text>
         </LinearGradient>
 
         <Text style={styles.sectionLabel}>{Strings.rewardsBreakdown}</Text>
         <View style={styles.breakdownRow}>
           <View style={styles.breakdownCard}>
             <Icon name="account-outline" size={fs(18)} color={Colors.primary} />
-            <Text style={styles.breakdownValue}>
-              {REFERRAL_STATS.registered}
-            </Text>
+            <Text style={styles.breakdownValue}>{stats.registered}</Text>
             <Text style={styles.breakdownLabel}>{Strings.registrations}</Text>
           </View>
           <View style={styles.breakdownCard}>
             <Icon name="star-outline" size={fs(18)} color={Colors.primary} />
-            <Text style={styles.breakdownValue}>
-              {REFERRAL_STATS.pointsEarned}
-            </Text>
+            <Text style={styles.breakdownValue}>{stats.pointsEarned}</Text>
             <Text style={styles.breakdownLabel}>{Strings.points}</Text>
           </View>
           <View style={styles.breakdownCard}>
             <Icon name="gift-outline" size={fs(18)} color={Colors.primary} />
-            <Text style={styles.breakdownValue}>{REFERRAL_STATS.redeemed}</Text>
+            <Text style={styles.breakdownValue}>0</Text>
             <Text style={styles.breakdownLabel}>{Strings.redeemed}</Text>
           </View>
         </View>
@@ -108,31 +190,38 @@ const MyRewardsScreen = () => {
           <Text style={styles.sectionLabelInline}>
             {Strings.referralHistory}
           </Text>
-          <TouchableOpacity activeOpacity={0.85}>
-            <Text style={styles.seeAllText}>{Strings.seeAll} →</Text>
-          </TouchableOpacity>
         </View>
 
-        {REFERRAL_HISTORY.map(item => (
-          <View key={item.id} style={styles.historyRow}>
-            <Image source={item.image} style={styles.historyAvatar} />
-            <View style={styles.historyTextWrap}>
-              <Text style={styles.historyName}>{item.name}</Text>
-              <Text style={styles.historySubtext}>
-                {Strings.registeredViaLink}
-              </Text>
-            </View>
-            <View style={styles.historyRight}>
-              <View style={styles.registeredBadge}>
-                <Icon name="check" size={fs(10)} color="#22C55E" />
-                <Text style={styles.registeredBadgeText}>
-                  {Strings.registeredBadge}
+        {historyLoading ? (
+          <View style={styles.loaderWrap}>
+            <ActivityIndicator size="large" color={Colors.primary} />
+          </View>
+        ) : referralHistory.length > 0 ? (
+          referralHistory.map(item => (
+            <View key={item.id} style={styles.historyRow}>
+              <Image source={item.image} style={styles.historyAvatar} />
+              <View style={styles.historyTextWrap}>
+                <Text style={styles.historyName}>{item.name}</Text>
+                <Text style={styles.historySubtext}>
+                  {Strings.registeredViaLink}
                 </Text>
               </View>
-              <Text style={styles.historyPoints}>{item.points}</Text>
+              <View style={styles.historyRight}>
+                {item.isRegistered ? (
+                  <View style={styles.registeredBadge}>
+                    <Icon name="check" size={fs(10)} color="#22C55E" />
+                    <Text style={styles.registeredBadgeText}>
+                      {Strings.registeredBadge}
+                    </Text>
+                  </View>
+                ) : null}
+                <Text style={styles.historyPoints}>{item.points}</Text>
+              </View>
             </View>
-          </View>
-        ))}
+          ))
+        ) : (
+          <Text style={styles.emptyText}>No referral history found</Text>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -157,6 +246,18 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: AuthStyles.horizontalPadding,
     paddingBottom: hp('3%'),
+  },
+  loaderWrap: {
+    minHeight: hp('12%'),
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyText: {
+    fontSize: FontSizes.bodySmall,
+    fontFamily: Fonts.regular,
+    color: Colors.textLight,
+    textAlign: 'center',
+    paddingVertical: hp('2%'),
   },
   heroCard: {
     borderRadius: wp('4.5%'),
@@ -271,11 +372,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginTop: hp('1%'),
     marginBottom: hp('1%'),
-  },
-  seeAllText: {
-    fontSize: fs(12),
-    fontFamily: Fonts.semiBold,
-    color: Colors.gold,
   },
   historyRow: {
     flexDirection: 'row',

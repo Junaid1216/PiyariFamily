@@ -30,6 +30,18 @@ export const MARITAL_STATUS_OPTIONS = [
 
 export type MaritalStatus = (typeof MARITAL_STATUS_OPTIONS)[number];
 
+export const MARITAL_STATUS_TO_API: Record<MaritalStatus, string> = {
+  Single: 'single',
+  Divorced: 'divorced',
+  Widowed: 'widowed',
+};
+
+export const MARITAL_STATUS_FROM_API: Record<string, MaritalStatus> = {
+  single: 'Single',
+  divorced: 'Divorced',
+  widowed: 'Widowed',
+};
+
 export const QUALIFICATION_OPTIONS = [
   "Bachelor's Degree",
   "Master's Degree",
@@ -102,6 +114,20 @@ export const BODY_TYPE_OPTIONS = [
 
 export type BodyType = (typeof BODY_TYPE_OPTIONS)[number];
 
+export const BODY_TYPE_TO_API: Record<BodyType, string> = {
+  Slim: 'slim',
+  Athletic: 'athletic',
+  Average: 'average',
+  Heavy: 'heavy',
+};
+
+export const BODY_TYPE_FROM_API: Record<string, BodyType> = {
+  slim: 'Slim',
+  athletic: 'Athletic',
+  average: 'Average',
+  heavy: 'Heavy',
+};
+
 export const COMPLEXION_OPTIONS = [
   'Fair',
   'Wheatish',
@@ -111,6 +137,20 @@ export const COMPLEXION_OPTIONS = [
 
 export type Complexion = (typeof COMPLEXION_OPTIONS)[number];
 
+export const COMPLEXION_TO_API: Record<Complexion, string> = {
+  Fair: 'fair',
+  Wheatish: 'wheatish',
+  Dusky: 'dusky',
+  Dark: 'dark',
+};
+
+export const COMPLEXION_FROM_API: Record<string, Complexion> = {
+  fair: 'Fair',
+  wheatish: 'Wheatish',
+  dusky: 'Dusky',
+  dark: 'Dark',
+};
+
 export const EMPLOYMENT_TYPE_OPTIONS = [
   'Employed',
   'Self-Employed',
@@ -118,6 +158,21 @@ export const EMPLOYMENT_TYPE_OPTIONS = [
 ] as const;
 
 export type EmploymentType = (typeof EMPLOYMENT_TYPE_OPTIONS)[number];
+
+/** Backend career API values — confirm with backend if validation fails */
+export const EMPLOYMENT_TYPE_TO_API: Record<EmploymentType, string> = {
+  Employed: 'employed',
+  'Self-Employed': 'self_employed',
+  Business: 'business',
+};
+
+export const INCOME_RANGE_TO_API: Record<IncomeRange, string> = {
+  'Dependent on Family': '0',
+  'Less than 50K': '40000',
+  '50K to 100K': '75000',
+  '100K to 200K': '150000',
+  '200K to 300K': '250000',
+};
 
 export const RELIGION_OPTIONS = [
   'Islam',

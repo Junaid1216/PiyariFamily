@@ -3,9 +3,16 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import FilterMatchesScreen from '../Screens/Like/FilterMatchesScreen';
 import ProfileDetailScreen from '../Screens/Home/ProfileDetailScreen';
 import { SearchScreen } from '../Screens/Search';
+import type { SuggestedMatch } from '../API';
 
 export type SearchStackParamList = {
-  SearchMain: undefined;
+  SearchMain:
+    | {
+        filterMatches?: SuggestedMatch[];
+        filterTotal?: number;
+        fromFilter?: boolean;
+      }
+    | undefined;
   FilterMatches: undefined;
   ProfileDetail: { profileId: string };
 };

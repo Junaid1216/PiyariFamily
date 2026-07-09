@@ -1,5 +1,12 @@
 import React from 'react';
-import { Image, ImageSourcePropType, StyleSheet, Text, View } from 'react-native';
+import {
+  Image,
+  ImageSourcePropType,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Colors } from '../Constant/Colors';
 import { Fonts } from '../Constant/Fonts';
@@ -16,6 +23,8 @@ type Props = {
   minLabel: string;
   centerLabel: string;
   maxLabel: string;
+  onLowValueChange?: (value: number) => void;
+  onHighValueChange?: (value: number) => void;
 };
 
 const FilterRangeSlider = ({
@@ -29,6 +38,8 @@ const FilterRangeSlider = ({
   minLabel,
   centerLabel,
   maxLabel,
+  onLowValueChange,
+  onHighValueChange,
 }: Props) => {
   const range = max - min;
   const lowPercent = ((lowValue - min) / range) * 100;
@@ -66,6 +77,68 @@ const FilterRangeSlider = ({
         <Text style={styles.centerLabel}>{centerLabel}</Text>
         <Text style={styles.edgeLabel}>{maxLabel}</Text>
       </View>
+
+      {onLowValueChange || onHighValueChange ? (
+        <View style={styles.controlsRow}>
+          {onLowValueChange ? (
+            <View style={styles.controlGroup}>
+              <Text style={styles.controlLabel}>Min</Text>
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() => onLowValueChange(Math.max(min, lowValue - 1))}
+              >
+                <Icon
+                  name="minus-circle-outline"
+                  size={fs(22)}
+                  color={Colors.primary}
+                />
+              </TouchableOpacity>
+              <Text style={styles.controlValue}>{lowValue}</Text>
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() =>
+                  onLowValueChange(Math.min(highValue - 1, lowValue + 1))
+                }
+              >
+                <Icon
+                  name="plus-circle-outline"
+                  size={fs(22)}
+                  color={Colors.primary}
+                />
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
+          {onHighValueChange ? (
+            <View style={styles.controlGroup}>
+              <Text style={styles.controlLabel}>Max</Text>
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() =>
+                  onHighValueChange(Math.max(lowValue + 1, highValue - 1))
+                }
+              >
+                <Icon
+                  name="minus-circle-outline"
+                  size={fs(22)}
+                  color={Colors.primary}
+                />
+              </TouchableOpacity>
+              <Text style={styles.controlValue}>{highValue}</Text>
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() => onHighValueChange(Math.min(max, highValue + 1))}
+              >
+                <Icon
+                  name="plus-circle-outline"
+                  size={fs(22)}
+                  color={Colors.primary}
+                />
+              </TouchableOpacity>
+            </View>
+          ) : null}
+        </View>
+      ) : null}
     </View>
   );
 };
@@ -130,6 +203,36 @@ const styles = StyleSheet.create({
   centerLabel: {
     fontSize: fs(12),
     fontFamily: Fonts.semiBold,
+    color: Colors.primary,
+  },
+  controlsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: wp('4%'),
+    marginTop: hp('1.2%'),
+  },
+  controlGroup: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: wp('2%'),
+    backgroundColor: Colors.tabActiveBg,
+    borderRadius: wp('3%'),
+    paddingVertical: hp('0.8%'),
+    paddingHorizontal: wp('2%'),
+  },
+  controlLabel: {
+    fontSize: fs(11),
+    fontFamily: Fonts.semiBold,
+    color: Colors.textLight,
+    marginRight: wp('1%'),
+  },
+  controlValue: {
+    minWidth: wp('7%'),
+    textAlign: 'center',
+    fontSize: fs(13),
+    fontFamily: Fonts.bold,
     color: Colors.primary,
   },
 });

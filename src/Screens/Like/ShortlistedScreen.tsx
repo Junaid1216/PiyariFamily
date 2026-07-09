@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
+  ActivityIndicator,
   FlatList,
   Image,
   StyleSheet,
@@ -7,19 +8,24 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import Toast from 'react-native-simple-toast';
+import { AxiosError } from 'axios';
 import { Images } from '../../Assets';
 import ScreenHeader from '../../Components/ScreenHeader';
+import {
+  Api,
+  ENDPOINTS,
+  getApiErrorMessage,
+  mapShortlistProfiles,
+  type ApiErrorResponse,
+  type ShortlistedProfile,
+} from '../../API';
 import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
-import {
-  LIKED_ME_PROFILES,
-  PROFILES_I_LIKED,
-  ShortlistedProfile,
-} from '../../Constant/Shortlisted';
 import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
 import { LikeStackParamList } from '../../Navigation/LikeStackNavigator';
@@ -36,9 +42,51 @@ const AVATAR_SIZE = wp('27%');
 const ShortlistedScreen = () => {
   const navigation = useNavigation<NavigationProp>();
   const [activeTab, setActiveTab] = useState<TabKey>('liked');
+  const [profiles, setProfiles] = useState<ShortlistedProfile[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
 
-  const profiles =
-    activeTab === 'liked' ? PROFILES_I_LIKED : LIKED_ME_PROFILES;
+  const fetchShortlist = useCallback(async () => {
+    setLoading(true);
+
+    const tab = activeTab === 'liked' ? 'i_liked' : 'liked_me';
+
+    try {
+      console.log('Shortlist Request:', `${ENDPOINTS.SHORTLIST}?tab=${tab}`);
+      const res = await Api.getShortlist(tab);
+
+      if (res?.status == 200) {
+        console.log('Shortlist Success:', res?.data);
+        setProfiles(mapShortlistProfiles(res.data?.profiles));
+        setTotal(res.data?.total ?? res.data?.profiles?.length ?? 0);
+      } else {
+        console.log('Shortlist Failed:', res?.data);
+        setProfiles([]);
+        setTotal(0);
+        Toast.show(
+          res?.data?.message ?? 'Failed to load shortlisted profiles',
+          Toast.LONG,
+        );
+      }
+    } catch (error) {
+      const axiosError = error as AxiosError<ApiErrorResponse>;
+      console.log('Shortlist Error:', axiosError?.response?.data || error);
+      setProfiles([]);
+      setTotal(0);
+      Toast.show(
+        getApiErrorMessage(error, 'Failed to load shortlisted profiles'),
+        Toast.LONG,
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [activeTab]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchShortlist();
+    }, [fetchShortlist]),
+  );
 
   const renderProfile = ({ item }: { item: ShortlistedProfile }) => (
     <View style={styles.card}>
@@ -100,8 +148,7 @@ const ShortlistedScreen = () => {
             activeOpacity={0.85}
             onPress={() =>
               navigation.navigate('ProfileDetail', {
-                profileId:
-                  item.id === '4' || item.id === '5' ? '2' : '1',
+                profileId: item.id,
               })
             }
           >
@@ -166,16 +213,28 @@ const ShortlistedScreen = () => {
       </View>
 
       <Text style={styles.profileCount}>
-        {Strings.showingProfiles.replace('{count}', String(profiles.length))}
+        {Strings.showingProfiles.replace('{count}', String(total))}
       </Text>
 
-      <FlatList
-        data={profiles}
-        keyExtractor={item => item.id}
-        renderItem={renderProfile}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.listContent}
-      />
+      {loading ? (
+        <View style={styles.centerContent}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+        </View>
+      ) : (
+        <FlatList
+          data={profiles}
+          keyExtractor={item => item.id}
+          renderItem={renderProfile}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={[
+            styles.listContent,
+            profiles.length === 0 && styles.emptyListContent,
+          ]}
+          ListEmptyComponent={
+            <Text style={styles.emptyText}>No shortlisted profiles found</Text>
+          }
+        />
+      )}
     </SafeAreaView>
   );
 };
@@ -184,6 +243,11 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: Colors.background,
+  },
+  centerContent: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   filterBtn: {
     width: wp('10.7%'),
@@ -233,6 +297,16 @@ const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: AuthStyles.horizontalPadding,
     paddingBottom: hp('2%'),
+  },
+  emptyListContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+  },
+  emptyText: {
+    textAlign: 'center',
+    fontSize: FontSizes.bodySmall,
+    fontFamily: Fonts.regular,
+    color: Colors.textLight,
   },
   card: {
     flexDirection: 'row',

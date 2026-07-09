@@ -62,6 +62,16 @@ const saveAuthSession = (response: AuthResponse) => {
   }
 };
 
+const shouldSaveAuthSession = (response: {
+  status?: number;
+  success?: boolean;
+  token?: string;
+  access_token?: string;
+}) =>
+  response.status == 200 ||
+  response.success === true ||
+  Boolean(response.token || response.access_token);
+
 export const authService = {
   login: async (payload: LoginPayload) => {
     const response = await postAuth<AuthResponse>(
@@ -69,7 +79,7 @@ export const authService = {
       payload,
     );
 
-    if (response.success) {
+    if (shouldSaveAuthSession(response)) {
       saveAuthSession(response);
     }
 
@@ -82,7 +92,7 @@ export const authService = {
       payload,
     );
 
-    if (response.success) {
+    if (shouldSaveAuthSession(response)) {
       saveAuthSession(response);
     }
 
@@ -95,7 +105,7 @@ export const authService = {
       payload,
     );
 
-    if (response.success) {
+    if (shouldSaveAuthSession(response)) {
       saveAuthSession(response);
     }
 
@@ -117,9 +127,18 @@ export const authService = {
   changePassword: (payload: ChangePasswordPayload) =>
     postAuth<MessageResponse>(ENDPOINTS.AUTH.CHANGE_PASSWORD, payload),
 
-  logout: () => {
-    tokenStorage.clear();
-    userStorage.clear();
-    profileStorage.clear();
+  logout: async () => {
+    try {
+      const { status, data } = await apiClient.postForm<MessageResponse>(
+        ENDPOINTS.AUTH.LOGOUT,
+        {},
+      );
+
+      return { status, ...data };
+    } finally {
+      tokenStorage.clear();
+      userStorage.clear();
+      profileStorage.clear();
+    }
   },
 };

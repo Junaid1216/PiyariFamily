@@ -120,27 +120,15 @@ const ChangePasswordScreen = () => {
           password: newPassword,
         });
 
-        console.log(
-          'Change Password Response:',
-          JSON.stringify(res, null, 2),
-        );
-
         if (res?.status == 200) {
-          console.log(
-            'Change Password Success:',
-            JSON.stringify(res, null, 2),
-          );
-          Toast.show(res?.message || Strings.passwordUpdated, Toast.LONG);
+          console.log('Change Password Success:', res);
           navigation.goBack();
         } else {
-          console.log(
-            'Change Password Failed:',
-            JSON.stringify(res, null, 2),
-          );
+          console.log('Change Password Failed:', res);
           Toast.show(res?.message || 'Failed to update password', Toast.LONG);
         }
       } catch (error: any) {
-        console.log('Change Password API Error:', error?.response?.data);
+        console.log('Change Password Error:', error?.response?.data || error);
         Toast.show(
           error?.response?.data?.message || 'Failed to update password',
           Toast.LONG,

@@ -21,7 +21,7 @@ import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
-import { authService, getApiErrorMessage, isSuccessStatus } from '../../API';
+import { authService, ENDPOINTS, getApiErrorMessage } from '../../API';
 import { hp, wp } from '../../Functions/responsive';
 
 type Props = {
@@ -45,21 +45,21 @@ const LoginScreen = ({ navigation }: Props) => {
 
     setLoading(true);
     try {
+      console.log('Login Request:', ENDPOINTS.AUTH.LOGIN);
       const response = await authService.login({
         email: email.trim(),
         password,
       });
 
-      console.log('Login Response:', JSON.stringify(response, null, 2));
-
-      if (isSuccessStatus(response.status) && response.success) {
-        Toast.show(response.message || 'Login successful');
+      if (response?.status == 200) {
+        console.log('Login Success:', response);
         navigation.replace('SelectCountry');
-        return;
+      } else {
+        console.log('Login Failed:', response);
+        Toast.show(response.message || 'Login failed. Please try again.');
       }
-
-      Toast.show(response.message || 'Login failed. Please try again.');
     } catch (error) {
+      console.log('Login Error:', (error as any)?.response?.data || error);
       Toast.show(getApiErrorMessage(error));
     } finally {
       setLoading(false);

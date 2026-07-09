@@ -1,6 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   FlatList,
   StyleSheet,
   Text,
@@ -15,20 +14,25 @@ import {
 } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-simple-toast';
+import { AxiosError } from 'axios';
+import { useFocusEffect } from '@react-navigation/native';
 import BackButton from '../../Components/BackButton';
 import PrimaryButton from '../../Components/PrimaryButton';
-import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
-import { Colors } from '../../Constant/Colors';
-import { CountryOption } from '../../Constant/ProfileSetup';
-import { Fonts } from '../../Constant/Fonts';
-import { Strings } from '../../Constant/Strings';
-import { AxiosError } from 'axios';
 import {
   Api,
   ENDPOINTS,
-  mapCountries,
+  getApiErrorMessage,
+  resolveProfileData,
+  type ApiErrorResponse,
 } from '../../API';
-import type { ApiErrorResponse } from '../../API';
+import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
+import { Colors } from '../../Constant/Colors';
+import {
+  CountryOption,
+  PROFILE_COUNTRIES,
+} from '../../Constant/ProfileSetup';
+import { Fonts } from '../../Constant/Fonts';
+import { Strings } from '../../Constant/Strings';
 import { getFooterBottomPadding } from '../../Functions/safeArea';
 import { fs, hp, wp } from '../../Functions/responsive';
 
@@ -51,68 +55,105 @@ const CountrySeparator = () => <View style={styles.separator} />;
 const SelectCountryScreen = ({ navigation }: Props) => {
   const insets = useSafeAreaInsets();
   const [search, setSearch] = useState('');
-  const [countries, setCountries] = useState<CountryOption[]>([]);
   const [selectedCode, setSelectedCode] = useState<CountryCode>('PK');
-  const [loading, setLoading] = useState(true);
-
-  const fetchCountries = useCallback(async () => {
-    setLoading(true);
-
-    try {
-      console.log('Countries Request:', ENDPOINTS.COUNTRIES);
-      const res = await Api.getCountries();
-      console.log('Countries Response:', JSON.stringify(res?.data, null, 2));
-
-      if (res?.status == 200) {
-        const mappedCountries = await mapCountries(res?.data?.data);
-        console.log(
-          'Countries Success:',
-          JSON.stringify(mappedCountries, null, 2),
-        );
-
-        if (mappedCountries.length > 0) {
-          setCountries(mappedCountries);
-
-          if (!mappedCountries.some(country => country.code === 'PK')) {
-            setSelectedCode(mappedCountries[0].code);
-          }
-        } else {
-          setCountries([]);
-        }
-      } else {
-        Toast.show(res?.data?.message ?? 'Failed to load countries', Toast.LONG);
-        setCountries([]);
-      }
-    } catch (error) {
-      const axiosError = error as AxiosError<ApiErrorResponse>;
-      console.log('Countries API Error:', {
-        status: axiosError?.response?.status,
-        url: ENDPOINTS.COUNTRIES,
-        data: axiosError?.response?.data || error,
-      });
-      Toast.show(
-        axiosError?.response?.data?.message ?? 'Failed to load countries',
-        Toast.LONG,
-      );
-      setCountries([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchCountries();
-  }, [fetchCountries]);
+  const [city, setCity] = useState('');
+  const [state, setState] = useState('');
+  const [saving, setSaving] = useState(false);
 
   const filteredCountries = useMemo(() => {
     const query = search.trim().toLowerCase();
     if (!query) {
-      return countries;
+      return PROFILE_COUNTRIES;
     }
-    return countries.filter(country =>
+
+    return PROFILE_COUNTRIES.filter(country =>
       country.name.toLowerCase().includes(query),
     );
-  }, [countries, search]);
+  }, [search]);
+
+  const selectedCountry = useMemo(
+    () => PROFILE_COUNTRIES.find(country => country.code === selectedCode),
+    [selectedCode],
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      const loadProfileCountry = async () => {
+        try {
+          console.log('Profile Country Prefill Request:', ENDPOINTS.PROFILE);
+          const res = await Api.getProfile();
+
+          if (res?.status == 200) {
+            console.log('Profile Country Prefill Success:', res?.data);
+            const profile = resolveProfileData(res?.data);
+
+            if (profile.country) {
+              const matchedCountry = PROFILE_COUNTRIES.find(
+                country =>
+                  country.name.toLowerCase() === profile.country?.toLowerCase(),
+              );
+
+              if (matchedCountry) {
+                setSelectedCode(matchedCountry.code);
+              }
+            }
+
+            if (profile.city) {
+              setCity(profile.city);
+            }
+
+            if (profile.state) {
+              setState(profile.state);
+            }
+          } else {
+            console.log('Profile Country Prefill Failed:', res?.data);
+          }
+        } catch (error) {
+          const axiosError = error as AxiosError<ApiErrorResponse>;
+          console.log(
+            'Profile Country Prefill Error:',
+            axiosError?.response?.data || error,
+          );
+        }
+      };
+
+      loadProfileCountry();
+    }, []),
+  );
+
+  const saveProfileCountry = useCallback(async () => {
+    if (!selectedCountry || saving) {
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      console.log('Profile Country Request:', ENDPOINTS.PROFILE_COUNTRY);
+      const res = await Api.updateProfileCountry({
+        country: selectedCountry.name,
+        city: city.trim(),
+        state: state.trim(),
+      });
+
+      if (res?.status == 200) {
+        console.log('Profile Country Success:', res);
+        navigation.navigate('BasicInfo');
+      } else {
+        console.log('Profile Country Failed:', res);
+        Toast.show(res?.message ?? 'Failed to save country', Toast.LONG);
+      }
+    } catch (error) {
+      const axiosError = error as AxiosError<ApiErrorResponse>;
+      console.log('Profile Country Error:', axiosError?.response?.data || error);
+      Toast.show(
+        getApiErrorMessage(error, 'Failed to save country'),
+        Toast.LONG,
+      );
+    } finally {
+      setSaving(false);
+    }
+  }, [city, navigation, saving, selectedCountry, state]);
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
@@ -140,21 +181,16 @@ const SelectCountryScreen = ({ navigation }: Props) => {
           />
         </View>
 
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={Colors.primary} />
-          </View>
-        ) : (
-          <FlatList
-            data={filteredCountries}
-            keyExtractor={item => `${item.code}-${item.name}`}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.listContent}
-            ItemSeparatorComponent={CountrySeparator}
-            ListEmptyComponent={
-              <Text style={styles.emptyText}>No countries found</Text>
-            }
-            renderItem={({ item }) => {
+        <FlatList
+          data={filteredCountries}
+          keyExtractor={(item: CountryOption) => `${item.code}-${item.name}`}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.listContent}
+          ItemSeparatorComponent={CountrySeparator}
+          ListEmptyComponent={
+            <Text style={styles.emptyText}>No countries found</Text>
+          }
+          renderItem={({ item }) => {
             const isSelected = item.code === selectedCode;
 
             return (
@@ -189,8 +225,7 @@ const SelectCountryScreen = ({ navigation }: Props) => {
               </TouchableOpacity>
             );
           }}
-          />
-        )}
+        />
       </View>
 
       <View
@@ -201,7 +236,9 @@ const SelectCountryScreen = ({ navigation }: Props) => {
       >
         <PrimaryButton
           title={Strings.continueBtn}
-          onPress={() => navigation.navigate('BasicInfo')}
+          onPress={saveProfileCountry}
+          loading={saving}
+          disabled={!selectedCountry}
           showArrow
         />
       </View>
@@ -257,12 +294,6 @@ const styles = StyleSheet.create({
   listContent: {
     paddingBottom: hp('1%'),
     flexGrow: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: hp('8%'),
   },
   emptyText: {
     textAlign: 'center',

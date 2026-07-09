@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { FontSizes } from '../Constant/AuthStyles';
 import { Colors } from '../Constant/Colors';
@@ -8,6 +8,7 @@ import { fs, hp, wp } from '../Functions/responsive';
 
 type Props = {
   cooldownSeconds?: number;
+  loading?: boolean;
   onResend?: () => void;
 };
 
@@ -17,7 +18,11 @@ const formatTime = (seconds: number) => {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 };
 
-const ResendCodeSection = ({ cooldownSeconds = 45, onResend }: Props) => {
+const ResendCodeSection = ({
+  cooldownSeconds = 45,
+  loading = false,
+  onResend,
+}: Props) => {
   const [seconds, setSeconds] = useState(cooldownSeconds);
   const canResend = seconds === 0;
 
@@ -38,7 +43,7 @@ const ResendCodeSection = ({ cooldownSeconds = 45, onResend }: Props) => {
   }, [seconds]);
 
   const handleResend = () => {
-    if (!canResend) {
+    if (!canResend || loading) {
       return;
     }
     onResend?.();
@@ -54,16 +59,20 @@ const ResendCodeSection = ({ cooldownSeconds = 45, onResend }: Props) => {
           </Text>
         </View>
       )}
-      <Text style={styles.prompt}>
-        Didn't receive it?{' '}
-        <Text
-          style={[styles.resendLink, !canResend && styles.resendDisabled]}
-          onPress={handleResend}
-          suppressHighlighting
-        >
-          Resend
-        </Text>
-      </Text>
+      <View style={styles.promptRow}>
+        <Text style={styles.prompt}>Didn't receive it? </Text>
+        {loading ? (
+          <ActivityIndicator size="small" color={Colors.gold} />
+        ) : (
+          <Text
+            style={[styles.resendLink, !canResend && styles.resendDisabled]}
+            onPress={handleResend}
+            suppressHighlighting
+          >
+            Resend
+          </Text>
+        )}
+      </View>
     </View>
   );
 };
@@ -82,6 +91,11 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     fontFamily: Fonts.regular,
     marginLeft: wp('1.6%'),
+  },
+  promptRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   prompt: {
     fontSize: FontSizes.body,

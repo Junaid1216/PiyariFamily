@@ -12,12 +12,19 @@ import {
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
 import Toast from 'react-native-simple-toast';
+import { AxiosError } from 'axios';
 import { Images } from '../../Assets';
 import AuthInput from '../../Components/AuthInput';
 import BackButton from '../../Components/BackButton';
 import PrimaryButton from '../../Components/PrimaryButton';
 import SetupDropdown from '../../Components/SetupDropdown';
 import SetupProgressBar from '../../Components/SetupProgressBar';
+import {
+  Api,
+  ENDPOINTS,
+  getApiErrorMessage,
+  type ApiErrorResponse,
+} from '../../API';
 import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import {
@@ -46,8 +53,9 @@ const EducationScreen = ({ navigation }: Props) => {
   const [openDropdown, setOpenDropdown] = useState<'qualification' | null>(
     null,
   );
+  const [saving, setSaving] = useState(false);
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     if (!qualification) {
       Toast.show('Please select your highest qualification');
       return;
@@ -64,7 +72,39 @@ const EducationScreen = ({ navigation }: Props) => {
       Toast.show('Please enter your graduation year');
       return;
     }
-    navigation.navigate('Career');
+    if (saving) {
+      return;
+    }
+
+    const qualificationValue = qualification.toLowerCase();
+
+    setSaving(true);
+
+    try {
+      console.log('Profile Education Request:', ENDPOINTS.PROFILE_EDUCATION);
+      const res = await Api.updateProfileEducation({
+        qualification: qualificationValue,
+        highest_education: qualificationValue,
+        field_of_study: fieldOfStudy.trim(),
+        university: university.trim(),
+        graduation_year: graduationYear.trim(),
+        education_details: 'None',
+      });
+
+      if (res?.status == 200) {
+        console.log('Profile Education Success:', res);
+        navigation.navigate('Career');
+      } else {
+        console.log('Profile Education Failed:', res);
+        Toast.show(res?.message ?? 'Failed to save education', Toast.LONG);
+      }
+    } catch (error) {
+      const axiosError = error as AxiosError<ApiErrorResponse>;
+      console.log('Profile Education Error:', axiosError?.response?.data || error);
+      Toast.show(getApiErrorMessage(axiosError), Toast.LONG);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -144,6 +184,7 @@ const EducationScreen = ({ navigation }: Props) => {
           <PrimaryButton
             title={Strings.continueBtn}
             onPress={handleContinue}
+            loading={saving}
             showArrow
           />
         </View>

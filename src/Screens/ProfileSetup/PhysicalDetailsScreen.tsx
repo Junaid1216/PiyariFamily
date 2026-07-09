@@ -14,18 +14,28 @@ import {
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import Toast from 'react-native-simple-toast';
+import { AxiosError } from 'axios';
 import { Images } from '../../Assets';
 import BackButton from '../../Components/BackButton';
 import FilterChip from '../../Components/FilterChip';
 import PrimaryButton from '../../Components/PrimaryButton';
 import SetupDropdown from '../../Components/SetupDropdown';
 import SetupProgressBar from '../../Components/SetupProgressBar';
+import {
+  Api,
+  ENDPOINTS,
+  getApiErrorMessage,
+  type ApiErrorResponse,
+} from '../../API';
 import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import {
   BODY_TYPE_OPTIONS,
+  BODY_TYPE_TO_API,
   BodyType,
   COMPLEXION_OPTIONS,
+  COMPLEXION_TO_API,
   Complexion,
   HEIGHT_FEET_OPTIONS,
   HEIGHT_INCHES_OPTIONS,
@@ -43,6 +53,15 @@ type Props = {
   };
 };
 
+const formatWeightForApi = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return '';
+  }
+
+  return /kg$/i.test(trimmed) ? trimmed : `${trimmed}kg`;
+};
+
 const PhysicalDetailsScreen = ({ navigation }: Props) => {
   const insets = useSafeAreaInsets();
   const [feet, setFeet] = useState('');
@@ -54,9 +73,46 @@ const PhysicalDetailsScreen = ({ navigation }: Props) => {
   const [openDropdown, setOpenDropdown] = useState<'feet' | 'inches' | null>(
     null,
   );
+  const [saving, setSaving] = useState(false);
 
-  const handleContinue = () => {
-    navigation.navigate('FaithCommunity');
+  const handleContinue = async () => {
+    if (!feet || !inches) {
+      Toast.show('Please select your height');
+      return;
+    }
+    if (saving) {
+      return;
+    }
+
+    const height = `${feet}.${inches}`;
+    const formattedWeight = formatWeightForApi(weight);
+
+    setSaving(true);
+
+    try {
+      console.log('Profile Physical Request:', ENDPOINTS.PROFILE_PHYSICAL);
+      const res = await Api.updateProfilePhysical({
+        height,
+        weight: formattedWeight,
+        body_type: BODY_TYPE_TO_API[bodyType],
+        complexion: COMPLEXION_TO_API[complexion],
+        physical_disability: hasDisability ? '1' : '0',
+      });
+
+      if (res?.status == 200) {
+        console.log('Profile Physical Success:', res);
+        navigation.navigate('FaithCommunity');
+      } else {
+        console.log('Profile Physical Failed:', res);
+        Toast.show(res?.message ?? 'Failed to save physical details', Toast.LONG);
+      }
+    } catch (error) {
+      const axiosError = error as AxiosError<ApiErrorResponse>;
+      console.log('Profile Physical Error:', axiosError?.response?.data || error);
+      Toast.show(getApiErrorMessage(axiosError), Toast.LONG);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -201,6 +257,7 @@ const PhysicalDetailsScreen = ({ navigation }: Props) => {
           <PrimaryButton
             title={Strings.continueBtn}
             onPress={handleContinue}
+            loading={saving}
             showArrow
           />
         </View>

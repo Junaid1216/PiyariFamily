@@ -38,7 +38,7 @@ import {
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
-import { Api, ENDPOINTS, mapFormToProfilePayload, mapProfileToForm, resolveProfileData, saveProfileCache } from '../../API';
+import { Api, ENDPOINTS, mapFormToProfilePayload, mapProfileToForm, resolveProfileData } from '../../API';
 import type { EditProfileFormData } from '../../API';
 import { ProfileStackParamList } from '../../Navigation/ProfileStackNavigator';
 import { getFooterBottomPadding } from '../../Functions/safeArea';
@@ -103,18 +103,16 @@ const EditProfileScreen = () => {
     try {
       console.log('Profile Request:', ENDPOINTS.PROFILE);
       const res = await Api.getProfile();
-      console.log('Profile Response:', JSON.stringify(res?.data, null, 2));
 
       if (res?.status == 200) {
-        const profile = mapProfileToForm(resolveProfileData(res?.data));
-        console.log('Profile Success:', JSON.stringify(profile, null, 2));
-        setForm(profile);
+        console.log('Profile Success:', res?.data);
+        setForm(mapProfileToForm(resolveProfileData(res?.data)));
       } else {
-        console.log('Profile Failed:', JSON.stringify(res?.data, null, 2));
+        console.log('Profile Failed:', res?.data);
         Toast.show(res?.data?.message || 'Failed to load profile', Toast.LONG);
       }
     } catch (error: any) {
-      console.log('Profile API Error:', error?.response?.data);
+      console.log('Profile Error:', error?.response?.data || error);
       Toast.show(
         error?.response?.data?.message || 'Failed to load profile',
         Toast.LONG,
@@ -165,34 +163,18 @@ const EditProfileScreen = () => {
       setSaving(true);
 
       try {
-        const payload = mapFormToProfilePayload(form);
-
-        console.log('Update Profile Request:', ENDPOINTS.PROFILE_UPDATE, payload);
-
-        const res = await Api.updateProfile(payload);
-
-        console.log(
-          'Update Profile Response:',
-          JSON.stringify(res, null, 2),
-        );
+        console.log('Update Profile Request:', ENDPOINTS.PROFILE_UPDATE);
+        const res = await Api.updateProfile(mapFormToProfilePayload(form));
 
         if (res?.status == 200) {
-          console.log(
-            'Update Profile Success:',
-            JSON.stringify(res, null, 2),
-          );
-          setForm(mapProfileToForm(saveProfileCache(res?.user)));
-          Toast.show(res?.message || Strings.profileSaved, Toast.LONG);
+          console.log('Update Profile Success:', res);
           navigation.goBack();
         } else {
-          console.log(
-            'Update Profile Failed:',
-            JSON.stringify(res, null, 2),
-          );
+          console.log('Update Profile Failed:', res);
           Toast.show(res?.message || 'Failed to save profile', Toast.LONG);
         }
       } catch (error: any) {
-        console.log('Update Profile API Error:', error?.response?.data);
+        console.log('Update Profile Error:', error?.response?.data || error);
         Toast.show(
           error?.response?.data?.message || 'Failed to save profile',
           Toast.LONG,

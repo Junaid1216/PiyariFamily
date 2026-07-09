@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   Image,
   KeyboardAvoidingView,
@@ -16,15 +16,27 @@ import {
 } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-simple-toast';
+import { AxiosError } from 'axios';
+import { useFocusEffect } from '@react-navigation/native';
 import { Images } from '../../Assets';
 import AuthInput from '../../Components/AuthInput';
 import BackButton from '../../Components/BackButton';
 import PrimaryButton from '../../Components/PrimaryButton';
 import SetupProgressBar from '../../Components/SetupProgressBar';
+import {
+  Api,
+  ENDPOINTS,
+  getApiErrorMessage,
+  resolveProfileData,
+  userStorage,
+  type ApiErrorResponse,
+} from '../../API';
 import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import {
+  MARITAL_STATUS_FROM_API,
   MARITAL_STATUS_OPTIONS,
+  MARITAL_STATUS_TO_API,
   MaritalStatus,
   PROFILE_SETUP_TOTAL_STEPS,
 } from '../../Constant/ProfileSetup';
@@ -90,6 +102,28 @@ const formatDateInput = (value: string): string => {
   return `${digits.slice(0, 2)} / ${digits.slice(2, 4)} / ${digits.slice(4)}`;
 };
 
+const formatBirthdayForApi = (value: string): string | null => {
+  const parsed = parseDateOfBirth(value);
+  if (!parsed) {
+    return null;
+  }
+
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, '0');
+  const day = String(parsed.getDate()).padStart(2, '0');
+
+  return `${year}-${month}-${day}`;
+};
+
+const formatBirthdayToInput = (value: string): string => {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) {
+    return '';
+  }
+
+  return `${match[3]} / ${match[2]} / ${match[1]}`;
+};
+
 const BasicInfoScreen = ({ navigation }: Props) => {
   const insets = useSafeAreaInsets();
   const [fullName, setFullName] = useState('');
@@ -97,6 +131,7 @@ const BasicInfoScreen = ({ navigation }: Props) => {
   const [dateOfBirth, setDateOfBirth] = useState('');
   const [maritalStatus, setMaritalStatus] = useState<MaritalStatus | ''>('');
   const [maritalDropdownOpen, setMaritalDropdownOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const age = useMemo(() => {
     const parsed = parseDateOfBirth(dateOfBirth);
@@ -106,12 +141,67 @@ const BasicInfoScreen = ({ navigation }: Props) => {
     return calculateAge(parsed);
   }, [dateOfBirth]);
 
-  const handleContinue = () => {
+  useFocusEffect(
+    useCallback(() => {
+      const loadBasicInfo = async () => {
+        try {
+          console.log('Profile Basic Info Prefill Request:', ENDPOINTS.PROFILE);
+          const res = await Api.getProfile();
+
+          if (res?.status == 200) {
+            console.log('Profile Basic Info Prefill Success:', res?.data);
+            const profile = resolveProfileData(res?.data);
+
+            if (profile.name) {
+              setFullName(profile.name);
+            } else if (userStorage.getUser()?.name) {
+              setFullName(userStorage.getUser()?.name ?? '');
+            }
+
+            if (profile.gender === 'male' || profile.gender === 'female') {
+              setGender(profile.gender);
+            }
+
+            if (profile.birthday) {
+              setDateOfBirth(formatBirthdayToInput(profile.birthday));
+            }
+
+            const marital =
+              MARITAL_STATUS_FROM_API[profile.marital_status?.toLowerCase() ?? ''];
+            if (marital) {
+              setMaritalStatus(marital);
+            }
+          } else {
+            console.log('Profile Basic Info Prefill Failed:', res?.data);
+            const savedName = userStorage.getUser()?.name;
+            if (savedName) {
+              setFullName(savedName);
+            }
+          }
+        } catch (error) {
+          const axiosError = error as AxiosError<ApiErrorResponse>;
+          console.log(
+            'Profile Basic Info Prefill Error:',
+            axiosError?.response?.data || error,
+          );
+          const savedName = userStorage.getUser()?.name;
+          if (savedName) {
+            setFullName(savedName);
+          }
+        }
+      };
+
+      loadBasicInfo();
+    }, []),
+  );
+
+  const handleContinue = async () => {
     if (!fullName.trim()) {
       Toast.show('Please enter your full name');
       return;
     }
-    if (!parseDateOfBirth(dateOfBirth)) {
+    const birthday = formatBirthdayForApi(dateOfBirth);
+    if (!birthday) {
       Toast.show('Please enter a valid date of birth');
       return;
     }
@@ -119,7 +209,35 @@ const BasicInfoScreen = ({ navigation }: Props) => {
       Toast.show('Please select your marital status');
       return;
     }
-    navigation.navigate('Education');
+    if (saving) {
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      console.log('Profile Basic Info Request:', ENDPOINTS.PROFILE_BASIC_INFO);
+      const res = await Api.updateProfileBasicInfo({
+        name: fullName.trim(),
+        birthday,
+        marital_status: MARITAL_STATUS_TO_API[maritalStatus],
+        gender,
+      });
+
+      if (res?.status == 200) {
+        console.log('Profile Basic Info Success:', res);
+        navigation.navigate('Education');
+      } else {
+        console.log('Profile Basic Info Failed:', res);
+        Toast.show(res?.message ?? 'Failed to save basic info', Toast.LONG);
+      }
+    } catch (error) {
+      const axiosError = error as AxiosError<ApiErrorResponse>;
+      console.log('Profile Basic Info Error:', axiosError?.response?.data || error);
+      Toast.show(getApiErrorMessage(axiosError), Toast.LONG);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -297,6 +415,7 @@ const BasicInfoScreen = ({ navigation }: Props) => {
           <PrimaryButton
             title={Strings.continueBtn}
             onPress={handleContinue}
+            loading={saving}
             showArrow
           />
         </View>

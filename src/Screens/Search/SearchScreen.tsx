@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Image,
-  ImageSourcePropType,
   ScrollView,
   StyleSheet,
   Text,
@@ -9,11 +9,28 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import {
+  RouteProp,
+  useFocusEffect,
+  useNavigation,
+  useRoute,
+} from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import Toast from 'react-native-simple-toast';
+import { AxiosError } from 'axios';
 import { Images } from '../../Assets';
+import {
+  Api,
+  ENDPOINTS,
+  getApiErrorMessage,
+  mapMatchList,
+  type ApiErrorResponse,
+  type MatchFilterParams,
+  type MatchSearchParams,
+  type SuggestedMatch,
+} from '../../API';
 import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
@@ -26,18 +43,9 @@ type NavigationProp = NativeStackNavigationProp<
   'SearchMain'
 >;
 
-type QuickFilter = 'nearMe' | 'verified' | 'newProfiles';
+type SearchRouteProp = RouteProp<SearchStackParamList, 'SearchMain'>;
 
-type SuggestedMatch = {
-  id: string;
-  name: string;
-  age: number;
-  location: string;
-  profession: string;
-  image: ImageSourcePropType;
-  tier: 'VIP' | 'VVIP';
-  isVerified: boolean;
-};
+type QuickFilter = 'nearMe' | 'verified' | 'newProfiles';
 
 const QUICK_FILTERS: {
   id: QuickFilter;
@@ -59,35 +67,105 @@ const RECENT_SEARCHES = [
   'Doctor, Karachi',
 ];
 
-const SUGGESTED_MATCHES: SuggestedMatch[] = [
-  {
-    id: '1',
-    name: 'Aisha',
-    age: 26,
-    location: 'Lahore',
-    profession: 'Designer',
-    image: Images.femaleProfile,
-    tier: 'VIP',
-    isVerified: true,
-  },
-  {
-    id: '2',
-    name: 'Rohan',
-    age: 29,
-    location: 'Karachi',
-    profession: 'Engineer',
-    image: Images.maleProfile,
-    tier: 'VVIP',
-    isVerified: true,
-  },
-];
+const buildSearchParams = (
+  searchQuery: string,
+  activeQuickFilter: QuickFilter,
+): MatchSearchParams => {
+  const params: MatchSearchParams = {};
+  const query = searchQuery.trim();
+
+  if (query) {
+    params.q = query;
+    params.search = query;
+  }
+
+  if (activeQuickFilter === 'verified') {
+    params.verified = 1;
+  }
+
+  if (activeQuickFilter === 'newProfiles') {
+    params.is_new = 1;
+  }
+
+  return params;
+};
 
 const SearchScreen = () => {
   const navigation = useNavigation<NavigationProp>();
+  const route = useRoute<SearchRouteProp>();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeQuickFilter, setActiveQuickFilter] =
     useState<QuickFilter>('nearMe');
   const [recentSearches, setRecentSearches] = useState(RECENT_SEARCHES);
+  const [suggestedMatches, setSuggestedMatches] = useState<SuggestedMatch[]>(
+    [],
+  );
+  const [loading, setLoading] = useState(true);
+  const skipNextSearchRef = useRef(false);
+
+  const fetchMatchSearch = useCallback(async () => {
+    setLoading(true);
+
+    try {
+      const params = buildSearchParams(searchQuery, activeQuickFilter);
+      console.log('Match Search Request:', ENDPOINTS.MATCHES_SEARCH);
+      const res = await Api.getMatchSearch(params);
+
+      if (res?.status == 200) {
+        console.log('Match Search Success:', res?.data);
+        const mapped = mapMatchList(res?.data);
+        setSuggestedMatches(mapped);
+      } else {
+        console.log('Match Search Failed:', res?.data);
+        setSuggestedMatches([]);
+        Toast.show(
+          res?.data?.message ?? 'Failed to load search results',
+          Toast.LONG,
+        );
+      }
+    } catch (error) {
+      const axiosError = error as AxiosError<ApiErrorResponse>;
+      console.log('Match Search Error:', axiosError?.response?.data || error);
+      setSuggestedMatches([]);
+      Toast.show(
+        getApiErrorMessage(error, 'Failed to load search results'),
+        Toast.LONG,
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [activeQuickFilter, searchQuery]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!route.params?.fromFilter) {
+        return;
+      }
+
+      const filterMatches = route.params.filterMatches ?? [];
+      setSuggestedMatches(filterMatches);
+      setLoading(false);
+      skipNextSearchRef.current = true;
+      navigation.setParams({
+        fromFilter: undefined,
+        filterMatches: undefined,
+        filterTotal: undefined,
+      });
+    }, [navigation, route.params?.filterMatches, route.params?.fromFilter]),
+  );
+
+  useEffect(() => {
+    if (skipNextSearchRef.current) {
+      skipNextSearchRef.current = false;
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      fetchMatchSearch();
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [fetchMatchSearch, searchQuery, activeQuickFilter]);
 
   const removeRecentSearch = (item: string) => {
     setRecentSearches(prev => prev.filter(search => search !== item));
@@ -182,85 +260,93 @@ const SearchScreen = () => {
           </TouchableOpacity>
         </View>
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.suggestedList}
-        >
-          {SUGGESTED_MATCHES.map(match => (
-            <TouchableOpacity
-              key={match.id}
-              style={styles.suggestedCard}
-              activeOpacity={0.9}
-              onPress={() =>
-                navigation.navigate('ProfileDetail', { profileId: match.id })
-              }
-            >
-              <View style={styles.suggestedImageWrap}>
-                <Image
-                  source={match.image}
-                  style={styles.suggestedImage}
-                  resizeMode="cover"
-                />
+        {loading ? (
+          <View style={styles.loaderWrap}>
+            <ActivityIndicator size="large" color={Colors.primary} />
+          </View>
+        ) : suggestedMatches.length > 0 ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.suggestedList}
+          >
+            {suggestedMatches.map(match => (
+              <TouchableOpacity
+                key={match.id}
+                style={styles.suggestedCard}
+                activeOpacity={0.9}
+                onPress={() =>
+                  navigation.navigate('ProfileDetail', { profileId: match.id })
+                }
+              >
+                <View style={styles.suggestedImageWrap}>
+                  <Image
+                    source={match.image}
+                    style={styles.suggestedImage}
+                    resizeMode="cover"
+                  />
 
-                <View style={styles.suggestedBadgeColumn}>
-                  <View style={styles.suggestedTierBadge}>
-                    <Icon
-                      name={match.tier === 'VIP' ? 'star' : 'crown'}
-                      size={fs(10)}
-                      color={Colors.white}
-                    />
-                    <Text style={styles.suggestedTierText}>{match.tier}</Text>
-                  </View>
-
-                  {match.isVerified ? (
-                    <View style={styles.suggestedVerifiedRow}>
-                      <Image
-                        source={Images.verifiedIcon}
-                        style={styles.suggestedVerifiedIcon}
-                        resizeMode="contain"
+                  <View style={styles.suggestedBadgeColumn}>
+                    <View style={styles.suggestedTierBadge}>
+                      <Icon
+                        name={match.tier === 'VIP' ? 'star' : 'crown'}
+                        size={fs(10)}
+                        color={Colors.white}
                       />
-                      <Text style={styles.suggestedVerifiedText}>
-                        {Strings.verifiedBadge}
+                      <Text style={styles.suggestedTierText}>{match.tier}</Text>
+                    </View>
+
+                    {match.isVerified ? (
+                      <View style={styles.suggestedVerifiedRow}>
+                        <Image
+                          source={Images.verifiedIcon}
+                          style={styles.suggestedVerifiedIcon}
+                          resizeMode="contain"
+                        />
+                        <Text style={styles.suggestedVerifiedText}>
+                          {Strings.verifiedBadge}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                </View>
+
+                <View style={styles.suggestedBody}>
+                  <Text style={styles.suggestedName}>
+                    {match.name}, {match.age}
+                  </Text>
+                  <View style={styles.suggestedLocationRow}>
+                    <Icon
+                      name="map-marker-outline"
+                      size={fs(11)}
+                      color={Colors.textLight}
+                    />
+                    <Text style={styles.suggestedLocation}>{match.location}</Text>
+                  </View>
+                  <View style={styles.suggestedBottomRow}>
+                    <View style={styles.professionTag}>
+                      <Text style={styles.professionText}>
+                        {match.profession}
                       </Text>
                     </View>
-                  ) : null}
-                </View>
-              </View>
-
-              <View style={styles.suggestedBody}>
-                <Text style={styles.suggestedName}>
-                  {match.name}, {match.age}
-                </Text>
-                <View style={styles.suggestedLocationRow}>
-                  <Icon
-                    name="map-marker-outline"
-                    size={fs(11)}
-                    color={Colors.textLight}
-                  />
-                  <Text style={styles.suggestedLocation}>{match.location}</Text>
-                </View>
-                <View style={styles.suggestedBottomRow}>
-                  <View style={styles.professionTag}>
-                    <Text style={styles.professionText}>
-                      {match.profession}
-                    </Text>
+                    <TouchableOpacity
+                      style={styles.suggestedLikeBtn}
+                      activeOpacity={0.85}
+                    >
+                      <Icon
+                        name="heart-outline"
+                        size={fs(16)}
+                        color={Colors.primary}
+                      />
+                    </TouchableOpacity>
                   </View>
-                  <TouchableOpacity
-                    style={styles.suggestedLikeBtn}
-                    activeOpacity={0.85}
-                  >
-                    <Icon
-                      name="heart-outline"
-                      size={fs(16)}
-                      color={Colors.primary}
-                    />
-                  </TouchableOpacity>
                 </View>
-              </View>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        ) : (
+          <Text style={styles.emptyText}>No matches found</Text>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -387,6 +473,18 @@ const styles = StyleSheet.create({
     fontSize: fs(13),
     fontFamily: Fonts.semiBold,
     color: Colors.gold,
+  },
+  loaderWrap: {
+    minHeight: hp('18%'),
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyText: {
+    fontSize: FontSizes.bodySmall,
+    fontFamily: Fonts.regular,
+    color: Colors.textLight,
+    textAlign: 'center',
+    paddingVertical: hp('4%'),
   },
   suggestedList: {
     gap: wp('3%'),

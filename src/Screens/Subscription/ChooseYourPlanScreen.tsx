@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import {
+  ActivityIndicator,
   ScrollView,
   StyleSheet,
   Text,
@@ -7,25 +8,29 @@ import {
   View,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
   SafeAreaView,
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import Toast from 'react-native-simple-toast';
+import { AxiosError } from 'axios';
 import PrimaryButton from '../../Components/PrimaryButton';
 import ScreenHeader from '../../Components/ScreenHeader';
+import {
+  Api,
+  ENDPOINTS,
+  getApiErrorMessage,
+  mapSubscriptions,
+  type ApiErrorResponse,
+  type SubscriptionPlansData,
+} from '../../API';
 import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
-import {
-  FREE_FEATURES,
-  PLAN_OPTIONS,
-  PREMIUM_PERKS,
-  VIP_FEATURES,
-  VVIP_FEATURES,
-} from '../../Constant/Subscription';
+import { PREMIUM_PERKS } from '../../Constant/Subscription';
 import { Strings } from '../../Constant/Strings';
 import { ProfileStackParamList } from '../../Navigation/ProfileStackNavigator';
 import { getFooterBottomPadding } from '../../Functions/safeArea';
@@ -41,9 +46,48 @@ const ChooseYourPlanScreen = () => {
   const navigation = useNavigation<NavigationProp>();
   const insets = useSafeAreaInsets();
   useHideTabBar();
+  const [plans, setPlans] = useState<SubscriptionPlansData>(mapSubscriptions());
+  const [loading, setLoading] = useState(true);
+
+  const fetchSubscriptions = useCallback(async () => {
+    setLoading(true);
+
+    try {
+      console.log('Subscriptions Request:', ENDPOINTS.SUBSCRIPTIONS);
+      const res = await Api.getSubscriptions();
+
+      if (res?.status == 200) {
+        console.log('Subscriptions Success:', res?.data);
+        setPlans(mapSubscriptions(res?.data));
+      } else {
+        console.log('Subscriptions Failed:', res?.data);
+        setPlans(mapSubscriptions());
+        Toast.show(
+          res?.data?.message ?? 'Failed to load subscription plans',
+          Toast.LONG,
+        );
+      }
+    } catch (error) {
+      const axiosError = error as AxiosError<ApiErrorResponse>;
+      console.log('Subscriptions Error:', axiosError?.response?.data || error);
+      setPlans(mapSubscriptions());
+      Toast.show(
+        getApiErrorMessage(error, 'Failed to load subscription plans'),
+        Toast.LONG,
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchSubscriptions();
+    }, [fetchSubscriptions]),
+  );
 
   const openPayment = (plan: 'VIP' | 'VVIP') => {
-    const selected = PLAN_OPTIONS[plan];
+    const selected = plan === 'VIP' ? plans.vipPlan : plans.vvipPlan;
     navigation.navigate('CompletePayment', {
       plan,
       price: selected.price,
@@ -111,6 +155,12 @@ const ChooseYourPlanScreen = () => {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
+        {loading ? (
+          <View style={styles.loaderWrap}>
+            <ActivityIndicator size="large" color={Colors.primary} />
+          </View>
+        ) : (
+          <>
         <Text style={styles.title}>{Strings.unlockPremiumLuck}</Text>
         <Text style={styles.subtitle}>{Strings.choosePlanSubtitle}</Text>
 
@@ -127,18 +177,18 @@ const ChooseYourPlanScreen = () => {
               {Strings.freePlan.toUpperCase()}
             </Text>
           </View>
-          {FREE_FEATURES.map(item => renderPlanFeature(item))}
+          {plans.freeFeatures.map(item => renderPlanFeature(item))}
         </View>
 
         <LinearGradient
-          colors={PLAN_OPTIONS.VIP.gradient}
+          colors={plans.vipPlan.gradient}
           start={{ x: 0, y: 0 }}
           end={{ x: 0, y: 1 }}
           style={styles.premiumCard}
         >
-          {renderPlanCardHeader('star', Strings.vipPlan, true)}
-          <Text style={styles.planPrice}>{PLAN_OPTIONS.VIP.priceLabel}</Text>
-          {VIP_FEATURES.map(item => renderPlanFeature(item, true))}
+          {renderPlanCardHeader('star', plans.vipPlan.title, true)}
+          <Text style={styles.planPrice}>{plans.vipPlan.priceLabel}</Text>
+          {plans.vipPlan.features.map(item => renderPlanFeature(item, true))}
           <TouchableOpacity
             style={styles.selectBtn}
             activeOpacity={0.85}
@@ -150,14 +200,14 @@ const ChooseYourPlanScreen = () => {
         </LinearGradient>
 
         <LinearGradient
-          colors={PLAN_OPTIONS.VVIP.gradient}
+          colors={plans.vvipPlan.gradient}
           start={{ x: 0, y: 0 }}
           end={{ x: 0, y: 1 }}
           style={styles.premiumCard}
         >
-          {renderPlanCardHeader('crown', Strings.vvipPlan, true)}
-          <Text style={styles.planPrice}>{PLAN_OPTIONS.VVIP.priceLabel}</Text>
-          {VVIP_FEATURES.map(item => renderPlanFeature(item, true))}
+          {renderPlanCardHeader('crown', plans.vvipPlan.title, true)}
+          <Text style={styles.planPrice}>{plans.vvipPlan.priceLabel}</Text>
+          {plans.vvipPlan.features.map(item => renderPlanFeature(item, true))}
           <TouchableOpacity
             style={styles.selectBtn}
             activeOpacity={0.85}
@@ -196,6 +246,8 @@ const ChooseYourPlanScreen = () => {
             {Strings.viewAllFeatures} →
           </Text>
         </TouchableOpacity>
+          </>
+        )}
       </ScrollView>
 
       <View
@@ -216,6 +268,11 @@ const ChooseYourPlanScreen = () => {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.background },
+  loaderWrap: {
+    minHeight: hp('50%'),
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   heartBtn: {
     width: wp('10.5%'),
     height: wp('10.5%'),

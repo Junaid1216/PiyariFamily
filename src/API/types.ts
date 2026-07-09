@@ -7,7 +7,7 @@ export type User = {
 };
 
 export type AuthResponse = {
-  success: boolean;
+  success?: boolean;
   message: string;
   user: User;
   token?: string;
