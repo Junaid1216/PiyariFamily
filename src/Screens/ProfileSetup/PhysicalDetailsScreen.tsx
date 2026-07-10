@@ -101,6 +101,7 @@ const PhysicalDetailsScreen = ({ navigation }: Props) => {
 
       if (res?.status == 200) {
         console.log('Profile Physical Success:', res);
+        Toast.show(res?.message ?? 'Physical details saved', Toast.LONG);
         navigation.navigate('FaithCommunity');
       } else {
         console.log('Profile Physical Failed:', res);

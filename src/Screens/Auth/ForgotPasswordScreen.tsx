@@ -48,6 +48,7 @@ const ForgotPasswordScreen = ({ navigation }: Props) => {
 
         if (res?.status == 200) {
           console.log('Forgot Password Success:', res);
+          Toast.show(res?.message || 'Reset code sent to your email', Toast.LONG);
           navigation.navigate('CheckEmail', { email: email.trim() });
         } else {
           console.log('Forgot Password Failed:', res);

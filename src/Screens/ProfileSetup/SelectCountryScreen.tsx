@@ -138,6 +138,7 @@ const SelectCountryScreen = ({ navigation }: Props) => {
 
       if (res?.status == 200) {
         console.log('Profile Country Success:', res);
+        Toast.show(res?.message ?? 'Country saved', Toast.LONG);
         navigation.navigate('BasicInfo');
       } else {
         console.log('Profile Country Failed:', res);

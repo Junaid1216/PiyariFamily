@@ -24,6 +24,7 @@ export type SubscriptionApiPlan = {
   title?: string | null;
   slug?: string | null;
   price?: number | string | null;
+  price_label?: string | null;
   amount?: number | string | null;
   currency?: string | null;
   duration?: string | null;
@@ -32,11 +33,17 @@ export type SubscriptionApiPlan = {
   benefits?: string[] | null;
 };
 
+export type SubscriptionComparisonRow = {
+  feature?: string | null;
+  plans?: unknown[];
+};
+
 export type SubscriptionsResponse = {
-  success?: boolean;
+  success?: boolean | number;
   plans?: SubscriptionApiPlan[];
   subscriptions?: SubscriptionApiPlan[];
-  data?: SubscriptionApiPlan[] | { plans?: SubscriptionApiPlan[] };
+  comparison?: SubscriptionComparisonRow[];
+  data?: SubscriptionApiPlan[] | { plans?: SubscriptionApiPlan[]; comparison?: SubscriptionComparisonRow[] };
   free_plan?: { features?: string[]; benefits?: string[] };
   free?: { features?: string[]; benefits?: string[] };
   message?: string;
@@ -122,31 +129,62 @@ const buildPlanData = (
     id: tier,
     title: pickString(apiPlan?.title, apiPlan?.name, apiPlan?.plan) || fallbackTitle,
     price,
-    priceLabel: formatPriceLabel(price, currency, fallback.priceLabel),
+    priceLabel:
+      pickString(apiPlan?.price_label) ||
+      formatPriceLabel(price, currency, fallback.priceLabel),
     period,
     features,
   };
 };
 
+const normalizeSubscriptionsResponse = (
+  response?: SubscriptionsResponse | null,
+): SubscriptionsResponse => {
+  if (!response || typeof response !== 'object') {
+    return {};
+  }
+
+  if (response.data && typeof response.data === 'object' && !Array.isArray(response.data)) {
+    return {
+      ...response,
+      ...response.data,
+    };
+  }
+
+  return response;
+};
+
+const extractComparisonFeatures = (
+  response?: SubscriptionsResponse | null,
+) => {
+  const rows = response?.comparison ?? [];
+
+  return rows
+    .map(row => row.feature?.trim())
+    .filter((feature): feature is string => Boolean(feature));
+};
+
 const extractPlans = (response?: SubscriptionsResponse | null) => {
-  if (!response) {
+  const normalized = normalizeSubscriptionsResponse(response);
+
+  if (!normalized) {
     return [];
   }
 
-  if (Array.isArray(response.plans)) {
-    return response.plans;
+  if (Array.isArray(normalized.plans)) {
+    return normalized.plans;
   }
 
-  if (Array.isArray(response.subscriptions)) {
-    return response.subscriptions;
+  if (Array.isArray(normalized.subscriptions)) {
+    return normalized.subscriptions;
   }
 
-  if (Array.isArray(response.data)) {
-    return response.data;
+  if (Array.isArray(normalized.data)) {
+    return normalized.data;
   }
 
-  if (response.data && typeof response.data === 'object' && Array.isArray(response.data.plans)) {
-    return response.data.plans;
+  if (normalized.data && typeof normalized.data === 'object' && Array.isArray(normalized.data.plans)) {
+    return normalized.data.plans;
   }
 
   return [];
@@ -155,7 +193,8 @@ const extractPlans = (response?: SubscriptionsResponse | null) => {
 export const mapSubscriptions = (
   response?: SubscriptionsResponse | null,
 ): SubscriptionPlansData => {
-  const plans = extractPlans(response);
+  const normalized = normalizeSubscriptionsResponse(response);
+  const plans = extractPlans(normalized);
   const freePlanApi = plans.find(
     plan => normalizePlanTier(plan.name ?? plan.plan ?? plan.title ?? plan.slug) === 'Free',
   );
@@ -167,12 +206,14 @@ export const mapSubscriptions = (
   );
 
   const freeFeatures =
-    response?.free_plan?.features ??
-    response?.free_plan?.benefits ??
-    response?.free?.features ??
-    response?.free?.benefits ??
+    normalized?.free_plan?.features ??
+    normalized?.free_plan?.benefits ??
+    normalized?.free?.features ??
+    normalized?.free?.benefits ??
     mapPlanFeatures(freePlanApi) ??
-    FREE_FEATURES;
+    (extractComparisonFeatures(normalized).length
+      ? extractComparisonFeatures(normalized)
+      : FREE_FEATURES);
 
   return {
     freeFeatures,

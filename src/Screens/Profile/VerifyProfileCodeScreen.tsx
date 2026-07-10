@@ -65,6 +65,7 @@ const VerifyProfileCodeScreen = () => {
 
       if (res?.status == 200) {
         console.log('Verify Phone Success:', res);
+        Toast.show(res?.message ?? 'Phone verified successfully', Toast.LONG);
         navigation.navigate('ProfileVerified', { phone: route.params.phone });
       } else {
         console.log('Verify Phone Failed:', res);

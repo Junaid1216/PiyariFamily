@@ -86,19 +86,30 @@ export type HomeMatchesResponse = {
   success?: boolean;
   greeting?: string | null;
   top_match?: MatchApiItem | null;
+  featured_matches?: MatchApiItem[];
+  matches?: MatchApiItem[];
   suggested_matches?: MatchApiItem[];
   total_matches?: number | string | null;
   message?: string;
+  data?: HomeMatchesResponse;
 };
 
 export type MatchSearchParams = {
   gender?: string;
   age_min?: number | string;
   age_max?: number | string;
-  q?: string;
-  search?: string;
-  verified?: string | number;
-  is_new?: string | number;
+  city?: string;
+  country?: string;
+  religion?: string;
+  marital_status?: string;
+  education?: string;
+  profession?: string;
+  name?: string;
+  near_me?: boolean | string | number;
+  verified?: boolean | string | number;
+  new_profiles?: boolean | string | number;
+  height_min?: number | string;
+  height_max?: number | string;
 };
 
 export type MatchFilterParams = {
@@ -112,9 +123,9 @@ export type MatchFilterParams = {
   monthly_income_min?: number | string;
   monthly_income_max?: number | string;
   monthly_income?: string;
-  near_me?: string | number;
-  verified?: string | number;
-  new_profiles?: string | number;
+  near_me?: string | number | boolean;
+  verified?: string | number | boolean;
+  new_profiles?: string | number | boolean;
 };
 
 export type MatchListPagination = {
@@ -303,27 +314,202 @@ export const mapSuggestedMatch = (
 };
 
 const extractMatchList = (response?: MatchListResponse | null) => {
-  if (!response) {
+  const normalized = normalizeMatchListResponse(response);
+
+  if (!normalized) {
     return [];
   }
 
-  if (Array.isArray(response.data)) {
-    return response.data;
+  if (Array.isArray(normalized.data)) {
+    return normalized.data;
   }
 
-  if (Array.isArray(response.profiles)) {
-    return response.profiles;
+  if (Array.isArray(normalized.profiles)) {
+    return normalized.profiles;
   }
 
-  if (Array.isArray(response.matches)) {
-    return response.matches;
+  if (Array.isArray(normalized.matches)) {
+    return normalized.matches;
   }
 
-  if (Array.isArray(response.results)) {
-    return response.results;
+  if (Array.isArray(normalized.results)) {
+    return normalized.results;
   }
 
   return [];
+};
+
+export const normalizeMatchListResponse = (
+  source?: MatchListResponse | null,
+): MatchListResponse => {
+  if (!source || typeof source !== 'object') {
+    return {};
+  }
+
+  let merged: MatchListResponse = { ...source };
+  const dataField = merged.data;
+
+  if (dataField && typeof dataField === 'object' && !Array.isArray(dataField)) {
+    merged = {
+      ...merged,
+      ...(dataField as MatchListResponse),
+    };
+  }
+
+  return merged;
+};
+
+export const resolveOppositeGender = (gender?: string | null) => {
+  const value = gender?.toLowerCase();
+
+  if (value === 'male') {
+    return 'female';
+  }
+
+  if (value === 'female') {
+    return 'male';
+  }
+
+  return 'female';
+};
+
+export const parseSearchQuery = (searchQuery: string) => {
+  const trimmed = searchQuery.trim();
+
+  if (!trimmed) {
+    return { name: undefined, profession: undefined, city: undefined };
+  }
+
+  const commaIndex = trimmed.indexOf(',');
+
+  if (commaIndex !== -1) {
+    const profession = trimmed.slice(0, commaIndex).trim();
+    const city = trimmed.slice(commaIndex + 1).trim();
+
+    return {
+      name: undefined,
+      profession: profession || undefined,
+      city: city || undefined,
+    };
+  }
+
+  return { name: trimmed, profession: undefined, city: undefined };
+};
+
+export type BuildSearchParamsInput = {
+  searchQuery?: string;
+  quickFilter?: 'nearMe' | 'verified' | 'newProfiles' | null;
+  quickFilters?: {
+    near_me?: boolean;
+    verified?: boolean;
+    new_profiles?: boolean;
+  };
+  profileGender?: string | null;
+  ageMin?: number;
+  ageMax?: number;
+  city?: string;
+  country?: string;
+  religion?: string;
+  maritalStatus?: string;
+  education?: string;
+  profession?: string;
+  heightMin?: number;
+  heightMax?: number;
+};
+
+export const buildMatchSearchParams = ({
+  searchQuery = '',
+  quickFilter = null,
+  quickFilters,
+  profileGender,
+  ageMin,
+  ageMax,
+  city,
+  country,
+  religion,
+  maritalStatus,
+  education,
+  profession,
+  heightMin,
+  heightMax,
+}: BuildSearchParamsInput): MatchSearchParams => {
+  const params: MatchSearchParams = {
+    gender: resolveOppositeGender(profileGender),
+  };
+
+  if (ageMin !== undefined) {
+    params.age_min = ageMin;
+  }
+
+  if (ageMax !== undefined) {
+    params.age_max = ageMax;
+  }
+
+  if (city?.trim()) {
+    params.city = city.trim();
+  }
+
+  if (country?.trim()) {
+    params.country = country.trim();
+  }
+
+  if (religion?.trim()) {
+    params.religion = religion.trim();
+  }
+
+  if (maritalStatus?.trim()) {
+    params.marital_status = maritalStatus.trim().toLowerCase();
+  }
+
+  if (education?.trim()) {
+    params.education = education.trim();
+  }
+
+  if (profession?.trim()) {
+    params.profession = profession.trim();
+  }
+
+  if (heightMin !== undefined) {
+    params.height_min = heightMin;
+  }
+
+  if (heightMax !== undefined) {
+    params.height_max = heightMax;
+  }
+
+  const parsedSearch = parseSearchQuery(searchQuery);
+
+  if (parsedSearch.name) {
+    params.name = parsedSearch.name;
+  }
+
+  if (!profession?.trim() && parsedSearch.profession) {
+    params.profession = parsedSearch.profession;
+  }
+
+  if (!city?.trim() && parsedSearch.city) {
+    params.city = parsedSearch.city;
+  }
+
+  if (quickFilters) {
+    if (quickFilters.near_me) {
+      params.near_me = true;
+    }
+    if (quickFilters.verified) {
+      params.verified = true;
+    }
+    if (quickFilters.new_profiles) {
+      params.new_profiles = true;
+    }
+  } else if (quickFilter === 'nearMe') {
+    params.near_me = true;
+  } else if (quickFilter === 'verified') {
+    params.verified = true;
+  } else if (quickFilter === 'newProfiles') {
+    params.new_profiles = true;
+  }
+
+  return params;
 };
 
 export const mapMatchList = (
@@ -351,6 +537,47 @@ export const pickMatchListTotal = (
 const mapSuggestedMatches = (items?: MatchApiItem[] | null) =>
   (items ?? []).map(mapSuggestedMatch);
 
+const normalizeHomeResponse = (
+  source?: HomeMatchesResponse | null,
+): HomeMatchesResponse => {
+  if (!source || typeof source !== 'object') {
+    return {};
+  }
+
+  if (source.data && typeof source.data === 'object') {
+    return normalizeHomeResponse({
+      ...source,
+      ...source.data,
+    });
+  }
+
+  return source;
+};
+
+const extractFeaturedMatches = (response: HomeMatchesResponse) => {
+  if (response.featured_matches?.length) {
+    return response.featured_matches;
+  }
+
+  if (response.top_match) {
+    return [response.top_match];
+  }
+
+  return [];
+};
+
+const extractSuggestedMatches = (response: HomeMatchesResponse) => {
+  if (response.suggested_matches?.length) {
+    return response.suggested_matches;
+  }
+
+  if (response.matches?.length) {
+    return response.matches;
+  }
+
+  return [];
+};
+
 const splitGreeting = (greeting: string) => {
   const dotIndex = greeting.indexOf('. ');
 
@@ -367,24 +594,17 @@ const splitGreeting = (greeting: string) => {
 export const mapHomeMatches = (
   response?: HomeMatchesResponse | null,
 ): HomeMatchesData => {
-  if (!response) {
-    return {
-      greeting: '',
-      totalMatches: 0,
-      featuredMatches: [],
-      suggestedMatches: [],
-    };
-  }
-
-  const featuredMatches = response.top_match
-    ? [mapFeaturedMatch(response.top_match, 0)]
-    : [];
+  const data = normalizeHomeResponse(response);
+  const featuredItems = extractFeaturedMatches(data);
+  const suggestedItems = extractSuggestedMatches(data);
 
   return {
-    greeting: pickString(response.greeting),
-    totalMatches: pickNumber(response.total_matches),
-    featuredMatches,
-    suggestedMatches: mapSuggestedMatches(response.suggested_matches),
+    greeting: pickString(data.greeting),
+    totalMatches:
+      pickNumber(data.total_matches) ||
+      featuredItems.length + suggestedItems.length,
+    featuredMatches: featuredItems.map(mapFeaturedMatch),
+    suggestedMatches: mapSuggestedMatches(suggestedItems),
   };
 };
 

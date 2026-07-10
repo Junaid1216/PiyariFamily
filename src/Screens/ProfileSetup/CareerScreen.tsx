@@ -93,7 +93,7 @@ const CareerScreen = ({ navigation }: Props) => {
     try {
       console.log('Profile Career Request:', ENDPOINTS.PROFILE_CAREER);
       const res = await Api.updateProfileCareer({
-        occupation: jobTitle.trim(),
+        job_title: jobTitle.trim(),
         employment_type: EMPLOYMENT_TYPE_TO_API[employmentType],
         company: company.trim(),
         annual_income: INCOME_RANGE_TO_API[incomeRange],
@@ -101,6 +101,7 @@ const CareerScreen = ({ navigation }: Props) => {
 
       if (res?.status == 200) {
         console.log('Profile Career Success:', res);
+        Toast.show(res?.message ?? 'Career details saved', Toast.LONG);
         navigation.navigate('PhysicalDetails');
       } else {
         console.log('Profile Career Failed:', res);

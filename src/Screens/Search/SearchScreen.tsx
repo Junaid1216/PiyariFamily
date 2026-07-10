@@ -24,11 +24,11 @@ import { Images } from '../../Assets';
 import {
   Api,
   ENDPOINTS,
+  buildMatchSearchParams,
   getApiErrorMessage,
   mapMatchList,
+  profileStorage,
   type ApiErrorResponse,
-  type MatchFilterParams,
-  type MatchSearchParams,
   type SuggestedMatch,
 } from '../../API';
 import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
@@ -67,54 +67,46 @@ const RECENT_SEARCHES = [
   'Doctor, Karachi',
 ];
 
-const buildSearchParams = (
-  searchQuery: string,
-  activeQuickFilter: QuickFilter,
-): MatchSearchParams => {
-  const params: MatchSearchParams = {};
-  const query = searchQuery.trim();
-
-  if (query) {
-    params.q = query;
-    params.search = query;
-  }
-
-  if (activeQuickFilter === 'verified') {
-    params.verified = 1;
-  }
-
-  if (activeQuickFilter === 'newProfiles') {
-    params.is_new = 1;
-  }
-
-  return params;
-};
+const SEARCH_DEBOUNCE_MS = 600;
+const MIN_SEARCH_LENGTH = 2;
 
 const SearchScreen = () => {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<SearchRouteProp>();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeQuickFilter, setActiveQuickFilter] =
-    useState<QuickFilter>('nearMe');
+    useState<QuickFilter | null>(null);
   const [recentSearches, setRecentSearches] = useState(RECENT_SEARCHES);
   const [suggestedMatches, setSuggestedMatches] = useState<SuggestedMatch[]>(
     [],
   );
   const [loading, setLoading] = useState(true);
   const skipNextSearchRef = useRef(false);
+  const skipFilterSearchRef = useRef(true);
+  const activeQuickFilterRef = useRef(activeQuickFilter);
+  const searchQueryRef = useRef(searchQuery);
 
-  const fetchMatchSearch = useCallback(async () => {
+  activeQuickFilterRef.current = activeQuickFilter;
+  searchQueryRef.current = searchQuery;
+
+  const fetchMatchSearch = useCallback(async (query: string) => {
     setLoading(true);
 
     try {
-      const params = buildSearchParams(searchQuery, activeQuickFilter);
-      console.log('Match Search Request:', ENDPOINTS.MATCHES_SEARCH);
+      const profile = profileStorage.get();
+      const trimmedQuery = query.trim();
+      const params = buildMatchSearchParams({
+        searchQuery: query,
+        quickFilter: activeQuickFilterRef.current,
+        profileGender: profile?.gender,
+        ageMin: trimmedQuery || activeQuickFilterRef.current ? 18 : undefined,
+      });
+      console.log('Match Search Request:', ENDPOINTS.MATCHES_SEARCH, params);
       const res = await Api.getMatchSearch(params);
 
       if (res?.status == 200) {
         console.log('Match Search Success:', res?.data);
-        const mapped = mapMatchList(res?.data);
-        setSuggestedMatches(mapped);
+        setSuggestedMatches(mapMatchList(res?.data));
       } else {
         console.log('Match Search Failed:', res?.data);
         setSuggestedMatches([]);
@@ -134,7 +126,7 @@ const SearchScreen = () => {
     } finally {
       setLoading(false);
     }
-  }, [activeQuickFilter, searchQuery]);
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -146,6 +138,7 @@ const SearchScreen = () => {
       setSuggestedMatches(filterMatches);
       setLoading(false);
       skipNextSearchRef.current = true;
+      skipFilterSearchRef.current = true;
       navigation.setParams({
         fromFilter: undefined,
         filterMatches: undefined,
@@ -155,17 +148,43 @@ const SearchScreen = () => {
   );
 
   useEffect(() => {
+    if (skipFilterSearchRef.current) {
+      skipFilterSearchRef.current = false;
+      return;
+    }
+
     if (skipNextSearchRef.current) {
       skipNextSearchRef.current = false;
       return;
     }
 
+    const trimmed = searchQueryRef.current.trim();
+
+    if (trimmed.length > 0 && trimmed.length < MIN_SEARCH_LENGTH) {
+      return;
+    }
+
+    fetchMatchSearch(trimmed);
+  }, [activeQuickFilter, fetchMatchSearch]);
+
+  useEffect(() => {
+    if (skipNextSearchRef.current) {
+      skipNextSearchRef.current = false;
+      return;
+    }
+
+    const trimmed = searchQuery.trim();
+
+    if (trimmed.length > 0 && trimmed.length < MIN_SEARCH_LENGTH) {
+      return;
+    }
+
     const timer = setTimeout(() => {
-      fetchMatchSearch();
-    }, 400);
+      fetchMatchSearch(trimmed);
+    }, trimmed ? SEARCH_DEBOUNCE_MS : 0);
 
     return () => clearTimeout(timer);
-  }, [fetchMatchSearch, searchQuery, activeQuickFilter]);
+  }, [fetchMatchSearch, searchQuery]);
 
   const removeRecentSearch = (item: string) => {
     setRecentSearches(prev => prev.filter(search => search !== item));
@@ -213,7 +232,11 @@ const SearchScreen = () => {
                   selected && styles.quickFilterChipSelected,
                 ]}
                 activeOpacity={0.85}
-                onPress={() => setActiveQuickFilter(filter.id)}
+                onPress={() =>
+                  setActiveQuickFilter(prev =>
+                    prev === filter.id ? null : filter.id,
+                  )
+                }
               >
                 <Icon
                   name={filter.icon}
@@ -235,7 +258,12 @@ const SearchScreen = () => {
 
         <Text style={styles.recentLabel}>{Strings.recentSearches}</Text>
         {recentSearches.map(item => (
-          <View key={item} style={styles.recentRow}>
+          <TouchableOpacity
+            key={item}
+            style={styles.recentRow}
+            activeOpacity={0.85}
+            onPress={() => setSearchQuery(item)}
+          >
             <Icon
               name="clock-outline"
               size={fs(18)}
@@ -250,7 +278,7 @@ const SearchScreen = () => {
             >
               <Icon name="close" size={fs(16)} color={Colors.textLight} />
             </TouchableOpacity>
-          </View>
+          </TouchableOpacity>
         ))}
 
         <View style={styles.sectionHeader}>

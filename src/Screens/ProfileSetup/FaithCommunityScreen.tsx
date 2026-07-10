@@ -38,6 +38,7 @@ import {
   OtherLanguage,
   PROFILE_SETUP_TOTAL_STEPS,
   RELIGION_OPTIONS,
+  RELIGION_TO_API,
   Religion,
 } from '../../Constant/ProfileSetup';
 import { Fonts } from '../../Constant/Fonts';
@@ -73,33 +74,26 @@ const FaithCommunityScreen = ({ navigation }: Props) => {
       return;
     }
 
-    const payload: Record<string, string | string[]> = {
-      religion,
-      mother_tongue: motherTongue,
-    };
-
     const communityValue = community.trim();
-    if (communityValue) {
-      payload.community = communityValue;
-    }
-
     const sectValue = sect.trim();
-    if (sectValue) {
-      payload.sect = sectValue;
-    }
 
-    if (otherLanguages.length > 0) {
-      payload.other_languages = otherLanguages;
-    }
+    const payload = {
+      religion: RELIGION_TO_API[religion],
+      mother_tongue: motherTongue,
+      community: communityValue,
+      sect: sectValue,
+      other_languages: otherLanguages,
+    };
 
     setSaving(true);
 
     try {
-      console.log('Profile Faith Request:', ENDPOINTS.PROFILE_UPDATE);
-      const res = await Api.updateProfile(payload);
+      console.log('Profile Faith Request:', ENDPOINTS.PROFILE_FAITH);
+      const res = await Api.updateProfileFaith(payload);
 
       if (res?.status == 200) {
         console.log('Profile Faith Success:', res);
+        Toast.show(res?.message ?? 'Faith details saved', Toast.LONG);
         navigation.navigate('AddPhotos');
       } else {
         console.log('Profile Faith Failed:', res);

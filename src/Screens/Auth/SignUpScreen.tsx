@@ -74,6 +74,7 @@ const SignUpScreen = ({ navigation }: Props) => {
 
       if (response?.status == 200) {
         console.log('Sign Up Success:', response);
+        Toast.show(response.message || 'Account created successfully', Toast.LONG);
         navigation.navigate('VerifyEmail', { email: email.trim() });
       } else {
         console.log('Sign Up Failed:', response);

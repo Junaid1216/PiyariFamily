@@ -44,6 +44,7 @@ const DEFAULT_STATS: ReferralStats = {
   referralLink: REFERRAL_LINK,
   registered: 0,
   pointsEarned: 0,
+  conversionRate: '',
   rewardsTable: [],
 };
 

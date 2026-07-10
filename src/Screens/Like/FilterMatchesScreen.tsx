@@ -26,8 +26,8 @@ import PrimaryButton from '../../Components/PrimaryButton';
 import {
   Api,
   ENDPOINTS,
-  FILTER_ANY,
   buildMatchFilterParams,
+  FILTER_ANY,
   getApiErrorMessage,
   mapFilterSetup,
   mapMatchList,
@@ -60,8 +60,8 @@ const EMPTY_SETUP: FilterSetupData = {
     incomeRanges: [],
   },
   defaults: {
-    ageMin: 24,
-    ageMax: 32,
+    ageMin: 18,
+    ageMax: 60,
     city: '',
     qualification: FILTER_ANY,
     profession: FILTER_ANY,
@@ -101,8 +101,8 @@ const FilterMatchesScreen = () => {
   const [religion, setReligion] = useState(FILTER_ANY);
   const [marital, setMarital] = useState('');
   const [citySearch, setCitySearch] = useState('');
-  const [ageMin, setAgeMin] = useState(24);
-  const [ageMax, setAgeMax] = useState(32);
+  const [ageMin, setAgeMin] = useState(18);
+  const [ageMax, setAgeMax] = useState(60);
   const [incomeRange, setIncomeRange] = useState(FILTER_ANY);
   const [activeQuickFilters, setActiveQuickFilters] = useState<
     Record<string, boolean>
@@ -218,11 +218,12 @@ const FilterMatchesScreen = () => {
         activeQuickFilters,
       });
 
-      console.log('Match Filter Request:', ENDPOINTS.MATCHES_FILTER);
+      console.log('Match Filter Request:', ENDPOINTS.MATCHES_FILTER, params);
       const res = await Api.getMatchFilter(params);
 
       if (res?.status == 200) {
         console.log('Match Filter Success:', res?.data);
+        Toast.show(res?.data?.message ?? 'Filters applied', Toast.LONG);
         const matches = mapMatchList(res?.data);
         navigation.navigate('SearchMain', {
           filterMatches: matches,

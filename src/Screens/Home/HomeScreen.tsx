@@ -66,6 +66,8 @@ const HomeScreen = () => {
       if (res?.status == 200) {
         console.log('Home Matches Success:', res?.data);
         const mapped = mapHomeMatches(res?.data);
+        Toast.show(res?.data?.message ?? 'Matches loaded', Toast.LONG);
+
         const greetingParts = mapHomeGreeting(mapped.greeting);
         setGreeting(greetingParts.title || Strings.homeGreeting);
         setSubtitle(greetingParts.subtitle || Strings.homeSubtitle);

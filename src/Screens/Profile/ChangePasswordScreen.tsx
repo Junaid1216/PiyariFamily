@@ -122,6 +122,7 @@ const ChangePasswordScreen = () => {
 
         if (res?.status == 200) {
           console.log('Change Password Success:', res);
+          Toast.show(res?.message || Strings.passwordUpdated, Toast.LONG);
           navigation.goBack();
         } else {
           console.log('Change Password Failed:', res);

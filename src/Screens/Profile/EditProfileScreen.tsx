@@ -18,7 +18,9 @@ import {
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { launchImageLibrary } from 'react-native-image-picker';
 import Toast from 'react-native-simple-toast';
+import { AxiosError } from 'axios';
 import { Images } from '../../Assets';
 import ScreenHeader from '../../Components/ScreenHeader';
 import PrimaryButton from '../../Components/PrimaryButton';
@@ -33,12 +35,16 @@ import {
   MOTHER_TONGUE_OPTIONS,
   OTHER_LANGUAGE_OPTIONS,
   OtherLanguage,
+  PROFILE_PHOTO_MAX_BYTES,
+  PROFILE_PHOTO_PICKER_MAX_SIZE,
+  PROFILE_PHOTO_PICKER_QUALITY,
   RESIDENCE_STATUS_OPTIONS,
 } from '../../Constant/ProfileSetup';
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
-import { Api, ENDPOINTS, mapFormToProfilePayload, mapProfileToForm, resolveProfileData } from '../../API';
+import { Api, ENDPOINTS, getApiErrorMessage, mapFormToProfilePayload, mapProfileToForm, resolveProfileData, type ApiErrorResponse } from '../../API';
+import { normalizeUploadFile, type UploadFile } from '../../API/formData';
 import type { EditProfileFormData } from '../../API';
 import { ProfileStackParamList } from '../../Navigation/ProfileStackNavigator';
 import { getFooterBottomPadding } from '../../Functions/safeArea';
@@ -61,6 +67,7 @@ const EMPTY_FORM: EditProfileFormData = {
   email: '',
   phone: '',
   city: '',
+  country: '',
   heightFeet: '',
   heightInches: '',
   motherTongue: '',
@@ -89,6 +96,7 @@ const EditProfileScreen = () => {
   >(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [newPhoto, setNewPhoto] = useState<UploadFile | null>(null);
 
   const updateForm = <K extends keyof EditProfileFormData>(
     key: K,
@@ -111,12 +119,10 @@ const EditProfileScreen = () => {
         console.log('Profile Failed:', res?.data);
         Toast.show(res?.data?.message || 'Failed to load profile', Toast.LONG);
       }
-    } catch (error: any) {
-      console.log('Profile Error:', error?.response?.data || error);
-      Toast.show(
-        error?.response?.data?.message || 'Failed to load profile',
-        Toast.LONG,
-      );
+    } catch (error) {
+      const axiosError = error as AxiosError<ApiErrorResponse>;
+      console.log('Profile Error:', axiosError?.response?.data || error);
+      Toast.show(getApiErrorMessage(axiosError, 'Failed to load profile'), Toast.LONG);
     } finally {
       setLoading(false);
     }
@@ -154,6 +160,47 @@ const EditProfileScreen = () => {
     }));
   };
 
+  const handlePickPhoto = () => {
+    launchImageLibrary(
+      {
+        mediaType: 'photo',
+        selectionLimit: 1,
+        maxWidth: PROFILE_PHOTO_PICKER_MAX_SIZE,
+        maxHeight: PROFILE_PHOTO_PICKER_MAX_SIZE,
+        quality: PROFILE_PHOTO_PICKER_QUALITY,
+      },
+      response => {
+        if (response.didCancel || response.errorCode) {
+          return;
+        }
+
+        const asset = response.assets?.[0];
+        if (!asset?.uri) {
+          return;
+        }
+
+        if (
+          asset.type &&
+          !['image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(
+            asset.type.toLowerCase(),
+          )
+        ) {
+          Toast.show('Please select JPEG, PNG, or WEBP image', Toast.LONG);
+          return;
+        }
+
+        if (asset.fileSize && asset.fileSize > PROFILE_PHOTO_MAX_BYTES) {
+          Toast.show(Strings.photoTooLarge, Toast.LONG);
+          return;
+        }
+
+        setNewPhoto(
+          normalizeUploadFile(asset.uri, asset.fileName ?? 'avatar.png', asset.type),
+        );
+      },
+    );
+  };
+
   const handleSave = async () => {
     if (saving || loading) {
       return;
@@ -164,21 +211,23 @@ const EditProfileScreen = () => {
 
       try {
         console.log('Update Profile Request:', ENDPOINTS.PROFILE_UPDATE);
-        const res = await Api.updateProfile(mapFormToProfilePayload(form));
+        const res = await Api.updateProfile(
+          mapFormToProfilePayload(form),
+          newPhoto,
+        );
 
         if (res?.status == 200) {
           console.log('Update Profile Success:', res);
+          Toast.show(res?.message ?? Strings.profileSaved, Toast.LONG);
           navigation.goBack();
         } else {
           console.log('Update Profile Failed:', res);
-          Toast.show(res?.message || 'Failed to save profile', Toast.LONG);
+          Toast.show(res?.message ?? 'Failed to save profile', Toast.LONG);
         }
-      } catch (error: any) {
-        console.log('Update Profile Error:', error?.response?.data || error);
-        Toast.show(
-          error?.response?.data?.message || 'Failed to save profile',
-          Toast.LONG,
-        );
+      } catch (error) {
+        const axiosError = error as AxiosError<ApiErrorResponse>;
+        console.log('Update Profile Error:', axiosError?.response?.data || error);
+        Toast.show(getApiErrorMessage(axiosError, 'Failed to save profile'), Toast.LONG);
       } finally {
         setSaving(false);
       }
@@ -232,18 +281,22 @@ const EditProfileScreen = () => {
             <View style={styles.photoWrap}>
               <Image
                 source={
-                  form.profilePhoto
-                    ? { uri: form.profilePhoto }
+                  newPhoto?.uri || form.profilePhoto
+                    ? { uri: newPhoto?.uri ?? form.profilePhoto ?? undefined }
                     : Images.femaleProfile
                 }
                 style={styles.profilePhoto}
                 resizeMode="cover"
               />
-              <TouchableOpacity style={styles.cameraBtn} activeOpacity={0.85}>
+              <TouchableOpacity
+                style={styles.cameraBtn}
+                activeOpacity={0.85}
+                onPress={handlePickPhoto}
+              >
                 <Icon name="camera" size={fs(14)} color={Colors.white} />
               </TouchableOpacity>
             </View>
-            <TouchableOpacity activeOpacity={0.85}>
+            <TouchableOpacity activeOpacity={0.85} onPress={handlePickPhoto}>
               <Text style={styles.changePhotoText}>{Strings.changePhoto}</Text>
             </TouchableOpacity>
           </View>

@@ -13,17 +13,20 @@ export type ReferralStats = {
   referralLink: string;
   registered: number;
   pointsEarned: number;
+  conversionRate: string;
   rewardsTable: ReferralRewardRow[];
 };
 
 export type ReferralStatsResponse = {
-  success?: boolean;
+  success?: boolean | number;
   referral_code?: string | null;
   referral_link?: string | null;
   reward_per_registration?: string | number | null;
   reward_points?: number | string | null;
   total_registered?: number | string | null;
+  conversion_rate?: string | null;
   message?: string;
+  data?: ReferralStatsResponse;
 };
 
 const pickNumber = (...values: Array<number | string | null | undefined>) => {
@@ -69,23 +72,65 @@ const formatPoints = (value?: string | number | null) => {
 
 const buildRewardsTable = (
   rewardPerRegistration?: string | number | null,
-): ReferralRewardRow[] => [
-  {
-    id: '1',
-    registrations: '1 Registration',
-    points: formatPoints(rewardPerRegistration ?? 0),
-  },
-];
+  conversionRate?: string | null,
+): ReferralRewardRow[] => {
+  if (conversionRate?.trim()) {
+    const [registrations = '1 Registration', points = ''] = conversionRate
+      .split('=')
+      .map(part => part.trim());
+
+    return [
+      {
+        id: '1',
+        registrations,
+        points: points || formatPoints(rewardPerRegistration ?? 0),
+      },
+    ];
+  }
+
+  return [
+    {
+      id: '1',
+      registrations: '1 Registration',
+      points: formatPoints(rewardPerRegistration ?? 0),
+    },
+  ];
+};
+
+const normalizeReferralStatsResponse = (
+  response?: ReferralStatsResponse | null,
+): ReferralStatsResponse | null => {
+  if (!response || typeof response !== 'object') {
+    return null;
+  }
+
+  if (response.data && typeof response.data === 'object') {
+    return {
+      ...response,
+      ...response.data,
+    };
+  }
+
+  return response;
+};
 
 export const mapReferralStats = (
   response?: ReferralStatsResponse | null,
-): ReferralStats => ({
-  referralCode: pickString(response?.referral_code),
-  referralLink: pickString(response?.referral_link) || REFERRAL_LINK,
-  registered: pickNumber(response?.total_registered),
-  pointsEarned: pickNumber(response?.reward_points),
-  rewardsTable: buildRewardsTable(response?.reward_per_registration),
-});
+): ReferralStats => {
+  const data = normalizeReferralStatsResponse(response);
+
+  return {
+    referralCode: pickString(data?.referral_code),
+    referralLink: pickString(data?.referral_link) || REFERRAL_LINK,
+    registered: pickNumber(data?.total_registered),
+    pointsEarned: pickNumber(data?.reward_points),
+    conversionRate: pickString(data?.conversion_rate),
+    rewardsTable: buildRewardsTable(
+      data?.reward_per_registration,
+      data?.conversion_rate,
+    ),
+  };
+};
 
 export type ReferralHistoryItem = {
   id: string;
@@ -112,10 +157,10 @@ export type ReferralHistoryApiItem = {
 };
 
 export type ReferralHistoryResponse = {
-  success?: boolean;
+  success?: boolean | number;
   history?: ReferralHistoryApiItem[];
   referrals?: ReferralHistoryApiItem[];
-  data?: ReferralHistoryApiItem[];
+  data?: ReferralHistoryApiItem[] | ReferralHistoryResponse;
   total?: number | string | null;
   message?: string;
 };
@@ -191,21 +236,44 @@ export const mapReferralHistoryItem = (
   };
 };
 
-const extractHistory = (response?: ReferralHistoryResponse | null) => {
-  if (!response) {
-    return [];
-  }
-
-  if (Array.isArray(response.history)) {
-    return response.history;
-  }
-
-  if (Array.isArray(response.referrals)) {
-    return response.referrals;
+const normalizeReferralHistoryResponse = (
+  response?: ReferralHistoryResponse | null,
+): ReferralHistoryResponse | null => {
+  if (!response || typeof response !== 'object') {
+    return null;
   }
 
   if (Array.isArray(response.data)) {
-    return response.data;
+    return { ...response, history: response.history ?? response.data };
+  }
+
+  if (response.data && typeof response.data === 'object' && !Array.isArray(response.data)) {
+    return {
+      ...response,
+      ...response.data,
+    };
+  }
+
+  return response;
+};
+
+const extractHistory = (response?: ReferralHistoryResponse | null) => {
+  const normalized = normalizeReferralHistoryResponse(response);
+
+  if (!normalized) {
+    return [];
+  }
+
+  if (Array.isArray(normalized.history)) {
+    return normalized.history;
+  }
+
+  if (Array.isArray(normalized.referrals)) {
+    return normalized.referrals;
+  }
+
+  if (Array.isArray(normalized.data)) {
+    return normalized.data;
   }
 
   return [];

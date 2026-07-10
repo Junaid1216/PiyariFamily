@@ -186,6 +186,16 @@ export const RELIGION_OPTIONS = [
 
 export type Religion = (typeof RELIGION_OPTIONS)[number];
 
+export const RELIGION_TO_API: Record<Religion, string> = {
+  Islam: 'Muslim',
+  Hinduism: 'Hinduism',
+  Christianity: 'Christianity',
+  Sikhism: 'Sikhism',
+  Buddhism: 'Buddhism',
+  Jainism: 'Jainism',
+  Other: 'Other',
+};
+
 export const MOTHER_TONGUE_OPTIONS = [
   'Urdu',
   'English',
@@ -217,3 +227,6 @@ export type OtherLanguage = (typeof OTHER_LANGUAGE_OPTIONS)[number];
 export const MAX_OTHER_LANGUAGES = 5;
 
 export const PROFILE_PHOTO_SLOTS = 6;
+export const PROFILE_PHOTO_MAX_BYTES = 5120 * 1024;
+export const PROFILE_PHOTO_PICKER_MAX_SIZE = 1280;
+export const PROFILE_PHOTO_PICKER_QUALITY = 0.75 as const;

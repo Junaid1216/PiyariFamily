@@ -93,6 +93,7 @@ const EducationScreen = ({ navigation }: Props) => {
 
       if (res?.status == 200) {
         console.log('Profile Education Success:', res);
+        Toast.show(res?.message ?? 'Education saved', Toast.LONG);
         navigation.navigate('Career');
       } else {
         console.log('Profile Education Failed:', res);

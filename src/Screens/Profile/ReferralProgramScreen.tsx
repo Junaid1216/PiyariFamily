@@ -48,6 +48,7 @@ const DEFAULT_STATS: ReferralStats = {
   referralLink: REFERRAL_LINK,
   registered: 0,
   pointsEarned: 0,
+  conversionRate: '',
   rewardsTable: REFERRAL_REWARDS_TABLE,
 };
 
@@ -143,6 +144,13 @@ const ReferralProgramScreen = () => {
               <Icon name="check" size={fs(11)} color={Colors.white} />
             </View>
           </LinearGradient>
+
+          <Text style={styles.sectionLabel}>{Strings.yourReferralCode}</Text>
+          <View style={styles.codeBox}>
+            <Text style={styles.codeText}>
+              {stats.referralCode || '-'}
+            </Text>
+          </View>
 
           <Text style={styles.sectionLabel}>{Strings.yourReferralLink}</Text>
           <View style={styles.linkBox}>
@@ -327,6 +335,22 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     letterSpacing: 1,
     marginBottom: hp('0.9%'),
+  },
+  codeBox: {
+    backgroundColor: PINK_CARD,
+    borderRadius: wp('3.5%'),
+    borderWidth: 1,
+    borderColor: '#F0D0D8',
+    paddingHorizontal: wp('4%'),
+    paddingVertical: hp('1.2%'),
+    marginBottom: hp('1.2%'),
+  },
+  codeText: {
+    fontSize: fs(18),
+    fontFamily: Fonts.bold,
+    color: Colors.primary,
+    letterSpacing: 2,
+    textAlign: 'center',
   },
   linkBox: {
     flexDirection: 'row',

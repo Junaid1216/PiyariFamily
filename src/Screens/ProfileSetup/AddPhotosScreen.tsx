@@ -14,12 +14,20 @@ import {
 } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-simple-toast';
+import { AxiosError } from 'axios';
 import BackButton from '../../Components/BackButton';
 import PrimaryButton from '../../Components/PrimaryButton';
 import SetupProgressBar from '../../Components/SetupProgressBar';
+import {
+  Api,
+  ENDPOINTS,
+  getApiErrorMessage,
+  type ApiErrorResponse,
+} from '../../API';
+import { normalizeUploadFile, type UploadFile } from '../../API/formData';
 import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
-import { PROFILE_PHOTO_SLOTS, PROFILE_SETUP_TOTAL_STEPS } from '../../Constant/ProfileSetup';
+import { PROFILE_PHOTO_SLOTS, PROFILE_PHOTO_MAX_BYTES, PROFILE_PHOTO_PICKER_MAX_SIZE, PROFILE_PHOTO_PICKER_QUALITY, PROFILE_SETUP_TOTAL_STEPS } from '../../Constant/ProfileSetup';
 import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
 import { getFooterBottomPadding } from '../../Functions/safeArea';
@@ -33,11 +41,15 @@ type Props = {
 };
 
 const createEmptyPhotos = () =>
-  Array.from({ length: PROFILE_PHOTO_SLOTS }, () => null as string | null);
+  Array.from({ length: PROFILE_PHOTO_SLOTS }, () => null as UploadFile | null);
+
+const isSupportedPhoto = (type?: string | null) =>
+  !type || ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(type.toLowerCase());
 
 const AddPhotosScreen = ({ navigation }: Props) => {
   const insets = useSafeAreaInsets();
-  const [photos, setPhotos] = useState<(string | null)[]>(createEmptyPhotos);
+  const [photos, setPhotos] = useState<(UploadFile | null)[]>(createEmptyPhotos);
+  const [saving, setSaving] = useState(false);
 
   const hasAtLeastOnePhoto = photos.some(photo => photo !== null);
 
@@ -46,20 +58,39 @@ const AddPhotosScreen = ({ navigation }: Props) => {
       {
         mediaType: 'photo',
         selectionLimit: 1,
+        maxWidth: PROFILE_PHOTO_PICKER_MAX_SIZE,
+        maxHeight: PROFILE_PHOTO_PICKER_MAX_SIZE,
+        quality: PROFILE_PHOTO_PICKER_QUALITY,
       },
       response => {
         if (response.didCancel || response.errorCode) {
           return;
         }
 
-        const uri = response.assets?.[0]?.uri;
-        if (!uri) {
+        const asset = response.assets?.[0];
+        if (!asset?.uri) {
           return;
         }
 
+        if (!isSupportedPhoto(asset.type)) {
+          Toast.show('Please select JPEG, PNG, or WEBP image', Toast.LONG);
+          return;
+        }
+
+        if (asset.fileSize && asset.fileSize > PROFILE_PHOTO_MAX_BYTES) {
+          Toast.show(Strings.photoTooLarge, Toast.LONG);
+          return;
+        }
+
+        const photo = normalizeUploadFile(
+          asset.uri,
+          asset.fileName,
+          asset.type,
+        );
+
         setPhotos(prev => {
           const next = [...prev];
-          next[index] = uri;
+          next[index] = photo;
           return next;
         });
       },
@@ -74,12 +105,38 @@ const AddPhotosScreen = ({ navigation }: Props) => {
     });
   };
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     if (!hasAtLeastOnePhoto) {
       Toast.show(Strings.addPhotoRequired);
       return;
     }
-    navigation.navigate('ProfileReady');
+    if (saving) {
+      return;
+    }
+
+    const selectedPhotos = photos.filter((photo): photo is UploadFile => photo !== null);
+
+    setSaving(true);
+
+    try {
+      console.log('Profile Photos Request:', ENDPOINTS.PROFILE_PHOTOS);
+      const res = await Api.uploadProfilePhotos(selectedPhotos);
+
+      if (res?.status == 200) {
+        console.log('Profile Photos Success:', res);
+        Toast.show(res?.message ?? 'Photos uploaded', Toast.LONG);
+        navigation.navigate('ProfileReady');
+      } else {
+        console.log('Profile Photos Failed:', res);
+        Toast.show(res?.message ?? 'Failed to upload photos', Toast.LONG);
+      }
+    } catch (error) {
+      const axiosError = error as AxiosError<ApiErrorResponse>;
+      console.log('Profile Photos Error:', axiosError?.response?.data || error);
+      Toast.show(getApiErrorMessage(axiosError), Toast.LONG);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -113,7 +170,7 @@ const AddPhotosScreen = ({ navigation }: Props) => {
                       </Text>
                     </View>
                   ) : null}
-                  <Image source={{ uri: photo }} style={styles.photoImage} />
+                  <Image source={{ uri: photo.uri }} style={styles.photoImage} />
                   <TouchableOpacity
                     style={styles.removeBtn}
                     activeOpacity={0.85}
@@ -173,8 +230,9 @@ const AddPhotosScreen = ({ navigation }: Props) => {
         <PrimaryButton
           title={Strings.completeProfile}
           onPress={handleContinue}
+          loading={saving}
           showArrow
-          disabled={!hasAtLeastOnePhoto}
+          disabled={!hasAtLeastOnePhoto || saving}
         />
       </View>
     </SafeAreaView>

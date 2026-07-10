@@ -118,6 +118,7 @@ const SettingsScreen = () => {
 
       if (res?.status == 200) {
         console.log('Logout Success:', res);
+        Toast.show(res?.message ?? 'Logged out successfully', Toast.LONG);
         navigation.getParent()?.getParent()?.getParent()?.dispatch(
           CommonActions.reset({
             index: 0,

@@ -46,6 +46,7 @@ export type EditProfileFormData = {
   email: string;
   phone: string;
   city: string;
+  country: string;
   heightFeet: string;
   heightInches: string;
   motherTongue: string;
@@ -74,7 +75,7 @@ const MARITAL_STATUS_MAP: Record<string, string> = {
 };
 
 const MARITAL_TO_API: Record<string, string> = {
-  'Never Married': 'single',
+  'Never Married': 'never married',
   Divorced: 'divorced',
   Widowed: 'widowed',
 };
@@ -320,6 +321,7 @@ export const mapProfileToForm = (
     city:
       safeProfile.location ??
       (buildLocation(safeProfile) || safeProfile.city || ''),
+    country: safeProfile.country ?? '',
     heightFeet: height.feet,
     heightInches: height.inches,
     motherTongue: safeProfile.mother_tongue
@@ -385,12 +387,17 @@ export const mapFormToProfilePayload = (
     payload.city = city;
   }
 
+  const country = form.country.trim();
+  if (country) {
+    payload.country = country;
+  }
+
   if (form.motherTongue) {
     payload.mother_tongue = form.motherTongue;
   }
 
   if (form.otherLanguages.length > 0) {
-    payload.other_languages = form.otherLanguages;
+    payload.other_languages = JSON.stringify(form.otherLanguages);
   }
 
   if (form.maritalStatus) {
@@ -403,7 +410,7 @@ export const mapFormToProfilePayload = (
   }
 
   if (form.residenceStatus) {
-    payload.residential_status = form.residenceStatus;
+    payload.residential_status = form.residenceStatus.toLowerCase();
   }
 
   if (form.birthday) {

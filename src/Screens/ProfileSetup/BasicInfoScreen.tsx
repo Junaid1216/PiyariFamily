@@ -226,6 +226,7 @@ const BasicInfoScreen = ({ navigation }: Props) => {
 
       if (res?.status == 200) {
         console.log('Profile Basic Info Success:', res);
+        Toast.show(res?.message ?? 'Basic info saved', Toast.LONG);
         navigation.navigate('Education');
       } else {
         console.log('Profile Basic Info Failed:', res);

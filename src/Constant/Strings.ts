@@ -194,6 +194,7 @@ export const Strings = {
   photosReviewNotice: 'Photos are reviewed for authenticity.',
   completeProfile: 'Complete Profile',
   addPhotoRequired: 'Please add at least 1 photo to continue',
+  photoTooLarge: 'Each photo must be under 5 MB. Please choose a smaller image.',
 
   profileReadyTitle: 'Congratulations Your Profile is',
   profileReadyHighlight: 'Ready!',
@@ -244,7 +245,7 @@ export const Strings = {
   clearAll: 'Clear All',
 
   findYourMatch: 'Find Your Match',
-  searchPlaceholder: 'Search by name, city, profession...',
+  searchPlaceholder: 'Search by name or profession, city...',
   quickFilters: 'Quick Filters',
   nearMe: 'Near Me',
   verifiedProfiles: 'Verified',
@@ -290,6 +291,7 @@ export const Strings = {
     'Earn points for every friend who successfully registers — not just for sharing!',
   rewardsOnRegistrationOnly: 'Rewards on Registration Only',
   yourReferralLink: 'YOUR REFERRAL LINK',
+  yourReferralCode: 'YOUR REFERRAL CODE',
   copyLink: 'Copy Link',
   whatsapp: 'WhatsApp',
   rewardsTable: 'REWARDS TABLE',

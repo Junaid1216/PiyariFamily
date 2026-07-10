@@ -3,6 +3,7 @@ import type {
   MatchFilterParams,
   MatchListResponse,
 } from './matchMapper';
+import { normalizeMatchListResponse } from './matchMapper';
 import {
   INCOME_RANGE_OPTIONS,
   QUALIFICATION_OPTIONS,
@@ -89,24 +90,26 @@ const normalizeList = (values?: Array<string | null | undefined>) =>
   ].sort((left, right) => left.localeCompare(right));
 
 const extractProfileList = (response?: MatchListResponse | null) => {
-  if (!response) {
+  const normalized = normalizeMatchListResponse(response);
+
+  if (!normalized) {
     return [];
   }
 
-  if (Array.isArray(response.data)) {
-    return response.data;
+  if (Array.isArray(normalized.data)) {
+    return normalized.data;
   }
 
-  if (Array.isArray(response.profiles)) {
-    return response.profiles;
+  if (Array.isArray(normalized.profiles)) {
+    return normalized.profiles;
   }
 
-  if (Array.isArray(response.matches)) {
-    return response.matches;
+  if (Array.isArray(normalized.matches)) {
+    return normalized.matches;
   }
 
-  if (Array.isArray(response.results)) {
-    return response.results;
+  if (Array.isArray(normalized.results)) {
+    return normalized.results;
   }
 
   return [];
@@ -235,16 +238,14 @@ const mapDefaults = (
   const apiOptions = response?.filter_options;
 
   return {
-    ageMin: pickNumber(applied.age_min ?? apiOptions?.age_min, 24),
-    ageMax: pickNumber(applied.age_max ?? apiOptions?.age_max, 32),
-    city: pickString(applied.city) || options.cities[0] || '',
-    qualification:
-      pickString(applied.qualification) || options.qualifications[0] || FILTER_ANY,
-    profession: pickString(applied.profession) || options.professions[0] || FILTER_ANY,
-    religion: pickString(applied.religion) || options.religions[0] || FILTER_ANY,
-    maritalStatus:
-      pickString(applied.marital_status) || options.maritalStatuses[0] || '',
-    incomeRange: options.incomeRanges[0] || FILTER_ANY,
+    ageMin: pickNumber(applied.age_min ?? apiOptions?.age_min, 18),
+    ageMax: pickNumber(applied.age_max ?? apiOptions?.age_max, 60),
+    city: pickString(applied.city),
+    qualification: pickString(applied.qualification) || FILTER_ANY,
+    profession: pickString(applied.profession) || FILTER_ANY,
+    religion: pickString(applied.religion) || FILTER_ANY,
+    maritalStatus: pickString(applied.marital_status),
+    incomeRange: FILTER_ANY,
   };
 };
 
@@ -281,7 +282,7 @@ export const mapIncomeToParams = (
     return INCOME_RANGE_MAP[value];
   }
 
-  return { monthly_income: value };
+  return {};
 };
 
 export type BuildFilterParamsInput = {
@@ -309,13 +310,12 @@ export const buildMatchFilterParams = ({
   incomeRange,
   activeQuickFilters,
 }: BuildFilterParamsInput): MatchFilterParams => {
-  const params: MatchFilterParams = {
-    age_min: ageMin,
-    age_max: ageMax,
-  };
+  const params: MatchFilterParams = {};
 
-  if (marital) {
-    params.marital_status = marital.toLowerCase();
+  if (marital.trim()) {
+    const normalized = marital.trim().toLowerCase();
+    params.marital_status =
+      normalized === 'single' ? 'never married' : normalized;
   }
 
   if (education && education !== FILTER_ANY) {
@@ -330,17 +330,24 @@ export const buildMatchFilterParams = ({
     params.religion = religion;
   }
 
-  const city = citySearch.trim() || location;
+  const city = citySearch.trim() || location.trim();
 
   if (city) {
     params.city = city;
+  }
+
+  const useAgeFilter = ageMin > 18 || ageMax < 60;
+
+  if (useAgeFilter) {
+    params.age_min = ageMin;
+    params.age_max = ageMax;
   }
 
   Object.assign(params, mapIncomeToParams(incomeRange));
 
   Object.entries(activeQuickFilters).forEach(([key, enabled]) => {
     if (enabled) {
-      params[key as keyof MatchFilterParams] = 1;
+      params[key as keyof MatchFilterParams] = true;
     }
   });
 

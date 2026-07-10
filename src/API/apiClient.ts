@@ -47,10 +47,34 @@ export const apiClient = {
       })),
 
   get: <T>(url: string, config?: AxiosRequestConfig): Promise<ApiResult<T>> =>
-    axiosInstance.get<T>(url, config).then(response => ({
+    axiosInstance.get<T>(url, config)      .then(response => ({
+        status: response.status,
+        data: response.data,
+      })),
+
+  postFormData: <T>(url: string, formData: FormData): Promise<ApiResult<T>> =>
+    axiosInstance.post<T>(url, formData).then(response => ({
       status: response.status,
       data: response.data,
     })),
+
+  postJson: <T>(
+    url: string,
+    data?: unknown,
+    config?: AxiosRequestConfig,
+  ): Promise<ApiResult<T>> =>
+    axiosInstance
+      .post<T>(url, data, {
+        ...config,
+        headers: {
+          'Content-Type': 'application/json',
+          ...config?.headers,
+        },
+      })
+      .then(response => ({
+        status: response.status,
+        data: response.data,
+      })),
 
   post: <T>(url: string, data?: unknown, config?: AxiosRequestConfig) =>
     axiosInstance.post<T>(url, data, config).then(response => response.data),

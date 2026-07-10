@@ -1,6 +1,6 @@
 import { apiClient } from './apiClient';
 import { ENDPOINTS } from './endpoints';
-import type { FormValue } from './formData';
+import { toPhotoUploadFormData, toProfileUpdateFormData, type FormValue, type UploadFile } from './formData';
 import type { ProfileApiData } from './mappers/profileMapper';
 import type {
   HomeMatchesResponse,
@@ -30,6 +30,14 @@ type UpdateProfileResponse = MessageResponse & {
 
 type VerifyPhoneResponse = MessageResponse & {
   user?: ProfileApiData;
+};
+
+export type ProfileFaithPayload = {
+  religion: string;
+  community?: string;
+  sect?: string;
+  mother_tongue: string;
+  other_languages?: string[];
 };
 
 export const Api = {
@@ -63,7 +71,7 @@ export const Api = {
   },
 
   updateProfileCareer: async (payload: Record<string, FormValue>) => {
-    const { status, data } = await apiClient.postForm<MessageResponse>(
+    const { status, data } = await apiClient.postForm<UpdateProfileResponse>(
       ENDPOINTS.PROFILE_CAREER,
       payload,
     );
@@ -75,6 +83,26 @@ export const Api = {
     const { status, data } = await apiClient.postForm<UpdateProfileResponse>(
       ENDPOINTS.PROFILE_PHYSICAL,
       payload,
+    );
+
+    return { status, ...data };
+  },
+
+  updateProfileFaith: async (payload: ProfileFaithPayload) => {
+    const { status, data } = await apiClient.postJson<UpdateProfileResponse>(
+      ENDPOINTS.PROFILE_FAITH,
+      payload,
+    );
+
+    return { status, ...data };
+  },
+
+  uploadProfilePhotos: async (photos: UploadFile[]) => {
+    const formData = toPhotoUploadFormData(photos);
+
+    const { status, data } = await apiClient.postFormData<UpdateProfileResponse>(
+      ENDPOINTS.PROFILE_PHOTOS,
+      formData,
     );
 
     return { status, ...data };
@@ -98,10 +126,15 @@ export const Api = {
     return { status, ...data };
   },
 
-  updateProfile: async (payload: Record<string, FormValue>) => {
-    const { status, data } = await apiClient.postForm<UpdateProfileResponse>(
+  updateProfile: async (
+    payload: Record<string, FormValue>,
+    photo?: UploadFile | null,
+  ) => {
+    const formData = toProfileUpdateFormData(payload, photo);
+
+    const { status, data } = await apiClient.postFormData<UpdateProfileResponse>(
       ENDPOINTS.PROFILE_UPDATE,
-      payload,
+      formData,
     );
 
     return { status, ...data };

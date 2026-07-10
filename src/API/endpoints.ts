@@ -16,6 +16,8 @@ export const ENDPOINTS = {
   PROFILE_EDUCATION: '/profile/education',
   PROFILE_PHYSICAL: '/profile/physical',
   PROFILE_CAREER: '/profile/career',
+  PROFILE_FAITH: '/profile/faith',
+  PROFILE_PHOTOS: '/profile/photos',
   PROFILE_UPDATE: '/profile/update',
   VERIFY_PHONE_SEND: '/verify-phone/send',
   VERIFY_PHONE_VERIFY: '/verify-phone/verify',

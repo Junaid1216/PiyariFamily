@@ -11,6 +11,7 @@ export type {
   SubscriptionsResponse,
 } from './mappers/subscriptionMapper';
 export {
+  buildMatchSearchParams,
   mapHomeGreeting,
   mapHomeMatches,
   mapMatchList,
@@ -31,6 +32,7 @@ export type {
   FilterSetupData,
 } from './mappers/filterMapper';
 export type {
+  BuildSearchParamsInput,
   FeaturedMatch,
   HomeMatchesData,
   HomeMatchesResponse,

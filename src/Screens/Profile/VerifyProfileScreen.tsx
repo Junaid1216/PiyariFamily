@@ -103,6 +103,7 @@ const VerifyProfileScreen = () => {
 
       if (res?.status == 200) {
         console.log('Verify Phone Send Success:', res);
+        Toast.show(res?.message ?? 'Verification code sent', Toast.LONG);
         navigation.navigate('VerifyProfileCode', { phone: trimmed });
       } else {
         console.log('Verify Phone Send Failed:', res);

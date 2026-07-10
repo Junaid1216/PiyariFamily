@@ -53,6 +53,7 @@ const LoginScreen = ({ navigation }: Props) => {
 
       if (response?.status == 200) {
         console.log('Login Success:', response);
+        Toast.show(response.message || 'Logged in successfully', Toast.LONG);
         navigation.replace('SelectCountry');
       } else {
         console.log('Login Failed:', response);
