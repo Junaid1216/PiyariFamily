@@ -12,6 +12,7 @@ export type HomeStackParamList = {
     name: string;
     fullName: string;
     matchImage: ImageSourcePropType;
+    mutualMatch?: boolean;
   };
 };
 

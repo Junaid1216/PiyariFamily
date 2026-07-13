@@ -103,6 +103,8 @@ export const Strings = {
   onboardingForever: 'Forever',
   homeGreeting: 'Good Morning, Hamza',
   homeSubtitle: 'Here are your best matches today',
+  bestMatchTitle: 'Best Match',
+  bestMatchSubtitle: 'Highest compatibility for you',
   newBadge: 'New',
   verifiedBadge: 'Verified ✓',
   suggestedMatches: 'Suggested Matches',
@@ -391,6 +393,16 @@ export const Strings = {
     'Need a break? Deactivating is safer — your matches and data will be preserved.',
   contactSupportBeforeLeaving: 'Contact Support Before Leaving',
   changedMindGoBack: 'Changed your mind? Go Back →',
+  accountDeactivatedTitle: 'Account Deactivated',
+  accountDeactivatedDesc:
+    'Your profile is hidden from others. Reactivate anytime to see matches again.',
+  accountDeactivatedSubtitle: 'You are taking a break',
+  inactiveHiddenFromOthers: 'Hidden from other users',
+  inactiveMatchesPaused: 'Matches are paused for now',
+  inactiveDataSafe: 'Your data is safe and preserved',
+  inactiveReactivateHint:
+    'Reactivate your account anytime to continue finding your match.',
+  reactivateAccount: 'Reactivate Account',
 
   editProfileTitle: 'Edit Profile',
   save: 'Save',

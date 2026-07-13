@@ -3,6 +3,7 @@ import { ENDPOINTS } from './endpoints';
 import { toPhotoUploadFormData, toProfileUpdateFormData, type FormValue, type UploadFile } from './formData';
 import type { ProfileApiData } from './mappers/profileMapper';
 import type {
+  BestMatchResponse,
   HomeMatchesResponse,
   MatchFilterParams,
   MatchListResponse,
@@ -11,7 +12,7 @@ import type {
 } from './mappers/matchMapper';
 import type { ReferralHistoryResponse, ReferralStatsResponse } from './mappers/referralMapper';
 import type { SubscriptionsResponse } from './mappers/subscriptionMapper';
-import type { ShortlistResponse, ShortlistTab } from './mappers/shortlistMapper';
+import type { ShortlistInterestResponse, ShortlistResponse, ShortlistTab } from './mappers/shortlistMapper';
 
 type ProfileResponse = {
   success?: boolean;
@@ -25,6 +26,15 @@ type MessageResponse = {
 };
 
 type UpdateProfileResponse = MessageResponse & {
+  user?: ProfileApiData;
+};
+
+type AccountStatusResponse = {
+  success?: number | boolean;
+  message?: string;
+  status?: 'active' | 'inactive';
+  can_activate?: boolean;
+  can_deactivate?: boolean;
   user?: ProfileApiData;
 };
 
@@ -145,6 +155,14 @@ export const Api = {
       params: { tab },
     }),
 
+  sendShortlistInterest: async (profileId: string) => {
+    const { status, data } = await apiClient.postEmpty<ShortlistInterestResponse>(
+      `${ENDPOINTS.SHORTLIST}/${profileId}/interest`,
+    );
+
+    return { status, ...data };
+  },
+
   getReferralStats: () =>
     apiClient.get<ReferralStatsResponse>(ENDPOINTS.REFERRALS_STATS),
 
@@ -153,6 +171,9 @@ export const Api = {
 
   getHomeMatches: () =>
     apiClient.get<HomeMatchesResponse>(ENDPOINTS.MATCHES_HOME),
+
+  getBestMatch: () =>
+    apiClient.get<BestMatchResponse>(ENDPOINTS.MATCHES_BEST),
 
   getMatchSearch: (params?: MatchSearchParams) =>
     apiClient.get<MatchListResponse>(ENDPOINTS.MATCHES_SEARCH, { params }),
@@ -165,4 +186,25 @@ export const Api = {
 
   getSubscriptions: () =>
     apiClient.get<SubscriptionsResponse>(ENDPOINTS.SUBSCRIPTIONS),
+
+  updateAccountStatus: async (action: 'deactivate' | 'activate') => {
+    const { status, data } = await apiClient.postForm<AccountStatusResponse>(
+      ENDPOINTS.ACCOUNT_DEACTIVATE,
+      { action },
+    );
+
+    return {
+      ...data,
+      status,
+      accountStatus: data.status,
+    };
+  },
+
+  deleteAccount: async () => {
+    const { status, data } = await apiClient.postEmpty<MessageResponse>(
+      ENDPOINTS.ACCOUNT_DELETE,
+    );
+
+    return { status, ...data };
+  },
 };

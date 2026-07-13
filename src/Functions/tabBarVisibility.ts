@@ -5,7 +5,7 @@ const HIDDEN_TAB_BAR_ROUTES: Record<string, string[]> = {
   Home: ['ProfileDetail', 'MatchSuccess'],
   Search: ['FilterMatches', 'ProfileDetail'],
   Messages: ['ChatRequests', 'Chat'],
-  Like: ['FilterMatches', 'ProfileDetail'],
+  Like: ['FilterMatches', 'ProfileDetail', 'MatchSuccess'],
   Profile: [
     'EditProfile',
     'VerifyProfile',

@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import LinearGradient from 'react-native-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -22,6 +23,7 @@ import { Images } from '../../Assets';
 import {
   Api,
   ENDPOINTS,
+  accountStorage,
   getApiErrorMessage,
   mapHomeGreeting,
   mapHomeMatches,
@@ -46,6 +48,21 @@ const SCREEN_WIDTH = Dimensions.get('window').width;
 const HORIZONTAL_PADDING = wp('5.5%');
 const CARD_WIDTH = SCREEN_WIDTH - HORIZONTAL_PADDING * 2;
 
+const INACTIVE_INFO_ITEMS = [
+  {
+    icon: 'eye-off-outline',
+    text: Strings.inactiveHiddenFromOthers,
+  },
+  {
+    icon: 'heart-off-outline',
+    text: Strings.inactiveMatchesPaused,
+  },
+  {
+    icon: 'shield-check-outline',
+    text: Strings.inactiveDataSafe,
+  },
+] as const;
+
 const HomeScreen = () => {
   const navigation = useNavigation<HomeNavigationProp>();
   const [featuredMatches, setFeaturedMatches] = useState<FeaturedMatch[]>([]);
@@ -53,11 +70,25 @@ const HomeScreen = () => {
   const [greeting, setGreeting] = useState(Strings.homeGreeting);
   const [subtitle, setSubtitle] = useState(Strings.homeSubtitle);
   const [loading, setLoading] = useState(true);
+  const [isInactive, setIsInactive] = useState(false);
+  const [reactivating, setReactivating] = useState(false);
+  const [liking, setLiking] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const sliderRef = useRef<FlatList<FeaturedMatch>>(null);
 
   const fetchHomeMatches = useCallback(async () => {
     setLoading(true);
+
+    if (accountStorage.getStatus() === 'inactive') {
+      console.log('Home Inactive Account: matches hidden');
+      setIsInactive(true);
+      setFeaturedMatches([]);
+      setSuggestedMatches([]);
+      setLoading(false);
+      return;
+    }
+
+    setIsInactive(false);
 
     try {
       console.log('Home Matches Request:', ENDPOINTS.MATCHES_HOME);
@@ -66,7 +97,6 @@ const HomeScreen = () => {
       if (res?.status == 200) {
         console.log('Home Matches Success:', res?.data);
         const mapped = mapHomeMatches(res?.data);
-        Toast.show(res?.data?.message ?? 'Matches loaded', Toast.LONG);
 
         const greetingParts = mapHomeGreeting(mapped.greeting);
         setGreeting(greetingParts.title || Strings.homeGreeting);
@@ -93,6 +123,51 @@ const HomeScreen = () => {
       setLoading(false);
     }
   }, []);
+
+  const handleReactivate = async () => {
+    if (reactivating) {
+      return;
+    } else {
+      setReactivating(true);
+
+      try {
+        console.log('Activate Account Request:', ENDPOINTS.ACCOUNT_DEACTIVATE, {
+          action: 'activate',
+        });
+
+        const res = await Api.updateAccountStatus('activate');
+
+        console.log(
+          'Activate Account Response:',
+          JSON.stringify(res, null, 2),
+        );
+
+        if (res?.status == 200) {
+          console.log(
+            'Activate Account Success:',
+            JSON.stringify(res, null, 2),
+          );
+          accountStorage.setStatus(res?.accountStatus ?? 'active');
+          Toast.show(res?.message || 'Account activated', Toast.LONG);
+          fetchHomeMatches();
+        } else {
+          console.log(
+            'Activate Account Failed:',
+            JSON.stringify(res, null, 2),
+          );
+          Toast.show(res?.message || 'Failed to activate account', Toast.LONG);
+        }
+      } catch (error: any) {
+        console.log('Activate Account API Error:', error?.response?.data);
+        Toast.show(
+          error?.response?.data?.message || 'Failed to activate account',
+          Toast.LONG,
+        );
+      } finally {
+        setReactivating(false);
+      }
+    }
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -123,8 +198,50 @@ const HomeScreen = () => {
     goToIndex(activeIndex + 1);
   };
 
-  const handleLike = () => {
-    goToIndex(activeIndex + 1);
+  const handleLike = async () => {
+    const current = featuredMatches[activeIndex];
+
+    if (!current || liking) {
+      return;
+    } else {
+      setLiking(true);
+
+      try {
+        console.log(
+          'Shortlist Interest Request:',
+          `${ENDPOINTS.SHORTLIST}/${current.id}/interest`,
+        );
+
+        const res = await Api.sendShortlistInterest(current.id);
+
+        if (res?.status == 200) {
+          console.log('Shortlist Interest Success:', res);
+          navigation.navigate('MatchSuccess', {
+            name: current.name.split(' ')[0],
+            fullName: current.name,
+            matchImage: current.image,
+            mutualMatch: Boolean(res.mutual_match),
+          });
+        } else {
+          console.log('Shortlist Interest Failed:', res);
+          Toast.show(res?.message ?? 'Failed to send interest', Toast.LONG);
+          goToIndex(activeIndex + 1);
+        }
+      } catch (error) {
+        const axiosError = error as AxiosError<ApiErrorResponse>;
+        console.log(
+          'Shortlist Interest Error:',
+          axiosError?.response?.data || error,
+        );
+        Toast.show(
+          getApiErrorMessage(error, 'Failed to send interest'),
+          Toast.LONG,
+        );
+        goToIndex(activeIndex + 1);
+      } finally {
+        setLiking(false);
+      }
+    }
   };
 
   const onFeaturedScrollEnd = (
@@ -195,6 +312,67 @@ const HomeScreen = () => {
     </TouchableOpacity>
   );
 
+  const renderInactiveState = () => (
+    <View style={styles.inactiveSection}>
+      <LinearGradient
+        colors={['#FFE5EC', '#FFF8FA', Colors.white]}
+        style={styles.inactiveCard}
+      >
+        <View style={styles.inactiveHero}>
+          <View style={styles.inactiveIconOuter}>
+            <View style={styles.inactiveIconInner}>
+              <Icon name="pause" size={fs(28)} color={Colors.white} />
+            </View>
+          </View>
+
+          <Text style={styles.inactiveBadge}>{Strings.accountDeactivatedSubtitle}</Text>
+          <Text style={styles.inactiveTitle}>
+            {Strings.accountDeactivatedTitle}
+          </Text>
+          <Text style={styles.inactiveDesc}>
+            {Strings.accountDeactivatedDesc}
+          </Text>
+        </View>
+
+        <View style={styles.inactiveInfoBox}>
+          {INACTIVE_INFO_ITEMS.map(item => (
+            <View key={item.text} style={styles.inactiveInfoRow}>
+              <View style={styles.inactiveInfoIconWrap}>
+                <Icon name={item.icon} size={fs(16)} color={Colors.primary} />
+              </View>
+              <Text style={styles.inactiveInfoText}>{item.text}</Text>
+            </View>
+          ))}
+        </View>
+
+        <View style={styles.inactiveTip}>
+          <Icon name="information-outline" size={fs(16)} color={Colors.gold} />
+          <Text style={styles.inactiveTipText}>
+            {Strings.inactiveReactivateHint}
+          </Text>
+        </View>
+
+        <TouchableOpacity
+          style={styles.reactivateBtn}
+          activeOpacity={0.88}
+          onPress={handleReactivate}
+          disabled={reactivating}
+        >
+          {reactivating ? (
+            <ActivityIndicator size="small" color={Colors.white} />
+          ) : (
+            <>
+              <Icon name="play-circle-outline" size={fs(20)} color={Colors.white} />
+              <Text style={styles.reactivateBtnText}>
+                {Strings.reactivateAccount}
+              </Text>
+            </>
+          )}
+        </TouchableOpacity>
+      </LinearGradient>
+    </View>
+  );
+
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
       <ScrollView
@@ -224,6 +402,14 @@ const HomeScreen = () => {
           </TouchableOpacity>
         </View>
 
+        {loading ? (
+          <View style={styles.loaderWrap}>
+            <ActivityIndicator size="large" color={Colors.primary} />
+          </View>
+        ) : isInactive ? (
+          renderInactiveState()
+        ) : (
+          <>
         <Text style={styles.greeting}>{greeting}</Text>
         <Text style={styles.subtitle}>{subtitle}</Text>
 
@@ -248,12 +434,6 @@ const HomeScreen = () => {
           <Icon name="chevron-right" size={fs(22)} color={Colors.primary} />
         </TouchableOpacity>
 
-        {loading ? (
-          <View style={styles.loaderWrap}>
-            <ActivityIndicator size="large" color={Colors.primary} />
-          </View>
-        ) : (
-          <>
         {featuredMatches.length > 0 ? (
           <>
         <FlatList
@@ -434,6 +614,132 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.regular,
     color: Colors.textLight,
     paddingVertical: hp('1%'),
+  },
+  inactiveSection: {
+    marginTop: hp('1%'),
+  },
+  inactiveCard: {
+    borderRadius: wp('5%'),
+    borderWidth: 1,
+    borderColor: '#F3DDE3',
+    paddingHorizontal: wp('5%'),
+    paddingVertical: hp('3%'),
+    overflow: 'hidden',
+  },
+  inactiveHero: {
+    alignItems: 'center',
+    marginBottom: hp('2.2%'),
+  },
+  inactiveIconOuter: {
+    width: wp('24%'),
+    height: wp('24%'),
+    borderRadius: wp('12%'),
+    backgroundColor: '#FFF0F3',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: hp('1.5%'),
+  },
+  inactiveIconInner: {
+    width: wp('18%'),
+    height: wp('18%'),
+    borderRadius: wp('9%'),
+    backgroundColor: Colors.gold,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inactiveBadge: {
+    fontSize: fs(11),
+    fontFamily: Fonts.semiBold,
+    color: Colors.gold,
+    backgroundColor: '#FEFCE8',
+    borderWidth: 1,
+    borderColor: '#F5E6B8',
+    paddingHorizontal: wp('3%'),
+    paddingVertical: hp('0.45%'),
+    borderRadius: wp('4%'),
+    marginBottom: hp('1%'),
+    overflow: 'hidden',
+  },
+  inactiveTitle: {
+    fontSize: fs(22),
+    fontFamily: Fonts.bold,
+    color: Colors.primary,
+    textAlign: 'center',
+    marginBottom: hp('0.8%'),
+    letterSpacing: -0.3,
+  },
+  inactiveDesc: {
+    fontSize: fs(13),
+    fontFamily: Fonts.regular,
+    color: Colors.textLight,
+    textAlign: 'center',
+    lineHeight: hp('2.4%'),
+    paddingHorizontal: wp('2%'),
+  },
+  inactiveInfoBox: {
+    backgroundColor: '#FFF5F7',
+    borderWidth: 1,
+    borderColor: '#F3DDE3',
+    borderRadius: wp('4%'),
+    paddingHorizontal: wp('4%'),
+    paddingVertical: hp('1.2%'),
+    marginBottom: hp('1.5%'),
+    gap: hp('1%'),
+  },
+  inactiveInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: wp('3%'),
+  },
+  inactiveInfoIconWrap: {
+    width: wp('8%'),
+    height: wp('8%'),
+    borderRadius: wp('2.2%'),
+    backgroundColor: Colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inactiveInfoText: {
+    flex: 1,
+    fontSize: fs(12),
+    fontFamily: Fonts.regular,
+    color: Colors.textSecondary,
+    lineHeight: hp('2%'),
+  },
+  inactiveTip: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: wp('2.5%'),
+    backgroundColor: '#FEFCE8',
+    borderRadius: wp('3%'),
+    borderWidth: 1,
+    borderColor: '#F5E6B8',
+    paddingHorizontal: wp('3.5%'),
+    paddingVertical: hp('1.1%'),
+    marginBottom: hp('2%'),
+  },
+  inactiveTipText: {
+    flex: 1,
+    fontSize: fs(11),
+    fontFamily: Fonts.regular,
+    fontStyle: 'italic',
+    color: '#8A6D1D',
+    lineHeight: hp('1.9%'),
+  },
+  reactivateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: wp('2%'),
+    backgroundColor: Colors.primary,
+    borderRadius: wp('3.5%'),
+    minHeight: hp('6%'),
+    paddingHorizontal: wp('6%'),
+  },
+  reactivateBtnText: {
+    fontSize: fs(15),
+    fontFamily: Fonts.bold,
+    color: Colors.white,
   },
   header: {
     flexDirection: 'row',

@@ -40,11 +40,20 @@ export type ShortlistApiItem = {
 };
 
 export type ShortlistResponse = {
-  success?: boolean;
+  success?: boolean | number;
   tab?: ShortlistTab;
+  tab_label?: string;
   total?: number;
   profiles?: ShortlistApiItem[];
   message?: string;
+};
+
+export type ShortlistInterestResponse = {
+  success?: boolean | number;
+  message?: string;
+  shortlisted?: boolean;
+  mutual_match?: boolean;
+  shortlist_tab?: ShortlistTab;
 };
 
 const pickString = (...values: Array<string | null | undefined>) => {

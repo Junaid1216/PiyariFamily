@@ -29,6 +29,23 @@ export type SuggestedMatch = {
   isVerified: boolean;
 };
 
+export type BestMatchData = {
+  id: string;
+  name: string;
+  age: number;
+  location: string;
+  matchScore: number;
+  image: ImageSourcePropType;
+};
+
+export type BestMatchResponse = {
+  success?: number | boolean;
+  match_score?: number | string | null;
+  profile?: MatchApiItem | null;
+  message?: string;
+  data?: BestMatchResponse;
+};
+
 export type HomeMatchesData = {
   greeting: string;
   totalMatches: number;
@@ -609,6 +626,41 @@ export const mapHomeMatches = (
 };
 
 export const mapHomeGreeting = (greeting: string) => splitGreeting(greeting);
+
+export const mapBestMatch = (
+  response?: BestMatchResponse | null,
+): BestMatchData | null => {
+  if (!response || typeof response !== 'object') {
+    return null;
+  }
+
+  const source =
+    response.profile ??
+    (response.data && typeof response.data === 'object'
+      ? response.data.profile
+      : null);
+
+  const matchScore =
+    response.match_score ??
+    (response.data && typeof response.data === 'object'
+      ? response.data.match_score
+      : null);
+
+  if (!source) {
+    return null;
+  }
+
+  const profile = normalizeItem(source);
+
+  return {
+    id: resolveId(profile, 0),
+    name: pickString(profile.name) || 'Profile',
+    age: pickNumber(profile.age),
+    location: resolveLocation(profile) || '-',
+    matchScore: pickNumber(matchScore),
+    image: resolveProfileImage(profile),
+  };
+};
 
 const parseLanguages = (value?: string | string[] | null) => {
   if (Array.isArray(value)) {

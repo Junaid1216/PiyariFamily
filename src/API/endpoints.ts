@@ -25,8 +25,11 @@ export const ENDPOINTS = {
   REFERRALS_STATS: '/referrals/stats',
   REFERRALS_HISTORY: '/referrals/history',
   MATCHES_HOME: '/matches/home',
+  MATCHES_BEST: '/matches/best-match',
   MATCHES_SEARCH: '/matches/search',
   MATCHES_FILTER: '/matches/filter',
   MATCHES: '/matches',
   SUBSCRIPTIONS: '/subscriptions',
+  ACCOUNT_DEACTIVATE: '/account/deactivate',
+  ACCOUNT_DELETE: '/account/delete',
 } as const;

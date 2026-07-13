@@ -14,6 +14,7 @@ export {
   buildMatchSearchParams,
   mapHomeGreeting,
   mapHomeMatches,
+  mapBestMatch,
   mapMatchList,
   mapMatchProfileDetail,
   pickMatchListTotal,
@@ -33,6 +34,8 @@ export type {
 } from './mappers/filterMapper';
 export type {
   BuildSearchParamsInput,
+  BestMatchData,
+  BestMatchResponse,
   FeaturedMatch,
   HomeMatchesData,
   HomeMatchesResponse,
@@ -60,6 +63,7 @@ export {
 } from './mappers/shortlistMapper';
 export type {
   ShortlistApiItem,
+  ShortlistInterestResponse,
   ShortlistResponse,
   ShortlistTab,
   ShortlistedProfile,
@@ -67,6 +71,8 @@ export type {
 export { mapProfileToForm, mapFormToProfilePayload, mapProfileToSettings, normalizeProfileData, resolveProfileData, saveProfileCache } from './mappers/profileMapper';
 export type { EditProfileFormData, ProfileApiData, SettingsProfileData } from './mappers/profileMapper';
 export { profileStorage } from './profileStorage';
+export { accountStorage } from './accountStorage';
+export type { AccountStatus } from './accountStorage';
 export { toFormData } from './formData';
 export { tokenStorage } from './tokenStorage';
 export { userStorage } from './userStorage';

@@ -51,6 +51,7 @@ const ProfileDetailScreen = () => {
     PROFILE_DETAILS[profileId] ?? null,
   );
   const [loading, setLoading] = useState(!PROFILE_DETAILS[profileId]);
+  const [sending, setSending] = useState(false);
 
   const fetchProfile = useCallback(async () => {
     if (PROFILE_DETAILS[profileId]) {
@@ -112,12 +113,46 @@ const ProfileDetailScreen = () => {
     );
   }
 
-  const handleSendInterest = () => {
-    navigation.navigate('MatchSuccess', {
-      name: profile.fullName.split(' ')[0],
-      fullName: profile.fullName,
-      matchImage: profile.image,
-    });
+  const handleSendInterest = async () => {
+    if (!profile || sending) {
+      return;
+    } else {
+      setSending(true);
+
+      try {
+        console.log(
+          'Shortlist Interest Request:',
+          `${ENDPOINTS.SHORTLIST}/${profileId}/interest`,
+        );
+
+        const res = await Api.sendShortlistInterest(profileId);
+
+        if (res?.status == 200) {
+          console.log('Shortlist Interest Success:', res);
+          navigation.navigate('MatchSuccess', {
+            name: profile.fullName.split(' ')[0],
+            fullName: profile.fullName,
+            matchImage: profile.image,
+            mutualMatch: Boolean(res.mutual_match),
+          });
+        } else {
+          console.log('Shortlist Interest Failed:', res);
+          Toast.show(res?.message ?? 'Failed to send interest', Toast.LONG);
+        }
+      } catch (error) {
+        const axiosError = error as AxiosError<ApiErrorResponse>;
+        console.log(
+          'Shortlist Interest Error:',
+          axiosError?.response?.data || error,
+        );
+        Toast.show(
+          getApiErrorMessage(error, 'Failed to send interest'),
+          Toast.LONG,
+        );
+      } finally {
+        setSending(false);
+      }
+    }
   };
 
   return (
@@ -295,9 +330,16 @@ const ProfileDetailScreen = () => {
           style={styles.interestBtn}
           activeOpacity={0.85}
           onPress={handleSendInterest}
+          disabled={sending}
         >
-          <Icon name="heart" size={fs(18)} color={Colors.white} />
-          <Text style={styles.interestBtnText}>{Strings.sendInterest}</Text>
+          {sending ? (
+            <ActivityIndicator size="small" color={Colors.white} />
+          ) : (
+            <>
+              <Icon name="heart" size={fs(18)} color={Colors.white} />
+              <Text style={styles.interestBtnText}>{Strings.sendInterest}</Text>
+            </>
+          )}
         </TouchableOpacity>
       </View>
     </View>

@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
+  ActivityIndicator,
   ScrollView,
   StyleSheet,
   Text,
@@ -7,7 +8,7 @@ import {
   View,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, CommonActions } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -17,6 +18,14 @@ import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
+import {
+  Api,
+  ENDPOINTS,
+  accountStorage,
+  profileStorage,
+  tokenStorage,
+  userStorage,
+} from '../../API';
 import { ProfileStackParamList } from '../../Navigation/ProfileStackNavigator';
 import { fs, hp, wp } from '../../Functions/responsive';
 
@@ -34,6 +43,112 @@ const LOSS_ITEMS = [
 
 const AccountOptionsScreen = () => {
   const navigation = useNavigation<NavigationProp>();
+  const [loading, setLoading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const clearSession = () => {
+    tokenStorage.clear();
+    userStorage.clear();
+    profileStorage.clear();
+    accountStorage.clear();
+  };
+
+  const goToLogin = () => {
+    navigation.getParent()?.getParent()?.getParent()?.dispatch(
+      CommonActions.reset({
+        index: 0,
+        routes: [{ name: 'Login' }],
+      }),
+    );
+  };
+
+  const handleDeactivate = async () => {
+    if (loading) {
+      return;
+    } else {
+      setLoading(true);
+
+      try {
+        console.log('Deactivate Account Request:', ENDPOINTS.ACCOUNT_DEACTIVATE, {
+          action: 'deactivate',
+        });
+
+        const res = await Api.updateAccountStatus('deactivate');
+
+        console.log(
+          'Deactivate Account Response:',
+          JSON.stringify(res, null, 2),
+        );
+
+        if (res?.status == 200) {
+          console.log(
+            'Deactivate Account Success:',
+            JSON.stringify(res, null, 2),
+          );
+          accountStorage.setStatus(res?.accountStatus ?? 'inactive');
+          Toast.show(res?.message || 'Account deactivated', Toast.LONG);
+          navigation.getParent()?.navigate('Home');
+        } else {
+          console.log(
+            'Deactivate Account Failed:',
+            JSON.stringify(res, null, 2),
+          );
+          Toast.show(res?.message || 'Failed to deactivate account', Toast.LONG);
+        }
+      } catch (error: any) {
+        console.log('Deactivate Account API Error:', error?.response?.data);
+        Toast.show(
+          error?.response?.data?.message || 'Failed to deactivate account',
+          Toast.LONG,
+        );
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
+  const handleDelete = async () => {
+    if (loading || deleting) {
+      return;
+    } else {
+      setDeleting(true);
+
+      try {
+        console.log('Delete Account Request:', ENDPOINTS.ACCOUNT_DELETE);
+
+        const res = await Api.deleteAccount();
+
+        console.log(
+          'Delete Account Response:',
+          JSON.stringify(res, null, 2),
+        );
+
+        if (res?.status == 200) {
+          console.log(
+            'Delete Account Success:',
+            JSON.stringify(res, null, 2),
+          );
+          clearSession();
+          Toast.show(res?.message || 'Account deleted successfully', Toast.LONG);
+          goToLogin();
+        } else {
+          console.log(
+            'Delete Account Failed:',
+            JSON.stringify(res, null, 2),
+          );
+          Toast.show(res?.message || 'Failed to delete account', Toast.LONG);
+        }
+      } catch (error: any) {
+        console.log('Delete Account API Error:', error?.response?.data);
+        Toast.show(
+          error?.response?.data?.message || 'Failed to delete account',
+          Toast.LONG,
+        );
+      } finally {
+        setDeleting(false);
+      }
+    }
+  };
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
@@ -76,11 +191,16 @@ const AccountOptionsScreen = () => {
           <TouchableOpacity
             style={styles.deactivateAction}
             activeOpacity={0.85}
-            onPress={() => Toast.show('Account deactivated')}
+            onPress={handleDeactivate}
+            disabled={loading || deleting}
           >
-            <Text style={styles.deactivateLink}>
-              {Strings.deactivateAction} →
-            </Text>
+            {loading ? (
+              <ActivityIndicator size="small" color={Colors.gold} />
+            ) : (
+              <Text style={styles.deactivateLink}>
+                {Strings.deactivateAction} →
+              </Text>
+            )}
           </TouchableOpacity>
         </View>
 
@@ -97,9 +217,14 @@ const AccountOptionsScreen = () => {
           <TouchableOpacity
             style={styles.deleteBtn}
             activeOpacity={0.85}
-            onPress={() => Toast.show('Account deletion requested')}
+            onPress={handleDelete}
+            disabled={loading || deleting}
           >
-            <Text style={styles.deleteBtnText}>{Strings.deleteAction} →</Text>
+            {deleting ? (
+              <ActivityIndicator size="small" color={Colors.redish} />
+            ) : (
+              <Text style={styles.deleteBtnText}>{Strings.deleteAction} →</Text>
+            )}
           </TouchableOpacity>
         </View>
 

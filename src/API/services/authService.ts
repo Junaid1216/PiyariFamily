@@ -1,6 +1,7 @@
 import { apiClient } from '../apiClient';
 import { ENDPOINTS } from '../endpoints';
 import { profileStorage } from '../profileStorage';
+import { accountStorage } from '../accountStorage';
 import { tokenStorage } from '../tokenStorage';
 import { userStorage } from '../userStorage';
 import type { AuthResponse, MessageResponse, OtpActionResponse } from '../types';
@@ -54,6 +55,8 @@ const saveAuthSession = (response: AuthResponse) => {
   if (response.user) {
     userStorage.setUser(response.user);
   }
+
+  accountStorage.setStatus('active');
 
   const token = response.token ?? response.access_token;
 
@@ -139,6 +142,7 @@ export const authService = {
       tokenStorage.clear();
       userStorage.clear();
       profileStorage.clear();
+      accountStorage.clear();
     }
   },
 };

@@ -46,6 +46,15 @@ export const apiClient = {
         data: response.data,
       })),
 
+  postEmpty: <T>(
+    url: string,
+    config?: AxiosRequestConfig,
+  ): Promise<ApiResult<T>> =>
+    axiosInstance.post<T>(url, undefined, config).then(response => ({
+      status: response.status,
+      data: response.data,
+    })),
+
   get: <T>(url: string, config?: AxiosRequestConfig): Promise<ApiResult<T>> =>
     axiosInstance.get<T>(url, config)      .then(response => ({
         status: response.status,
