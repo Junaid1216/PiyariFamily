@@ -17,6 +17,7 @@ const SplashScreen = ({ navigation }: Props) => {
     const timer = setTimeout(() => {
       navigation.replace('Onboarding');
     }, 3500);
+
     return () => clearTimeout(timer);
   }, [navigation]);
 

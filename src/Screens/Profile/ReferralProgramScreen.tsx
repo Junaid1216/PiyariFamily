@@ -35,6 +35,12 @@ import { Strings } from '../../Constant/Strings';
 import { ProfileStackParamList } from '../../Navigation/ProfileStackNavigator';
 import { getFooterBottomPadding } from '../../Functions/safeArea';
 import { fs, hp, wp } from '../../Functions/responsive';
+import {
+  selectReferralStats,
+  setReferralStats,
+  useAppDispatch,
+  useAppSelector,
+} from '../../Redux';
 
 type NavigationProp = NativeStackNavigationProp<
   ProfileStackParamList,
@@ -55,8 +61,10 @@ const DEFAULT_STATS: ReferralStats = {
 const ReferralProgramScreen = () => {
   const navigation = useNavigation<NavigationProp>();
   const insets = useSafeAreaInsets();
-  const [stats, setStats] = useState<ReferralStats>(DEFAULT_STATS);
-  const [loading, setLoading] = useState(true);
+  const dispatch = useAppDispatch();
+  const cachedStats = useAppSelector(selectReferralStats);
+  const stats = cachedStats ?? DEFAULT_STATS;
+  const [loading, setLoading] = useState(!cachedStats);
 
   const fetchReferralStats = useCallback(async () => {
     setLoading(true);
@@ -67,10 +75,10 @@ const ReferralProgramScreen = () => {
 
       if (res?.status == 200) {
         console.log('Referral Stats Success:', res?.data);
-        setStats(mapReferralStats(res?.data));
+        dispatch(setReferralStats(mapReferralStats(res?.data)));
       } else {
         console.log('Referral Stats Failed:', res?.data);
-        setStats(DEFAULT_STATS);
+        dispatch(setReferralStats(DEFAULT_STATS));
         Toast.show(
           res?.data?.message ?? 'Failed to load referral stats',
           Toast.LONG,
@@ -79,7 +87,7 @@ const ReferralProgramScreen = () => {
     } catch (error) {
       const axiosError = error as AxiosError<ApiErrorResponse>;
       console.log('Referral Stats Error:', axiosError?.response?.data || error);
-      setStats(DEFAULT_STATS);
+      dispatch(setReferralStats(DEFAULT_STATS));
       Toast.show(
         getApiErrorMessage(error, 'Failed to load referral stats'),
         Toast.LONG,
@@ -87,7 +95,7 @@ const ReferralProgramScreen = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [dispatch]);
 
   useFocusEffect(
     useCallback(() => {

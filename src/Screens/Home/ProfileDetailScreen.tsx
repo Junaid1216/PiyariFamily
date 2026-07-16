@@ -35,6 +35,10 @@ import { Strings } from '../../Constant/Strings';
 import { HomeStackParamList } from '../../Navigation/HomeStackNavigator';
 import { getFooterBottomPadding } from '../../Functions/safeArea';
 import { fs, hp, wp } from '../../Functions/responsive';
+import {
+  selectIsAccountInactive,
+  useAppSelector,
+} from '../../Redux';
 
 type RouteProps = RouteProp<HomeStackParamList, 'ProfileDetail'>;
 type NavigationProp = NativeStackNavigationProp<
@@ -46,6 +50,7 @@ const ProfileDetailScreen = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<RouteProps>();
+  const isAccountInactive = useAppSelector(selectIsAccountInactive);
   const { profileId } = route.params;
   const [profile, setProfile] = useState<ProfileDetail | null>(
     PROFILE_DETAILS[profileId] ?? null,
@@ -114,6 +119,11 @@ const ProfileDetailScreen = () => {
   }
 
   const handleSendInterest = async () => {
+    if (isAccountInactive) {
+      Toast.show(Strings.inactiveReactivateHint, Toast.LONG);
+      return;
+    }
+
     if (!profile || sending) {
       return;
     } else {
@@ -327,10 +337,13 @@ const ProfileDetailScreen = () => {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.interestBtn}
+          style={[
+            styles.interestBtn,
+            isAccountInactive && styles.interestBtnDisabled,
+          ]}
           activeOpacity={0.85}
           onPress={handleSendInterest}
-          disabled={sending}
+          disabled={sending || isAccountInactive}
         >
           {sending ? (
             <ActivityIndicator size="small" color={Colors.white} />
@@ -604,6 +617,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: wp('2%'),
+  },
+  interestBtnDisabled: {
+    opacity: 0.45,
   },
   interestBtnText: {
     fontSize: fs(14),

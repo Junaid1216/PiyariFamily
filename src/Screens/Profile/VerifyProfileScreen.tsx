@@ -22,9 +22,7 @@ import {
   Api,
   ENDPOINTS,
   getApiErrorMessage,
-  profileStorage,
   resolveProfileData,
-  userStorage,
   type ApiErrorResponse,
 } from '../../API';
 import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
@@ -33,6 +31,7 @@ import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
 import { ProfileStackParamList } from '../../Navigation/ProfileStackNavigator';
 import { hp, wp, fs } from '../../Functions/responsive';
+import { useAppSelector, selectProfile, selectUser } from '../../Redux';
 
 type NavigationProp = NativeStackNavigationProp<
   ProfileStackParamList,
@@ -41,6 +40,8 @@ type NavigationProp = NativeStackNavigationProp<
 
 const VerifyProfileScreen = () => {
   const navigation = useNavigation<NavigationProp>();
+  const cachedProfile = useAppSelector(selectProfile);
+  const user = useAppSelector(selectUser);
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const [prefilling, setPrefilling] = useState(true);
@@ -57,8 +58,8 @@ const VerifyProfileScreen = () => {
         const profile = resolveProfileData(res?.data);
         const savedPhone =
           profile.phone ??
-          profileStorage.get()?.phone ??
-          userStorage.getUser()?.phone ??
+          cachedProfile?.phone ??
+          user?.phone ??
           '';
 
         if (savedPhone) {
@@ -77,7 +78,7 @@ const VerifyProfileScreen = () => {
     } finally {
       setPrefilling(false);
     }
-  }, [navigation]);
+  }, [cachedProfile?.phone, navigation, user?.phone]);
 
   useFocusEffect(
     useCallback(() => {

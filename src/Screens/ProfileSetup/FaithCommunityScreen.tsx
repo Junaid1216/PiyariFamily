@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   Image,
   KeyboardAvoidingView,
@@ -17,6 +17,7 @@ import {
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-simple-toast';
 import { AxiosError } from 'axios';
+import { useFocusEffect } from '@react-navigation/native';
 import { Images } from '../../Assets';
 import BackButton from '../../Components/BackButton';
 import PrimaryButton from '../../Components/PrimaryButton';
@@ -26,6 +27,7 @@ import {
   Api,
   ENDPOINTS,
   getApiErrorMessage,
+  saveProfileCache,
   type ApiErrorResponse,
 } from '../../API';
 import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
@@ -45,12 +47,25 @@ import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
 import { getFooterBottomPadding } from '../../Functions/safeArea';
 import { fs, hp, wp } from '../../Functions/responsive';
+import { store } from '../../Redux';
 
 type Props = {
   navigation: {
     goBack: () => void;
     navigate: (screen: string) => void;
   };
+};
+
+const matchReligion = (value?: string | null): Religion | '' => {
+  if (!value) {
+    return '';
+  }
+
+  const matched = RELIGION_OPTIONS.find(
+    option => option.toLowerCase() === value.toLowerCase(),
+  );
+
+  return matched ?? '';
 };
 
 const FaithCommunityScreen = ({ navigation }: Props) => {
@@ -64,6 +79,52 @@ const FaithCommunityScreen = ({ navigation }: Props) => {
     'religion' | 'motherTongue' | 'languages' | null
   >(null);
   const [saving, setSaving] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      console.log('Redux FaithCommunity:', store.getState());
+
+      const cachedProfile = store.getState().profile.profile;
+      if (!cachedProfile) {
+        return;
+      }
+
+      const religionValue = matchReligion(cachedProfile.religion);
+      if (religionValue) {
+        setReligion(religionValue);
+      }
+      if (cachedProfile.community) {
+        setCommunity(
+          cachedProfile.community.charAt(0).toUpperCase() +
+            cachedProfile.community.slice(1),
+        );
+      }
+      if (cachedProfile.sect) {
+        setSect(
+          cachedProfile.sect.charAt(0).toUpperCase() +
+            cachedProfile.sect.slice(1),
+        );
+      }
+      if (cachedProfile.mother_tongue) {
+        const tongue = MOTHER_TONGUE_OPTIONS.find(
+          option =>
+            option.toLowerCase() === cachedProfile.mother_tongue?.toLowerCase(),
+        );
+        if (tongue) {
+          setMotherTongue(tongue);
+        }
+      }
+      if (Array.isArray(cachedProfile.other_languages)) {
+        const languages = cachedProfile.other_languages.filter(
+          (language): language is OtherLanguage =>
+            OTHER_LANGUAGE_OPTIONS.includes(language as OtherLanguage),
+        );
+        if (languages.length) {
+          setOtherLanguages(languages);
+        }
+      }
+    }, []),
+  );
 
   const handleContinue = async () => {
     if (!religion) {
@@ -93,6 +154,13 @@ const FaithCommunityScreen = ({ navigation }: Props) => {
 
       if (res?.status == 200) {
         console.log('Profile Faith Success:', res);
+        saveProfileCache({
+          religion: RELIGION_TO_API[religion],
+          mother_tongue: motherTongue,
+          community: communityValue,
+          sect: sectValue,
+          other_languages: otherLanguages,
+        });
         Toast.show(res?.message ?? 'Faith details saved', Toast.LONG);
         navigation.navigate('AddPhotos');
       } else {

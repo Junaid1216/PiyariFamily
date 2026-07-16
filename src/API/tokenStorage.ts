@@ -1,17 +1,16 @@
-let accessToken: string | null = null;
-let refreshToken: string | null = null;
+import { store, setAccessToken, setRefreshToken } from '../Redux';
 
 export const tokenStorage = {
-  getAccessToken: () => accessToken,
+  getAccessToken: () => store.getState().auth.accessToken,
   setAccessToken: (token: string | null) => {
-    accessToken = token;
+    store.dispatch(setAccessToken(token));
   },
-  getRefreshToken: () => refreshToken,
+  getRefreshToken: () => store.getState().auth.refreshToken,
   setRefreshToken: (token: string | null) => {
-    refreshToken = token;
+    store.dispatch(setRefreshToken(token));
   },
   clear: () => {
-    accessToken = null;
-    refreshToken = null;
+    store.dispatch(setAccessToken(null));
+    store.dispatch(setRefreshToken(null));
   },
 };

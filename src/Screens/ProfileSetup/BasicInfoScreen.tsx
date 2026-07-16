@@ -28,7 +28,7 @@ import {
   ENDPOINTS,
   getApiErrorMessage,
   resolveProfileData,
-  userStorage,
+  saveProfileCache,
   type ApiErrorResponse,
 } from '../../API';
 import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
@@ -44,6 +44,7 @@ import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
 import { getFooterBottomPadding } from '../../Functions/safeArea';
 import { fs, hp, wp } from '../../Functions/responsive';
+import { store } from '../../Redux';
 
 type Gender = 'male' | 'female';
 
@@ -143,10 +144,41 @@ const BasicInfoScreen = ({ navigation }: Props) => {
 
   useFocusEffect(
     useCallback(() => {
+      console.log('Redux BasicInfo:', store.getState());
+
+      const cachedProfile = store.getState().profile.profile;
+      const user = store.getState().auth.user;
+
+      if (cachedProfile?.name) {
+        setFullName(cachedProfile.name);
+      } else if (user?.name) {
+        setFullName(user.name);
+      }
+
+      if (cachedProfile?.gender === 'male' || cachedProfile?.gender === 'female') {
+        setGender(cachedProfile.gender);
+      }
+
+      if (cachedProfile?.birthday) {
+        setDateOfBirth(formatBirthdayToInput(cachedProfile.birthday));
+      }
+
+      const cachedMarital =
+        MARITAL_STATUS_FROM_API[cachedProfile?.marital_status?.toLowerCase() ?? ''];
+      if (cachedMarital) {
+        setMaritalStatus(cachedMarital);
+      }
+
+      let cancelled = false;
+
       const loadBasicInfo = async () => {
         try {
           console.log('Profile Basic Info Prefill Request:', ENDPOINTS.PROFILE);
           const res = await Api.getProfile();
+
+          if (cancelled) {
+            return;
+          }
 
           if (res?.status == 200) {
             console.log('Profile Basic Info Prefill Success:', res?.data);
@@ -154,8 +186,8 @@ const BasicInfoScreen = ({ navigation }: Props) => {
 
             if (profile.name) {
               setFullName(profile.name);
-            } else if (userStorage.getUser()?.name) {
-              setFullName(userStorage.getUser()?.name ?? '');
+            } else if (user?.name) {
+              setFullName(user.name);
             }
 
             if (profile.gender === 'male' || profile.gender === 'female') {
@@ -173,7 +205,7 @@ const BasicInfoScreen = ({ navigation }: Props) => {
             }
           } else {
             console.log('Profile Basic Info Prefill Failed:', res?.data);
-            const savedName = userStorage.getUser()?.name;
+            const savedName = user?.name;
             if (savedName) {
               setFullName(savedName);
             }
@@ -184,7 +216,7 @@ const BasicInfoScreen = ({ navigation }: Props) => {
             'Profile Basic Info Prefill Error:',
             axiosError?.response?.data || error,
           );
-          const savedName = userStorage.getUser()?.name;
+          const savedName = user?.name;
           if (savedName) {
             setFullName(savedName);
           }
@@ -192,6 +224,10 @@ const BasicInfoScreen = ({ navigation }: Props) => {
       };
 
       loadBasicInfo();
+
+      return () => {
+        cancelled = true;
+      };
     }, []),
   );
 
@@ -226,6 +262,12 @@ const BasicInfoScreen = ({ navigation }: Props) => {
 
       if (res?.status == 200) {
         console.log('Profile Basic Info Success:', res);
+        saveProfileCache({
+          name: fullName.trim(),
+          birthday,
+          marital_status: MARITAL_STATUS_TO_API[maritalStatus],
+          gender,
+        });
         Toast.show(res?.message ?? 'Basic info saved', Toast.LONG);
         navigation.navigate('Education');
       } else {

@@ -1,13 +1,12 @@
 import type { User } from './types';
-
-let currentUser: User | null = null;
+import { store, setUser } from '../Redux';
 
 export const userStorage = {
-  getUser: () => currentUser,
+  getUser: () => store.getState().auth.user,
   setUser: (user: User | null) => {
-    currentUser = user;
+    store.dispatch(setUser(user));
   },
   clear: () => {
-    currentUser = null;
+    store.dispatch(setUser(null));
   },
 };

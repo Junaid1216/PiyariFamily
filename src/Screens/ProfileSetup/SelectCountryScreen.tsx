@@ -23,6 +23,7 @@ import {
   ENDPOINTS,
   getApiErrorMessage,
   resolveProfileData,
+  saveProfileCache,
   type ApiErrorResponse,
 } from '../../API';
 import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
@@ -35,6 +36,8 @@ import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
 import { getFooterBottomPadding } from '../../Functions/safeArea';
 import { fs, hp, wp } from '../../Functions/responsive';
+import { store } from '../../Redux';
+import type { ProfileApiData } from '../../API/mappers/profileMapper';
 
 type Props = {
   navigation: {
@@ -51,6 +54,28 @@ const getFlagEmoji = (countryCode: CountryCode) =>
     .join('');
 
 const CountrySeparator = () => <View style={styles.separator} />;
+
+const applyCountryPrefill = (profile: ProfileApiData) => {
+  if (profile.country) {
+    const matchedCountry = PROFILE_COUNTRIES.find(
+      country =>
+        country.name.toLowerCase() === profile.country?.toLowerCase(),
+    );
+
+    if (matchedCountry) {
+      return {
+        selectedCode: matchedCountry.code,
+        city: profile.city ?? '',
+        state: profile.state ?? '',
+      };
+    }
+  }
+
+  return {
+    city: profile.city ?? '',
+    state: profile.state ?? '',
+  };
+};
 
 const SelectCountryScreen = ({ navigation }: Props) => {
   const insets = useSafeAreaInsets();
@@ -78,32 +103,46 @@ const SelectCountryScreen = ({ navigation }: Props) => {
 
   useFocusEffect(
     useCallback(() => {
+      console.log('Redux SelectCountry:', store.getState());
+
+      const cachedProfile = store.getState().profile.profile;
+      if (cachedProfile) {
+        const prefill = applyCountryPrefill(cachedProfile);
+        if (prefill.selectedCode) {
+          setSelectedCode(prefill.selectedCode);
+        }
+        if (prefill.city) {
+          setCity(prefill.city);
+        }
+        if (prefill.state) {
+          setState(prefill.state);
+        }
+      }
+
+      let cancelled = false;
+
       const loadProfileCountry = async () => {
         try {
           console.log('Profile Country Prefill Request:', ENDPOINTS.PROFILE);
           const res = await Api.getProfile();
 
+          if (cancelled) {
+            return;
+          }
+
           if (res?.status == 200) {
             console.log('Profile Country Prefill Success:', res?.data);
             const profile = resolveProfileData(res?.data);
+            const prefill = applyCountryPrefill(profile);
 
-            if (profile.country) {
-              const matchedCountry = PROFILE_COUNTRIES.find(
-                country =>
-                  country.name.toLowerCase() === profile.country?.toLowerCase(),
-              );
-
-              if (matchedCountry) {
-                setSelectedCode(matchedCountry.code);
-              }
+            if (prefill.selectedCode) {
+              setSelectedCode(prefill.selectedCode);
             }
-
-            if (profile.city) {
-              setCity(profile.city);
+            if (prefill.city) {
+              setCity(prefill.city);
             }
-
-            if (profile.state) {
-              setState(profile.state);
+            if (prefill.state) {
+              setState(prefill.state);
             }
           } else {
             console.log('Profile Country Prefill Failed:', res?.data);
@@ -118,6 +157,10 @@ const SelectCountryScreen = ({ navigation }: Props) => {
       };
 
       loadProfileCountry();
+
+      return () => {
+        cancelled = true;
+      };
     }, []),
   );
 
@@ -138,6 +181,11 @@ const SelectCountryScreen = ({ navigation }: Props) => {
 
       if (res?.status == 200) {
         console.log('Profile Country Success:', res);
+        saveProfileCache({
+          country: selectedCountry.name,
+          city: city.trim(),
+          state: state.trim(),
+        });
         Toast.show(res?.message ?? 'Country saved', Toast.LONG);
         navigation.navigate('BasicInfo');
       } else {

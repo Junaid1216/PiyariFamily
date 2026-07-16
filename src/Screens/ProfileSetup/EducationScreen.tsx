@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -7,6 +7,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   SafeAreaView,
   useSafeAreaInsets,
@@ -23,6 +24,7 @@ import {
   Api,
   ENDPOINTS,
   getApiErrorMessage,
+  saveProfileCache,
   type ApiErrorResponse,
 } from '../../API';
 import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
@@ -36,12 +38,26 @@ import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
 import { getFooterBottomPadding } from '../../Functions/safeArea';
 import { hp } from '../../Functions/responsive';
+import { store } from '../../Redux';
 
 type Props = {
   navigation: {
     goBack: () => void;
     navigate: (screen: string) => void;
   };
+};
+
+const matchQualification = (value?: string | null): Qualification | '' => {
+  if (!value) {
+    return '';
+  }
+
+  const normalized = value.toLowerCase();
+  const matched = QUALIFICATION_OPTIONS.find(
+    option => option.toLowerCase() === normalized,
+  );
+
+  return matched ?? '';
 };
 
 const EducationScreen = ({ navigation }: Props) => {
@@ -54,6 +70,33 @@ const EducationScreen = ({ navigation }: Props) => {
     null,
   );
   const [saving, setSaving] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      console.log('Redux Education:', store.getState());
+
+      const cachedProfile = store.getState().profile.profile;
+      if (!cachedProfile) {
+        return;
+      }
+
+      const qualificationValue = matchQualification(
+        cachedProfile.qualification ?? cachedProfile.education,
+      );
+      if (qualificationValue) {
+        setQualification(qualificationValue);
+      }
+      if (cachedProfile.field_of_study) {
+        setFieldOfStudy(cachedProfile.field_of_study);
+      }
+      if (cachedProfile.university) {
+        setUniversity(cachedProfile.university);
+      }
+      if (cachedProfile.graduation_year) {
+        setGraduationYear(String(cachedProfile.graduation_year));
+      }
+    }, []),
+  );
 
   const handleContinue = async () => {
     if (!qualification) {
@@ -93,6 +136,13 @@ const EducationScreen = ({ navigation }: Props) => {
 
       if (res?.status == 200) {
         console.log('Profile Education Success:', res);
+        saveProfileCache({
+          qualification: qualificationValue,
+          education: qualificationValue,
+          field_of_study: fieldOfStudy.trim(),
+          university: university.trim(),
+          graduation_year: graduationYear.trim(),
+        });
         Toast.show(res?.message ?? 'Education saved', Toast.LONG);
         navigation.navigate('Career');
       } else {

@@ -1,13 +1,13 @@
+import { store, setAccountStatus } from '../Redux';
+
 export type AccountStatus = 'active' | 'inactive';
 
-let currentStatus: AccountStatus | null = null;
-
 export const accountStorage = {
-  getStatus: () => currentStatus,
+  getStatus: () => store.getState().profile.accountStatus,
   setStatus: (status: AccountStatus | null) => {
-    currentStatus = status;
+    store.dispatch(setAccountStatus(status));
   },
   clear: () => {
-    currentStatus = null;
+    store.dispatch(setAccountStatus(null));
   },
 };

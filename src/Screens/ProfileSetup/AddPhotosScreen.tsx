@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   Image,
   ScrollView,
@@ -15,13 +15,16 @@ import {
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-simple-toast';
 import { AxiosError } from 'axios';
+import { useFocusEffect } from '@react-navigation/native';
 import BackButton from '../../Components/BackButton';
 import PrimaryButton from '../../Components/PrimaryButton';
 import SetupProgressBar from '../../Components/SetupProgressBar';
 import {
   Api,
   ENDPOINTS,
+  extractProfilePhotoSlots,
   getApiErrorMessage,
+  saveProfileCache,
   type ApiErrorResponse,
 } from '../../API';
 import { normalizeUploadFile, type UploadFile } from '../../API/formData';
@@ -32,6 +35,7 @@ import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
 import { getFooterBottomPadding } from '../../Functions/safeArea';
 import { fs, hp, wp } from '../../Functions/responsive';
+import { store } from '../../Redux';
 
 type Props = {
   navigation: {
@@ -48,10 +52,26 @@ const isSupportedPhoto = (type?: string | null) =>
 
 const AddPhotosScreen = ({ navigation }: Props) => {
   const insets = useSafeAreaInsets();
-  const [photos, setPhotos] = useState<(UploadFile | null)[]>(createEmptyPhotos);
+  const [localPhotos, setLocalPhotos] =
+    useState<(UploadFile | null)[]>(createEmptyPhotos);
+  const [remotePhotos, setRemotePhotos] =
+    useState<(string | null)[]>(createEmptyPhotos);
   const [saving, setSaving] = useState(false);
 
-  const hasAtLeastOnePhoto = photos.some(photo => photo !== null);
+  useFocusEffect(
+    useCallback(() => {
+      const profile = store.getState().profile.profile;
+      console.log('Redux AddPhotos:', store.getState());
+      setRemotePhotos(extractProfilePhotoSlots(profile));
+    }, []),
+  );
+
+  const getSlotUri = (index: number) =>
+    localPhotos[index]?.uri ?? remotePhotos[index] ?? null;
+
+  const hasAtLeastOnePhoto =
+    localPhotos.some(photo => photo !== null) ||
+    remotePhotos.some(photo => photo !== null);
 
   const handlePickPhoto = (index: number) => {
     launchImageLibrary(
@@ -88,9 +108,14 @@ const AddPhotosScreen = ({ navigation }: Props) => {
           asset.type,
         );
 
-        setPhotos(prev => {
+        setLocalPhotos(prev => {
           const next = [...prev];
           next[index] = photo;
+          return next;
+        });
+        setRemotePhotos(prev => {
+          const next = [...prev];
+          next[index] = null;
           return next;
         });
       },
@@ -98,7 +123,12 @@ const AddPhotosScreen = ({ navigation }: Props) => {
   };
 
   const handleRemovePhoto = (index: number) => {
-    setPhotos(prev => {
+    setLocalPhotos(prev => {
+      const next = [...prev];
+      next[index] = null;
+      return next;
+    });
+    setRemotePhotos(prev => {
       const next = [...prev];
       next[index] = null;
       return next;
@@ -114,7 +144,14 @@ const AddPhotosScreen = ({ navigation }: Props) => {
       return;
     }
 
-    const selectedPhotos = photos.filter((photo): photo is UploadFile => photo !== null);
+    const selectedPhotos = localPhotos.filter(
+      (photo): photo is UploadFile => photo !== null,
+    );
+
+    if (!selectedPhotos.length && remotePhotos.some(Boolean)) {
+      navigation.navigate('ProfileReady');
+      return;
+    }
 
     setSaving(true);
 
@@ -124,6 +161,9 @@ const AddPhotosScreen = ({ navigation }: Props) => {
 
       if (res?.status == 200) {
         console.log('Profile Photos Success:', res);
+        const cached = saveProfileCache(res?.data ?? res);
+        setRemotePhotos(extractProfilePhotoSlots(cached));
+        setLocalPhotos(createEmptyPhotos());
         Toast.show(res?.message ?? 'Photos uploaded', Toast.LONG);
         navigation.navigate('ProfileReady');
       } else {
@@ -157,10 +197,11 @@ const AddPhotosScreen = ({ navigation }: Props) => {
         <Text style={styles.subtitle}>{Strings.addPhotosSubtitle}</Text>
 
         <View style={styles.photoGrid}>
-          {photos.map((photo, index) => {
+          {localPhotos.map((photo, index) => {
             const isMain = index === 0;
+            const slotUri = getSlotUri(index);
 
-            if (photo) {
+            if (slotUri) {
               return (
                 <View key={index} style={styles.photoSlot}>
                   {isMain ? (
@@ -170,7 +211,7 @@ const AddPhotosScreen = ({ navigation }: Props) => {
                       </Text>
                     </View>
                   ) : null}
-                  <Image source={{ uri: photo.uri }} style={styles.photoImage} />
+                  <Image source={{ uri: slotUri }} style={styles.photoImage} />
                   <TouchableOpacity
                     style={styles.removeBtn}
                     activeOpacity={0.85}

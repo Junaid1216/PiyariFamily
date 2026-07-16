@@ -43,6 +43,7 @@ import { Strings } from '../../Constant/Strings';
 import { SearchStackParamList } from '../../Navigation/SearchStackNavigator';
 import { getFooterBottomPadding } from '../../Functions/safeArea';
 import { fs, hp, wp } from '../../Functions/responsive';
+import { store } from '../../Redux';
 
 type FilterNavigationProp = NativeStackNavigationProp<
   SearchStackParamList,
@@ -121,8 +122,11 @@ const FilterMatchesScreen = () => {
         console.log('Match Filter Meta Success:', res?.data);
         const setup = mapFilterSetup(res?.data);
         const defaults = applyDefaults(setup);
+        const profileCity =
+          store.getState().profile.profile?.city?.trim() ?? '';
+        const locationDefault = defaults.location || profileCity;
         setFilterSetup(setup);
-        setLocation(defaults.location);
+        setLocation(locationDefault);
         setCitySearch(defaults.citySearch);
         setEducation(defaults.education);
         setProfession(defaults.profession);

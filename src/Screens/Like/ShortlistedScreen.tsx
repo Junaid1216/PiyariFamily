@@ -30,6 +30,13 @@ import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
 import { LikeStackParamList } from '../../Navigation/LikeStackNavigator';
 import { fs, hp, wp } from '../../Functions/responsive';
+import {
+  selectShortlistLiked,
+  selectShortlistLikedMe,
+  setShortlistData,
+  useAppDispatch,
+  useAppSelector,
+} from '../../Redux';
 
 type TabKey = 'liked' | 'likedMe';
 type NavigationProp = NativeStackNavigationProp<
@@ -41,10 +48,17 @@ const AVATAR_SIZE = wp('27%');
 
 const ShortlistedScreen = () => {
   const navigation = useNavigation<NavigationProp>();
+  const dispatch = useAppDispatch();
   const [activeTab, setActiveTab] = useState<TabKey>('liked');
-  const [profiles, setProfiles] = useState<ShortlistedProfile[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const cachedLiked = useAppSelector(selectShortlistLiked);
+  const cachedLikedMe = useAppSelector(selectShortlistLikedMe);
+  const bucket = activeTab === 'liked' ? cachedLiked : cachedLikedMe;
+  const [loading, setLoading] = useState(
+    bucket.profiles.length === 0 && bucket.total === 0,
+  );
+
+  const profiles = bucket.profiles;
+  const total = bucket.total;
 
   const fetchShortlist = useCallback(async () => {
     setLoading(true);
@@ -57,12 +71,25 @@ const ShortlistedScreen = () => {
 
       if (res?.status == 200) {
         console.log('Shortlist Success:', res?.data);
-        setProfiles(mapShortlistProfiles(res.data?.profiles));
-        setTotal(res.data?.total ?? res.data?.profiles?.length ?? 0);
+        const mapped = mapShortlistProfiles(res.data?.profiles);
+        const nextTotal = res.data?.total ?? res.data?.profiles?.length ?? 0;
+
+        dispatch(
+          setShortlistData({
+            tab,
+            profiles: mapped,
+            total: nextTotal,
+          }),
+        );
       } else {
         console.log('Shortlist Failed:', res?.data);
-        setProfiles([]);
-        setTotal(0);
+        dispatch(
+          setShortlistData({
+            tab,
+            profiles: [],
+            total: 0,
+          }),
+        );
         Toast.show(
           res?.data?.message ?? 'Failed to load shortlisted profiles',
           Toast.LONG,
@@ -71,8 +98,13 @@ const ShortlistedScreen = () => {
     } catch (error) {
       const axiosError = error as AxiosError<ApiErrorResponse>;
       console.log('Shortlist Error:', axiosError?.response?.data || error);
-      setProfiles([]);
-      setTotal(0);
+      dispatch(
+        setShortlistData({
+          tab,
+          profiles: [],
+          total: 0,
+        }),
+      );
       Toast.show(
         getApiErrorMessage(error, 'Failed to load shortlisted profiles'),
         Toast.LONG,
@@ -80,7 +112,7 @@ const ShortlistedScreen = () => {
     } finally {
       setLoading(false);
     }
-  }, [activeTab]);
+  }, [activeTab, dispatch]);
 
   useFocusEffect(
     useCallback(() => {

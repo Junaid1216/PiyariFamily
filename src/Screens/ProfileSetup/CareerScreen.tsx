@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -14,6 +14,7 @@ import {
 } from 'react-native-safe-area-context';
 import Toast from 'react-native-simple-toast';
 import { AxiosError } from 'axios';
+import { useFocusEffect } from '@react-navigation/native';
 import { Images } from '../../Assets';
 import AuthInput from '../../Components/AuthInput';
 import BackButton from '../../Components/BackButton';
@@ -24,6 +25,7 @@ import {
   Api,
   ENDPOINTS,
   getApiErrorMessage,
+  saveProfileCache,
   type ApiErrorResponse,
 } from '../../API';
 import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
@@ -43,6 +45,7 @@ import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
 import { getFooterBottomPadding } from '../../Functions/safeArea';
 import { fs, hp, wp } from '../../Functions/responsive';
+import { store } from '../../Redux';
 
 type Props = {
   navigation: {
@@ -55,6 +58,12 @@ const EMPLOYMENT_LABELS: Record<EmploymentType, string> = {
   Employed: Strings.employed,
   'Self-Employed': Strings.selfEmployed,
   Business: Strings.business,
+};
+
+const EMPLOYMENT_FROM_API: Record<string, EmploymentType> = {
+  employed: 'Employed',
+  self_employed: 'Self-Employed',
+  business: 'Business',
 };
 
 const CareerScreen = ({ navigation }: Props) => {
@@ -70,6 +79,31 @@ const CareerScreen = ({ navigation }: Props) => {
     'income' | 'residence' | null
   >(null);
   const [saving, setSaving] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      console.log('Redux Career:', store.getState());
+
+      const cachedProfile = store.getState().profile.profile;
+      if (!cachedProfile) {
+        return;
+      }
+
+      const employment =
+        EMPLOYMENT_FROM_API[cachedProfile.employment_type?.toLowerCase() ?? ''];
+      if (employment) {
+        setEmploymentType(employment);
+      }
+      if (cachedProfile.job_title) {
+        setJobTitle(cachedProfile.job_title);
+      } else if (cachedProfile.profession) {
+        setJobTitle(cachedProfile.profession);
+      }
+      if (cachedProfile.company) {
+        setCompany(cachedProfile.company);
+      }
+    }, []),
+  );
 
   const handleContinue = async () => {
     if (!jobTitle.trim()) {
@@ -101,6 +135,12 @@ const CareerScreen = ({ navigation }: Props) => {
 
       if (res?.status == 200) {
         console.log('Profile Career Success:', res);
+        saveProfileCache({
+          job_title: jobTitle.trim(),
+          employment_type: EMPLOYMENT_TYPE_TO_API[employmentType],
+          company: company.trim(),
+          profession: jobTitle.trim(),
+        });
         Toast.show(res?.message ?? 'Career details saved', Toast.LONG);
         navigation.navigate('PhysicalDetails');
       } else {

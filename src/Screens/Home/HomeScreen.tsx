@@ -23,7 +23,6 @@ import { Images } from '../../Assets';
 import {
   Api,
   ENDPOINTS,
-  accountStorage,
   getApiErrorMessage,
   mapHomeGreeting,
   mapHomeMatches,
@@ -38,6 +37,21 @@ import { HomeStackParamList } from '../../Navigation/HomeStackNavigator';
 import { navigateToSubscription } from '../../Functions/subscriptionNavigation';
 import { navigateToProfileScreen } from '../../Functions/profileNavigation';
 import { fs, hp, wp } from '../../Functions/responsive';
+import {
+  store,
+  useAppDispatch,
+  useAppSelector,
+  clearHomeMatches,
+  removeFeaturedMatch,
+  selectFeaturedMatches,
+  selectHomeGreeting,
+  selectHomeSubtitle,
+  selectIsAccountInactive,
+  selectSuggestedMatches,
+  selectUser,
+  setAccountStatus,
+  setHomeMatches,
+} from '../../Redux';
 
 type HomeNavigationProp = NativeStackNavigationProp<
   HomeStackParamList,
@@ -65,30 +79,35 @@ const INACTIVE_INFO_ITEMS = [
 
 const HomeScreen = () => {
   const navigation = useNavigation<HomeNavigationProp>();
-  const [featuredMatches, setFeaturedMatches] = useState<FeaturedMatch[]>([]);
-  const [suggestedMatches, setSuggestedMatches] = useState<SuggestedMatch[]>([]);
-  const [greeting, setGreeting] = useState(Strings.homeGreeting);
-  const [subtitle, setSubtitle] = useState(Strings.homeSubtitle);
+  const dispatch = useAppDispatch();
+  const user = useAppSelector(selectUser);
+  const isAccountInactive = useAppSelector(selectIsAccountInactive);
+  const greeting = useAppSelector(selectHomeGreeting);
+  const subtitle = useAppSelector(selectHomeSubtitle);
+  const featuredMatches = useAppSelector(selectFeaturedMatches);
+  const suggestedMatches = useAppSelector(selectSuggestedMatches);
   const [loading, setLoading] = useState(true);
-  const [isInactive, setIsInactive] = useState(false);
   const [reactivating, setReactivating] = useState(false);
   const [liking, setLiking] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const sliderRef = useRef<FlatList<FeaturedMatch>>(null);
 
+  const displayGreeting =
+    greeting ||
+    (user?.name
+      ? `Hello, ${user.name.split(' ')[0]}!`
+      : Strings.homeGreeting);
+  const displaySubtitle = subtitle || Strings.homeSubtitle;
+
   const fetchHomeMatches = useCallback(async () => {
     setLoading(true);
 
-    if (accountStorage.getStatus() === 'inactive') {
+    if (isAccountInactive) {
       console.log('Home Inactive Account: matches hidden');
-      setIsInactive(true);
-      setFeaturedMatches([]);
-      setSuggestedMatches([]);
+      dispatch(clearHomeMatches());
       setLoading(false);
       return;
     }
-
-    setIsInactive(false);
 
     try {
       console.log('Home Matches Request:', ENDPOINTS.MATCHES_HOME);
@@ -97,17 +116,27 @@ const HomeScreen = () => {
       if (res?.status == 200) {
         console.log('Home Matches Success:', res?.data);
         const mapped = mapHomeMatches(res?.data);
-
         const greetingParts = mapHomeGreeting(mapped.greeting);
-        setGreeting(greetingParts.title || Strings.homeGreeting);
-        setSubtitle(greetingParts.subtitle || Strings.homeSubtitle);
-        setFeaturedMatches(mapped.featuredMatches);
-        setSuggestedMatches(mapped.suggestedMatches);
+        const title =
+          greetingParts.title ||
+          (user?.name
+            ? `Hello, ${user.name.split(' ')[0]}!`
+            : Strings.homeGreeting);
+
+        dispatch(
+          setHomeMatches({
+            greeting: title,
+            subtitle: greetingParts.subtitle || Strings.homeSubtitle,
+            featuredMatches: mapped.featuredMatches,
+            suggestedMatches: mapped.suggestedMatches,
+            totalMatches: mapped.totalMatches,
+          }),
+        );
+        console.log('Redux HomeScreen:', store.getState());
         setActiveIndex(0);
       } else {
         console.log('Home Matches Failed:', res?.data);
-        setFeaturedMatches([]);
-        setSuggestedMatches([]);
+        dispatch(clearHomeMatches());
         Toast.show(
           res?.data?.message ?? 'Failed to load matches',
           Toast.LONG,
@@ -116,13 +145,12 @@ const HomeScreen = () => {
     } catch (error) {
       const axiosError = error as AxiosError<ApiErrorResponse>;
       console.log('Home Matches Error:', axiosError?.response?.data || error);
-      setFeaturedMatches([]);
-      setSuggestedMatches([]);
+      dispatch(clearHomeMatches());
       Toast.show(getApiErrorMessage(error, 'Failed to load matches'), Toast.LONG);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [dispatch, isAccountInactive, user?.name]);
 
   const handleReactivate = async () => {
     if (reactivating) {
@@ -147,7 +175,7 @@ const HomeScreen = () => {
             'Activate Account Success:',
             JSON.stringify(res, null, 2),
           );
-          accountStorage.setStatus(res?.accountStatus ?? 'active');
+          dispatch(setAccountStatus(res?.accountStatus ?? 'active'));
           Toast.show(res?.message || 'Account activated', Toast.LONG);
           fetchHomeMatches();
         } else {
@@ -171,6 +199,7 @@ const HomeScreen = () => {
 
   useFocusEffect(
     useCallback(() => {
+      console.log('Redux HomeScreen:', store.getState());
       fetchHomeMatches();
     }, [fetchHomeMatches]),
   );
@@ -216,6 +245,7 @@ const HomeScreen = () => {
 
         if (res?.status == 200) {
           console.log('Shortlist Interest Success:', res);
+          dispatch(removeFeaturedMatch(current.id));
           navigation.navigate('MatchSuccess', {
             name: current.name.split(' ')[0],
             fullName: current.name,
@@ -406,12 +436,12 @@ const HomeScreen = () => {
           <View style={styles.loaderWrap}>
             <ActivityIndicator size="large" color={Colors.primary} />
           </View>
-        ) : isInactive ? (
+        ) : isAccountInactive ? (
           renderInactiveState()
         ) : (
           <>
-        <Text style={styles.greeting}>{greeting}</Text>
-        <Text style={styles.subtitle}>{subtitle}</Text>
+        <Text style={styles.greeting}>{displayGreeting}</Text>
+        <Text style={styles.subtitle}>{displaySubtitle}</Text>
 
         <TouchableOpacity
           style={styles.premiumBanner}

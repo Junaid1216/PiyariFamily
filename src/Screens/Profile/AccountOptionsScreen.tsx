@@ -21,13 +21,18 @@ import { Strings } from '../../Constant/Strings';
 import {
   Api,
   ENDPOINTS,
-  accountStorage,
-  profileStorage,
-  tokenStorage,
-  userStorage,
 } from '../../API';
 import { ProfileStackParamList } from '../../Navigation/ProfileStackNavigator';
 import { fs, hp, wp } from '../../Functions/responsive';
+import {
+  clearAuth,
+  clearHomeMatches,
+  clearProfile,
+  clearReferral,
+  clearShortlist,
+  setAccountStatus,
+  useAppDispatch,
+} from '../../Redux';
 
 type NavigationProp = NativeStackNavigationProp<
   ProfileStackParamList,
@@ -43,14 +48,16 @@ const LOSS_ITEMS = [
 
 const AccountOptionsScreen = () => {
   const navigation = useNavigation<NavigationProp>();
+  const dispatch = useAppDispatch();
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   const clearSession = () => {
-    tokenStorage.clear();
-    userStorage.clear();
-    profileStorage.clear();
-    accountStorage.clear();
+    dispatch(clearAuth());
+    dispatch(clearProfile());
+    dispatch(clearHomeMatches());
+    dispatch(clearShortlist());
+    dispatch(clearReferral());
   };
 
   const goToLogin = () => {
@@ -85,7 +92,7 @@ const AccountOptionsScreen = () => {
             'Deactivate Account Success:',
             JSON.stringify(res, null, 2),
           );
-          accountStorage.setStatus(res?.accountStatus ?? 'inactive');
+          dispatch(setAccountStatus(res?.accountStatus ?? 'inactive'));
           Toast.show(res?.message || 'Account deactivated', Toast.LONG);
           navigation.getParent()?.navigate('Home');
         } else {

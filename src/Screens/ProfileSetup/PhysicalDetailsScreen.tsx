@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -16,6 +16,7 @@ import {
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-simple-toast';
 import { AxiosError } from 'axios';
+import { useFocusEffect } from '@react-navigation/native';
 import { Images } from '../../Assets';
 import BackButton from '../../Components/BackButton';
 import FilterChip from '../../Components/FilterChip';
@@ -26,14 +27,17 @@ import {
   Api,
   ENDPOINTS,
   getApiErrorMessage,
+  saveProfileCache,
   type ApiErrorResponse,
 } from '../../API';
 import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import {
+  BODY_TYPE_FROM_API,
   BODY_TYPE_OPTIONS,
   BODY_TYPE_TO_API,
   BodyType,
+  COMPLEXION_FROM_API,
   COMPLEXION_OPTIONS,
   COMPLEXION_TO_API,
   Complexion,
@@ -45,6 +49,7 @@ import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
 import { getFooterBottomPadding } from '../../Functions/safeArea';
 import { fs, hp, wp } from '../../Functions/responsive';
+import { store } from '../../Redux';
 
 type Props = {
   navigation: {
@@ -62,6 +67,18 @@ const formatWeightForApi = (value: string) => {
   return /kg$/i.test(trimmed) ? trimmed : `${trimmed}kg`;
 };
 
+const parseHeight = (value?: string | null) => {
+  if (!value) {
+    return { feet: '', inches: '' };
+  }
+
+  const [feetPart, inchesPart] = value.split('.');
+  return {
+    feet: feetPart ?? '',
+    inches: inchesPart ?? '',
+  };
+};
+
 const PhysicalDetailsScreen = ({ navigation }: Props) => {
   const insets = useSafeAreaInsets();
   const [feet, setFeet] = useState('');
@@ -74,6 +91,41 @@ const PhysicalDetailsScreen = ({ navigation }: Props) => {
     null,
   );
   const [saving, setSaving] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      console.log('Redux PhysicalDetails:', store.getState());
+
+      const cachedProfile = store.getState().profile.profile;
+      if (!cachedProfile) {
+        return;
+      }
+
+      const heightParts = parseHeight(cachedProfile.height);
+      if (heightParts.feet) {
+        setFeet(heightParts.feet);
+      }
+      if (heightParts.inches) {
+        setInches(heightParts.inches);
+      }
+      if (cachedProfile.weight) {
+        setWeight(cachedProfile.weight.replace(/kg$/i, ''));
+      }
+      const bodyTypeValue =
+        BODY_TYPE_FROM_API[cachedProfile.body_type?.toLowerCase() ?? ''];
+      if (bodyTypeValue) {
+        setBodyType(bodyTypeValue);
+      }
+      const complexionValue =
+        COMPLEXION_FROM_API[cachedProfile.complexion?.toLowerCase() ?? ''];
+      if (complexionValue) {
+        setComplexion(complexionValue);
+      }
+      if (cachedProfile.physical_disability !== undefined) {
+        setHasDisability(Boolean(cachedProfile.physical_disability));
+      }
+    }, []),
+  );
 
   const handleContinue = async () => {
     if (!feet || !inches) {
@@ -101,6 +153,13 @@ const PhysicalDetailsScreen = ({ navigation }: Props) => {
 
       if (res?.status == 200) {
         console.log('Profile Physical Success:', res);
+        saveProfileCache({
+          height,
+          weight: formattedWeight,
+          body_type: BODY_TYPE_TO_API[bodyType],
+          complexion: COMPLEXION_TO_API[complexion],
+          physical_disability: hasDisability,
+        });
         Toast.show(res?.message ?? 'Physical details saved', Toast.LONG);
         navigation.navigate('FaithCommunity');
       } else {

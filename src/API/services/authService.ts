@@ -1,9 +1,8 @@
 import { apiClient } from '../apiClient';
 import { ENDPOINTS } from '../endpoints';
-import { profileStorage } from '../profileStorage';
+import { clearAuth, clearProfile, clearHomeMatches, clearShortlist, clearReferral, store, setAuthSession } from '../../Redux';
 import { accountStorage } from '../accountStorage';
-import { tokenStorage } from '../tokenStorage';
-import { userStorage } from '../userStorage';
+import { saveProfileCache } from '../mappers/profileMapper';
 import type { AuthResponse, MessageResponse, OtpActionResponse } from '../types';
 
 export type LoginPayload = {
@@ -51,28 +50,48 @@ const postAuth = async <T>(
   return { status, ...data };
 };
 
+const resolveAccountStatus = (
+  response: Pick<AuthResponse, 'account_status' | 'is_deactivated'>,
+) => {
+  if (response.account_status === 'inactive' || response.is_deactivated) {
+    return 'inactive' as const;
+  }
+
+  if (response.account_status === 'active') {
+    return 'active' as const;
+  }
+
+  return 'active' as const;
+};
+
 const saveAuthSession = (response: AuthResponse) => {
+  const token = response.token ?? response.access_token ?? null;
+
+  store.dispatch(
+    setAuthSession({
+      user: response.user ?? null,
+      accessToken: token,
+    }),
+  );
+
   if (response.user) {
-    userStorage.setUser(response.user);
+    saveProfileCache(response.user);
   }
 
-  accountStorage.setStatus('active');
+  accountStorage.setStatus(resolveAccountStatus(response));
 
-  const token = response.token ?? response.access_token;
-
-  if (token) {
-    tokenStorage.setAccessToken(token);
-  }
+  console.log('Redux after login:', store.getState());
 };
 
 const shouldSaveAuthSession = (response: {
   status?: number;
-  success?: boolean;
+  success?: boolean | number;
   token?: string;
   access_token?: string;
 }) =>
   response.status == 200 ||
   response.success === true ||
+  response.success == 200 ||
   Boolean(response.token || response.access_token);
 
 export const authService = {
@@ -139,10 +158,11 @@ export const authService = {
 
       return { status, ...data };
     } finally {
-      tokenStorage.clear();
-      userStorage.clear();
-      profileStorage.clear();
-      accountStorage.clear();
+      store.dispatch(clearAuth());
+      store.dispatch(clearProfile());
+      store.dispatch(clearHomeMatches());
+      store.dispatch(clearShortlist());
+      store.dispatch(clearReferral());
     }
   },
 };

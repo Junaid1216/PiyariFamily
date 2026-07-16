@@ -27,7 +27,6 @@ import {
   buildMatchSearchParams,
   getApiErrorMessage,
   mapMatchList,
-  profileStorage,
   type ApiErrorResponse,
   type SuggestedMatch,
 } from '../../API';
@@ -37,6 +36,7 @@ import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
 import { SearchStackParamList } from '../../Navigation/SearchStackNavigator';
 import { fs, hp, wp } from '../../Functions/responsive';
+import { useAppSelector, selectProfile } from '../../Redux';
 
 type NavigationProp = NativeStackNavigationProp<
   SearchStackParamList,
@@ -73,6 +73,7 @@ const MIN_SEARCH_LENGTH = 2;
 const SearchScreen = () => {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<SearchRouteProp>();
+  const profile = useAppSelector(selectProfile);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeQuickFilter, setActiveQuickFilter] =
     useState<QuickFilter | null>(null);
@@ -93,12 +94,12 @@ const SearchScreen = () => {
     setLoading(true);
 
     try {
-      const profile = profileStorage.get();
+      const profileGender = profile?.gender;
       const trimmedQuery = query.trim();
       const params = buildMatchSearchParams({
         searchQuery: query,
         quickFilter: activeQuickFilterRef.current,
-        profileGender: profile?.gender,
+        profileGender,
         ageMin: trimmedQuery || activeQuickFilterRef.current ? 18 : undefined,
       });
       console.log('Match Search Request:', ENDPOINTS.MATCHES_SEARCH, params);
@@ -126,7 +127,7 @@ const SearchScreen = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [profile?.gender]);
 
   useFocusEffect(
     useCallback(() => {

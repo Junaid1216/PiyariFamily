@@ -23,6 +23,7 @@ import { Strings } from '../../Constant/Strings';
 import { Api, ENDPOINTS, authService, getApiErrorMessage, mapProfileToSettings, resolveProfileData, type ApiErrorResponse } from '../../API';
 import { ProfileStackParamList } from '../../Navigation/ProfileStackNavigator';
 import { fs, hp, wp } from '../../Functions/responsive';
+import { useAppDispatch, useAppSelector, selectProfilePhoto, selectUser, setProfile, store } from '../../Redux';
 
 type NavigationProp = NativeStackNavigationProp<
   ProfileStackParamList,
@@ -68,10 +69,12 @@ const SettingItem = ({
 
 const SettingsScreen = () => {
   const navigation = useNavigation<NavigationProp>();
-  const [profileName, setProfileName] = useState('');
+  const dispatch = useAppDispatch();
+  const user = useAppSelector(selectUser);
+  const profilePhoto = useAppSelector(selectProfilePhoto);
+  const [profileName, setProfileName] = useState(user?.name ?? '');
   const [profileMeta, setProfileMeta] = useState('');
   const [isVerified, setIsVerified] = useState(false);
-  const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [profilePictureVisible, setProfilePictureVisible] = useState(true);
   const [additionalPhotosVisible, setAdditionalPhotosVisible] = useState(true);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -85,10 +88,11 @@ const SettingsScreen = () => {
         console.log('Profile Success:', res?.data);
         const rawProfile = resolveProfileData(res?.data);
         const profile = mapProfileToSettings(rawProfile);
+        dispatch(setProfile(rawProfile));
+        console.log('Redux Settings (after fetch):', store.getState());
         setProfileName(profile.name);
         setProfileMeta(profile.meta);
         setIsVerified(profile.isVerified);
-        setProfilePhoto(profile.profilePhoto);
         setProfilePictureVisible(profile.profilePictureVisible);
         setAdditionalPhotosVisible(profile.additionalPhotosVisible);
       } else {
@@ -97,10 +101,11 @@ const SettingsScreen = () => {
     } catch (error: any) {
       console.log('Profile Error:', error?.response?.data || error);
     }
-  }, []);
+  }, [dispatch]);
 
   useFocusEffect(
     useCallback(() => {
+      console.log('Redux Settings:', store.getState());
       fetchProfile();
     }, [fetchProfile]),
   );
@@ -118,6 +123,7 @@ const SettingsScreen = () => {
 
       if (res?.status == 200) {
         console.log('Logout Success:', res);
+        console.log('Redux Settings (after logout):', store.getState());
         Toast.show(res?.message ?? 'Logged out successfully', Toast.LONG);
         navigation.getParent()?.getParent()?.getParent()?.dispatch(
           CommonActions.reset({

@@ -23,6 +23,7 @@ import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
 import { authService, ENDPOINTS, getApiErrorMessage } from '../../API';
 import { hp, wp } from '../../Functions/responsive';
+import { store, useAppSelector, selectUser } from '../../Redux';
 
 type Props = {
   navigation: {
@@ -33,6 +34,7 @@ type Props = {
 
 const LoginScreen = ({ navigation }: Props) => {
   const insets = useSafeAreaInsets();
+  const user = useAppSelector(selectUser);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -53,6 +55,7 @@ const LoginScreen = ({ navigation }: Props) => {
 
       if (response?.status == 200) {
         console.log('Login Success:', response);
+        console.log('Redux LoginScreen:', store.getState());
         Toast.show(response.message || 'Logged in successfully', Toast.LONG);
         navigation.replace('SelectCountry');
       } else {
@@ -85,7 +88,10 @@ const LoginScreen = ({ navigation }: Props) => {
             <AuthHeader />
 
             <View style={styles.formSection}>
-              <Text style={styles.title}>{Strings.welcomeBack}, Shahid !</Text>
+              <Text style={styles.title}>
+                {Strings.welcomeBack}
+                {user?.name ? `, ${user.name.split(' ')[0]} !` : ' !'}
+              </Text>
               <Text style={styles.subtitle}>{Strings.loginSubtitle}</Text>
 
               <AuthInput

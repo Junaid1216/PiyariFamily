@@ -33,6 +33,12 @@ import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
 import { ProfileStackParamList } from '../../Navigation/ProfileStackNavigator';
 import { fs, hp, wp } from '../../Functions/responsive';
+import {
+  selectReferralStats,
+  setReferralStats,
+  useAppDispatch,
+  useAppSelector,
+} from '../../Redux';
 
 type NavigationProp = NativeStackNavigationProp<
   ProfileStackParamList,
@@ -50,7 +56,9 @@ const DEFAULT_STATS: ReferralStats = {
 
 const MyRewardsScreen = () => {
   const navigation = useNavigation<NavigationProp>();
-  const [stats, setStats] = useState<ReferralStats>(DEFAULT_STATS);
+  const dispatch = useAppDispatch();
+  const cachedStats = useAppSelector(selectReferralStats);
+  const stats = cachedStats ?? DEFAULT_STATS;
   const [referralHistory, setReferralHistory] = useState<ReferralHistoryItem[]>(
     [],
   );
@@ -63,10 +71,10 @@ const MyRewardsScreen = () => {
 
       if (res?.status == 200) {
         console.log('Referral Stats Success:', res?.data);
-        setStats(mapReferralStats(res?.data));
+        dispatch(setReferralStats(mapReferralStats(res?.data)));
       } else {
         console.log('Referral Stats Failed:', res?.data);
-        setStats(DEFAULT_STATS);
+        dispatch(setReferralStats(DEFAULT_STATS));
         Toast.show(
           res?.data?.message ?? 'Failed to load referral stats',
           Toast.LONG,
@@ -75,13 +83,13 @@ const MyRewardsScreen = () => {
     } catch (error) {
       const axiosError = error as AxiosError<ApiErrorResponse>;
       console.log('Referral Stats Error:', axiosError?.response?.data || error);
-      setStats(DEFAULT_STATS);
+      dispatch(setReferralStats(DEFAULT_STATS));
       Toast.show(
         getApiErrorMessage(error, 'Failed to load referral stats'),
         Toast.LONG,
       );
     }
-  }, []);
+  }, [dispatch]);
 
   const fetchReferralHistory = useCallback(async () => {
     setHistoryLoading(true);

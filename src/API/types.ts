@@ -7,11 +7,13 @@ export type User = {
 };
 
 export type AuthResponse = {
-  success?: boolean;
+  success?: boolean | number;
   message: string;
   user: User;
   token?: string;
   access_token?: string;
+  account_status?: 'active' | 'inactive';
+  is_deactivated?: boolean;
 };
 
 export type ApiResult<T> = {

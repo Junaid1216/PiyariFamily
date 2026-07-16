@@ -1,13 +1,12 @@
 import type { ProfileApiData } from './mappers/profileMapper';
-
-let cachedProfile: ProfileApiData | null = null;
+import { store, setProfile } from '../Redux';
 
 export const profileStorage = {
-  get: () => cachedProfile,
+  get: () => store.getState().profile.profile,
   set: (profile: ProfileApiData | null) => {
-    cachedProfile = profile;
+    store.dispatch(setProfile(profile));
   },
   clear: () => {
-    cachedProfile = null;
+    store.dispatch(setProfile(null));
   },
 };

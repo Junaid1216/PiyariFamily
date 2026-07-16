@@ -68,7 +68,7 @@ export type {
   ShortlistTab,
   ShortlistedProfile,
 } from './mappers/shortlistMapper';
-export { mapProfileToForm, mapFormToProfilePayload, mapProfileToSettings, normalizeProfileData, resolveProfileData, saveProfileCache } from './mappers/profileMapper';
+export { mapProfileToForm, mapFormToProfilePayload, mapProfileToSettings, normalizeProfileData, resolveProfileData, saveProfileCache, extractPhotoUrl, extractProfilePhotoSlots } from './mappers/profileMapper';
 export type { EditProfileFormData, ProfileApiData, SettingsProfileData } from './mappers/profileMapper';
 export { profileStorage } from './profileStorage';
 export { accountStorage } from './accountStorage';

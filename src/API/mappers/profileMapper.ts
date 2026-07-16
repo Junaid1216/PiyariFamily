@@ -1,4 +1,5 @@
 import type { OtherLanguage } from '../../Constant/ProfileSetup';
+import { PROFILE_PHOTO_SLOTS } from '../../Constant/ProfileSetup';
 import type { FormValue } from '../formData';
 import { profileStorage } from '../profileStorage';
 import { userStorage } from '../userStorage';
@@ -35,6 +36,18 @@ export type ProfileApiData = {
   language?: string | null;
   profile_photo_visible?: boolean;
   additional_photos_visible?: boolean;
+  qualification?: string | null;
+  education?: string | null;
+  field_of_study?: string | null;
+  university?: string | null;
+  graduation_year?: string | null;
+  job_title?: string | null;
+  company?: string | null;
+  employment_type?: string | null;
+  profession?: string | null;
+  religion?: string | null;
+  sect?: string | null;
+  photos?: Array<Record<string, unknown> | string> | null;
 };
 
 export type EditProfileFormData = {
@@ -208,6 +221,68 @@ export const saveProfileCache = (source: unknown): ProfileApiData => {
   }
 
   return resolved;
+};
+
+export const extractPhotoUrl = (photo: unknown): string | null => {
+  if (typeof photo === 'string' && photo.trim()) {
+    return photo;
+  }
+
+  if (!photo || typeof photo !== 'object') {
+    return null;
+  }
+
+  const obj = photo as Record<string, unknown>;
+  const candidates = ['url', 'image', 'path', 'profile_photo', 'photo'];
+
+  for (const key of candidates) {
+    if (typeof obj[key] === 'string' && obj[key]) {
+      return obj[key] as string;
+    }
+  }
+
+  return null;
+};
+
+export const extractProfilePhotoSlots = (
+  profile?: ProfileApiData | null,
+  slotCount = PROFILE_PHOTO_SLOTS,
+): (string | null)[] => {
+  const slots = Array.from({ length: slotCount }, () => null as string | null);
+
+  if (!profile) {
+    return slots;
+  }
+
+  const mainPhoto = profile.profile_photo ?? profile.image ?? null;
+  if (mainPhoto) {
+    slots[0] = mainPhoto;
+  }
+
+  if (!Array.isArray(profile.photos)) {
+    return slots;
+  }
+
+  let slotIndex = mainPhoto ? 1 : 0;
+
+  for (const photo of profile.photos) {
+    const url = extractPhotoUrl(photo);
+
+    if (!url || url === mainPhoto) {
+      continue;
+    }
+
+    while (slotIndex < slotCount && slots[slotIndex]) {
+      slotIndex += 1;
+    }
+
+    if (slotIndex < slotCount) {
+      slots[slotIndex] = url;
+      slotIndex += 1;
+    }
+  }
+
+  return slots;
 };
 
 const formatBirthday = (value?: string | null) => {

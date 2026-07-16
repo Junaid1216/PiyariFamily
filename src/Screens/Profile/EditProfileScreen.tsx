@@ -11,7 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
   SafeAreaView,
@@ -43,12 +43,19 @@ import {
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
-import { Api, ENDPOINTS, getApiErrorMessage, mapFormToProfilePayload, mapProfileToForm, resolveProfileData, type ApiErrorResponse } from '../../API';
+import { Api, ENDPOINTS, getApiErrorMessage, mapFormToProfilePayload, mapProfileToForm, resolveProfileData, saveProfileCache, type ApiErrorResponse } from '../../API';
 import { normalizeUploadFile, type UploadFile } from '../../API/formData';
 import type { EditProfileFormData } from '../../API';
 import { ProfileStackParamList } from '../../Navigation/ProfileStackNavigator';
 import { getFooterBottomPadding } from '../../Functions/safeArea';
 import { fs, hp, wp } from '../../Functions/responsive';
+import {
+  selectProfilePhoto,
+  setProfile,
+  store,
+  useAppDispatch,
+  useAppSelector,
+} from '../../Redux';
 
 type NavigationProp = NativeStackNavigationProp<
   ProfileStackParamList,
@@ -82,6 +89,14 @@ const EMPTY_FORM: EditProfileFormData = {
 const EditProfileScreen = () => {
   const navigation = useNavigation<NavigationProp>();
   const insets = useSafeAreaInsets();
+  const dispatch = useAppDispatch();
+  const cachedPhoto = useAppSelector(selectProfilePhoto);
+
+  useFocusEffect(
+    useCallback(() => {
+      console.log('Redux EditProfile:', store.getState());
+    }, []),
+  );
 
   const [form, setForm] = useState<EditProfileFormData>(EMPTY_FORM);
   const [openDropdown, setOpenDropdown] = useState<
@@ -108,13 +123,24 @@ const EditProfileScreen = () => {
   const fetchProfile = useCallback(async () => {
     setLoading(true);
 
+    const cachedProfile = cachedPhoto;
+    if (cachedProfile) {
+      setForm(prev => ({
+        ...prev,
+        profilePhoto: cachedProfile,
+      }));
+    }
+
     try {
       console.log('Profile Request:', ENDPOINTS.PROFILE);
       const res = await Api.getProfile();
 
       if (res?.status == 200) {
         console.log('Profile Success:', res?.data);
-        setForm(mapProfileToForm(resolveProfileData(res?.data)));
+        const rawProfile = resolveProfileData(res?.data);
+        dispatch(setProfile(rawProfile));
+        console.log('Redux EditProfile (after fetch):', store.getState());
+        setForm(mapProfileToForm(rawProfile));
       } else {
         console.log('Profile Failed:', res?.data);
         Toast.show(res?.data?.message || 'Failed to load profile', Toast.LONG);
@@ -126,7 +152,7 @@ const EditProfileScreen = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [cachedPhoto, dispatch]);
 
   useEffect(() => {
     fetchProfile();
@@ -218,6 +244,14 @@ const EditProfileScreen = () => {
 
         if (res?.status == 200) {
           console.log('Update Profile Success:', res);
+          const photoUri = newPhoto?.uri ?? form.profilePhoto;
+          const savedProfile = saveProfileCache({
+            ...(typeof res?.data === 'object' && res?.data ? res.data : res),
+            profile_photo: photoUri,
+            image: photoUri,
+          });
+          dispatch(setProfile(savedProfile));
+          console.log('Redux EditProfile (after save):', store.getState());
           Toast.show(res?.message ?? Strings.profileSaved, Toast.LONG);
           navigation.goBack();
         } else {
