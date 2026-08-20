@@ -24,6 +24,7 @@ import {
   Api,
   ENDPOINTS,
   getApiErrorMessage,
+  resolveProfileData,
   saveProfileCache,
   type ApiErrorResponse,
 } from '../../API';
@@ -75,26 +76,69 @@ const EducationScreen = ({ navigation }: Props) => {
     useCallback(() => {
       console.log('Redux Education:', store.getState());
 
+      const applyEducation = (profile: {
+        qualification?: string | null;
+        highest_education?: string | null;
+        education?: string | null;
+        field_of_study?: string | null;
+        university?: string | null;
+        graduation_year?: string | number | null;
+      }) => {
+        const qualificationValue = matchQualification(
+          profile.qualification ??
+            profile.highest_education ??
+            profile.education,
+        );
+        if (qualificationValue) {
+          setQualification(qualificationValue);
+        }
+        if (profile.field_of_study) {
+          setFieldOfStudy(profile.field_of_study);
+        }
+        if (profile.university) {
+          setUniversity(profile.university);
+        }
+        if (profile.graduation_year) {
+          setGraduationYear(String(profile.graduation_year));
+        }
+      };
+
       const cachedProfile = store.getState().profile.profile;
-      if (!cachedProfile) {
-        return;
+      if (cachedProfile) {
+        applyEducation(cachedProfile);
       }
 
-      const qualificationValue = matchQualification(
-        cachedProfile.qualification ?? cachedProfile.education,
-      );
-      if (qualificationValue) {
-        setQualification(qualificationValue);
-      }
-      if (cachedProfile.field_of_study) {
-        setFieldOfStudy(cachedProfile.field_of_study);
-      }
-      if (cachedProfile.university) {
-        setUniversity(cachedProfile.university);
-      }
-      if (cachedProfile.graduation_year) {
-        setGraduationYear(String(cachedProfile.graduation_year));
-      }
+      let cancelled = false;
+
+      const loadEducation = async () => {
+        try {
+          console.log('Profile Education Prefill Request:', ENDPOINTS.PROFILE);
+          const res = await Api.getProfile();
+
+          if (cancelled) {
+            return;
+          }
+
+          if (res?.status == 200) {
+            console.log('Profile Education Prefill Success:', res?.data);
+            applyEducation(resolveProfileData(res?.data));
+          } else {
+            console.log('Profile Education Prefill Failed:', res?.data);
+          }
+        } catch (error) {
+          const axiosError = error as AxiosError<ApiErrorResponse>;
+          console.log(
+            'Profile Education Prefill Error:',
+            axiosError?.response?.data || error,
+          );
+        }
+      };
+
+      loadEducation();
+
+      return () => {
+        cancelled = true;
+      };
     }, []),
   );
 
@@ -126,18 +170,19 @@ const EducationScreen = ({ navigation }: Props) => {
     try {
       console.log('Profile Education Request:', ENDPOINTS.PROFILE_EDUCATION);
       const res = await Api.updateProfileEducation({
-        qualification: qualificationValue,
         highest_education: qualificationValue,
-        field_of_study: fieldOfStudy.trim(),
         university: university.trim(),
+        field_of_study: fieldOfStudy.trim(),
+        qualification: qualificationValue,
         graduation_year: graduationYear.trim(),
-        education_details: 'None',
       });
 
-      if (res?.status == 200) {
+      if (res?.status == 200 || res?.success === true || res?.success == 200) {
         console.log('Profile Education Success:', res);
         saveProfileCache({
+          ...(res.user ?? {}),
           qualification: qualificationValue,
+          highest_education: qualificationValue,
           education: qualificationValue,
           field_of_study: fieldOfStudy.trim(),
           university: university.trim(),

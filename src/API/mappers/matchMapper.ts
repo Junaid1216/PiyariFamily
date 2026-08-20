@@ -1,6 +1,8 @@
 import { ImageSourcePropType } from 'react-native';
 import { Images } from '../../Assets';
 import type { BasicDetail, QuickInfo } from '../../Constant/MatchProfiles';
+import { pickImageUrl } from './profileMapper';
+import { toRemoteImageSource } from '../mediaUrl';
 
 export type MatchTag = {
   icon: string;
@@ -57,6 +59,8 @@ export type MatchApiItem = {
   id?: number | string;
   user_id?: number | string;
   name?: string;
+  full_name?: string;
+  fullName?: string;
   age?: number | string | null;
   city?: string | null;
   country?: string | null;
@@ -74,6 +78,9 @@ export type MatchApiItem = {
   religion?: string | null;
   profile_photo?: string | null;
   image?: string | null;
+  photo?: string | null;
+  avatar?: string | null;
+  photos?: Array<Record<string, unknown> | string> | null;
   gender?: string | null;
   is_verified?: boolean | number | null;
   is_new?: boolean | number | null;
@@ -84,11 +91,13 @@ export type MatchApiItem = {
   bio?: string | null;
   about?: string | null;
   about_me?: string | null;
+  description?: string | null;
   height?: string | null;
   marital_status?: string | null;
   mother_tongue?: string | null;
   other_languages?: string | string[] | null;
   residential_status?: string | null;
+  residence_status?: string | null;
   interests?: string[] | null;
   user?: MatchApiItem;
   profile?: MatchApiItem;
@@ -104,11 +113,16 @@ export type HomeMatchesResponse = {
   greeting?: string | null;
   top_match?: MatchApiItem | null;
   featured_matches?: MatchApiItem[];
+  featured?: MatchApiItem[];
   matches?: MatchApiItem[];
   suggested_matches?: MatchApiItem[];
+  profiles?: MatchApiItem[];
+  users?: MatchApiItem[];
+  results?: MatchApiItem[];
+  recommendations?: MatchApiItem[];
   total_matches?: number | string | null;
   message?: string;
-  data?: HomeMatchesResponse;
+  data?: HomeMatchesResponse | MatchApiItem[];
 };
 
 export type MatchSearchParams = {
@@ -200,24 +214,55 @@ const pickNumber = (value?: number | string | null) => {
   return 0;
 };
 
+const stripEmptyMedia = (item: MatchApiItem): MatchApiItem => {
+  const next = { ...item };
+  const mediaKeys = [
+    'photos',
+    'image',
+    'photo',
+    'profile_photo',
+    'avatar',
+  ] as const;
+
+  for (const key of mediaKeys) {
+    const value = next[key];
+    if (
+      value == null ||
+      value === '' ||
+      (Array.isArray(value) && value.length === 0)
+    ) {
+      delete next[key];
+    }
+  }
+
+  return next;
+};
+
 const normalizeItem = (item: MatchApiItem): MatchApiItem => {
   const nested = item.user ?? item.profile;
 
   if (nested && typeof nested === 'object') {
-    return { ...item, ...nested };
+    return { ...stripEmptyMedia(item), ...stripEmptyMedia(nested) };
   }
 
   return item;
 };
 
-const resolveProfileImage = (item: MatchApiItem): ImageSourcePropType => {
-  const photo = pickString(item.profile_photo, item.image);
-
-  if (photo) {
-    return { uri: photo };
+const resolveProfileImage = (
+  ...items: MatchApiItem[]
+): ImageSourcePropType => {
+  for (const item of items) {
+    const photo = pickImageUrl(item);
+    if (photo) {
+      return toRemoteImageSource(photo);
+    }
   }
 
-  if (item.gender?.toLowerCase() === 'male') {
+  const gender = items
+    .map(item => item.gender?.toLowerCase())
+    .find(value => value === 'male' || value === 'female');
+
+  if (gender === 'male') {
     return Images.maleProfile;
   }
 
@@ -297,7 +342,7 @@ export const mapFeaturedMatch = (
     name: pickString(profile.name) || 'Profile',
     age: pickNumber(profile.age),
     location: resolveLocation(profile) || '-',
-    image: resolveProfileImage(profile),
+    image: resolveProfileImage(item, profile),
     tags: buildTags(profile),
     isNew: Boolean(profile.is_new ?? profile.is_new_profile),
     isVerified: Boolean(profile.is_verified),
@@ -322,7 +367,7 @@ export const mapSuggestedMatch = (
         profile.profession,
         profile.employment_type,
       ) || '-',
-    image: resolveProfileImage(profile),
+    image: resolveProfileImage(item, profile),
     tier: resolveTier(
       profile.tier ?? profile.plan ?? profile.subscription_plan,
     ),
@@ -554,26 +599,57 @@ export const pickMatchListTotal = (
 const mapSuggestedMatches = (items?: MatchApiItem[] | null) =>
   (items ?? []).map(mapSuggestedMatch);
 
+const pickMatchArray = (...lists: Array<MatchApiItem[] | null | undefined>) => {
+  for (const list of lists) {
+    if (Array.isArray(list) && list.length) {
+      return list;
+    }
+  }
+
+  return [];
+};
+
 const normalizeHomeResponse = (
   source?: HomeMatchesResponse | null,
+  depth = 0,
 ): HomeMatchesResponse => {
-  if (!source || typeof source !== 'object') {
-    return {};
+  if (!source || typeof source !== 'object' || depth > 4) {
+    return source && typeof source === 'object' ? source : {};
+  }
+
+  if (Array.isArray(source.data)) {
+    return {
+      ...source,
+      suggested_matches: pickMatchArray(
+        source.suggested_matches,
+        source.data,
+      ),
+      matches: pickMatchArray(source.matches, source.data),
+    };
   }
 
   if (source.data && typeof source.data === 'object') {
-    return normalizeHomeResponse({
-      ...source,
-      ...source.data,
-    });
+    const { data: _ignored, ...rest } = source;
+    return normalizeHomeResponse(
+      {
+        ...rest,
+        ...source.data,
+      },
+      depth + 1,
+    );
   }
 
   return source;
 };
 
 const extractFeaturedMatches = (response: HomeMatchesResponse) => {
-  if (response.featured_matches?.length) {
-    return response.featured_matches;
+  const featured = pickMatchArray(
+    response.featured_matches,
+    response.featured,
+  );
+
+  if (featured.length) {
+    return featured;
   }
 
   if (response.top_match) {
@@ -584,15 +660,14 @@ const extractFeaturedMatches = (response: HomeMatchesResponse) => {
 };
 
 const extractSuggestedMatches = (response: HomeMatchesResponse) => {
-  if (response.suggested_matches?.length) {
-    return response.suggested_matches;
-  }
-
-  if (response.matches?.length) {
-    return response.matches;
-  }
-
-  return [];
+  return pickMatchArray(
+    response.suggested_matches,
+    response.matches,
+    response.profiles,
+    response.results,
+    response.users,
+    response.recommendations,
+  );
 };
 
 const splitGreeting = (greeting: string) => {
@@ -612,10 +687,24 @@ export const mapHomeMatches = (
   response?: HomeMatchesResponse | null,
 ): HomeMatchesData => {
   const data = normalizeHomeResponse(response);
-  const featuredItems = extractFeaturedMatches(data);
-  const suggestedItems = extractSuggestedMatches(data);
+  let featuredItems = extractFeaturedMatches(data);
+  let suggestedItems = extractSuggestedMatches(data);
 
-  return {
+  if (featuredItems.length && suggestedItems.length) {
+    const featuredIds = new Set(
+      featuredItems.map(item => String(item.id ?? item.user_id ?? '')),
+    );
+    suggestedItems = suggestedItems.filter(
+      item => !featuredIds.has(String(item.id ?? item.user_id ?? '')),
+    );
+  }
+
+  if (!featuredItems.length && suggestedItems.length) {
+    featuredItems = [suggestedItems[0]];
+    suggestedItems = suggestedItems.slice(1);
+  }
+
+  const mapped = {
     greeting: pickString(data.greeting),
     totalMatches:
       pickNumber(data.total_matches) ||
@@ -623,6 +712,56 @@ export const mapHomeMatches = (
     featuredMatches: featuredItems.map(mapFeaturedMatch),
     suggestedMatches: mapSuggestedMatches(suggestedItems),
   };
+
+  logMappedPhotos(mapped);
+  return mapped;
+};
+
+const logMappedPhotos = (mapped: HomeMatchesData) => {
+  console.log(
+    'Home mapped photos:',
+    [...mapped.featuredMatches, ...mapped.suggestedMatches].map(item => ({
+      id: item.id,
+      name: item.name,
+      image: item.image,
+    })),
+  );
+};
+
+const suggestedToFeatured = (item: SuggestedMatch): FeaturedMatch => ({
+  id: item.id,
+  name: item.name,
+  age: item.age,
+  location: item.location,
+  image: item.image,
+  tags:
+    item.profession && item.profession !== '-'
+      ? [{ icon: 'briefcase-outline', label: item.profession }]
+      : [],
+  isVerified: item.isVerified,
+});
+
+export const mapListToHomeMatches = (
+  items: SuggestedMatch[],
+  greeting = '',
+): HomeMatchesData => {
+  if (!items.length) {
+    return {
+      greeting,
+      totalMatches: 0,
+      featuredMatches: [],
+      suggestedMatches: [],
+    };
+  }
+
+  const mapped = {
+    greeting,
+    totalMatches: items.length,
+    featuredMatches: [suggestedToFeatured(items[0])],
+    suggestedMatches: items.length > 1 ? items.slice(1) : items,
+  };
+  logMappedPhotos(mapped);
+  return mapped;
 };
 
 export const mapHomeGreeting = (greeting: string) => splitGreeting(greeting);
@@ -636,29 +775,47 @@ export const mapBestMatch = (
 
   const source =
     response.profile ??
-    (response.data && typeof response.data === 'object'
+    (response.data &&
+    typeof response.data === 'object' &&
+    !Array.isArray(response.data)
       ? response.data.profile
-      : null);
+      : null) ??
+    response;
 
   const matchScore =
     response.match_score ??
-    (response.data && typeof response.data === 'object'
+    (response.data &&
+    typeof response.data === 'object' &&
+    !Array.isArray(response.data)
       ? response.data.match_score
       : null);
 
-  if (!source) {
+  if (!source || typeof source !== 'object') {
     return null;
   }
 
-  const profile = normalizeItem(source);
+  const profile = unwrapMatchRecord(source);
+  const photo =
+    pickImageUrl(profile) ||
+    pickImageUrl(source) ||
+    pickImageUrl(response.profile) ||
+    pickImageUrl(response);
+
+  if (!pickString(profile.name, profile.full_name, profile.fullName) && !profile.id) {
+    return null;
+  }
 
   return {
     id: resolveId(profile, 0),
-    name: pickString(profile.name) || 'Profile',
+    name:
+      pickString(profile.name, profile.full_name, profile.fullName) ||
+      'Profile',
     age: pickNumber(profile.age),
     location: resolveLocation(profile) || '-',
     matchScore: pickNumber(matchScore),
-    image: resolveProfileImage(profile),
+    image: photo
+      ? toRemoteImageSource(photo)
+      : resolveProfileImage(profile, source, response),
   };
 };
 
@@ -689,11 +846,56 @@ const formatDetailValue = (label: string, value: string) => {
   return value;
 };
 
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+
+const unwrapMatchRecord = (
+  source?: unknown,
+  depth = 0,
+): MatchApiItem => {
+  if (depth > 5) {
+    return isPlainObject(source) ? normalizeItem(source as MatchApiItem) : {};
+  }
+
+  if (Array.isArray(source)) {
+    return unwrapMatchRecord(source[0], depth + 1);
+  }
+
+  if (!isPlainObject(source)) {
+    return {};
+  }
+
+  const record = source as MatchApiItem & {
+    data?: unknown;
+    match?: unknown;
+  };
+  const nested = [record.data, record.user, record.profile, record.match].find(
+    value =>
+      (Array.isArray(value) && value.length > 0) || isPlainObject(value),
+  );
+
+  if (nested && nested !== record) {
+    const inner = unwrapMatchRecord(nested, depth + 1);
+    return normalizeItem({ ...record, ...inner });
+  }
+
+  return normalizeItem(record);
+};
+
+export type MatchProfilePreview = {
+  name?: string;
+  age?: number;
+  location?: string;
+  image?: ImageSourcePropType;
+  isVerified?: boolean;
+};
+
 export const mapMatchProfileDetail = (
   response: MatchProfileResponse | null | undefined,
   profileId: string,
+  preview?: MatchProfilePreview | null,
 ) => {
-  const profile = normalizeItem(response ?? {});
+  const profile = unwrapMatchRecord(response);
   const education = pickString(
     profile.qualification,
     profile.highest_education,
@@ -707,9 +909,15 @@ export const mapMatchProfileDetail = (
     profile.employment_type,
   );
   const community = pickString(profile.community, profile.religion);
-  const residentialStatus = pickString(profile.residential_status);
-  const age = pickNumber(profile.age);
-  const city = pickString(profile.city) || '-';
+  const residentialStatus = pickString(
+    profile.residential_status,
+    profile.residence_status,
+  );
+  const age = pickNumber(profile.age) || preview?.age || 0;
+  const city =
+    pickString(profile.city) ||
+    pickString(preview?.location?.split(',')[0]) ||
+    '-';
   const height = pickString(profile.height) || '-';
   const maritalStatus = pickString(profile.marital_status) || '-';
   const motherTongue = pickString(profile.mother_tongue) || '-';
@@ -767,15 +975,35 @@ export const mapMatchProfileDetail = (
 
   return {
     id: profileId,
-    fullName: pickString(profile.name) || 'Profile',
+    fullName:
+      pickString(profile.name, profile.full_name, profile.fullName) ||
+      preview?.name ||
+      'Profile',
     age,
-    location: resolveLocation(profile) || city,
-    image: resolveProfileImage(profile),
+    location:
+      resolveLocation(profile) ||
+      (city !== '-' ? city : '') ||
+      preview?.location ||
+      '-',
+    image: (() => {
+      const photo = pickImageUrl(profile) || pickImageUrl(response);
+      if (photo) {
+        return { uri: photo };
+      }
+      if (preview?.image) {
+        return preview.image;
+      }
+      return resolveProfileImage(profile, response ?? {});
+    })(),
     tier: resolveTier(profile.tier ?? profile.plan ?? profile.subscription_plan),
-    isVerified: Boolean(profile.is_verified),
+    isVerified: Boolean(profile.is_verified || preview?.isVerified),
     about:
-      pickString(profile.bio, profile.about, profile.about_me) ||
-      'No description available.',
+      pickString(
+        profile.bio,
+        profile.about,
+        profile.about_me,
+        profile.description,
+      ) || 'No description available.',
     quickInfo,
     basicDetails,
     languages: parseLanguages(profile.other_languages),

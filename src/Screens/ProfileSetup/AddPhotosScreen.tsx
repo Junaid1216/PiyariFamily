@@ -158,10 +158,23 @@ const AddPhotosScreen = ({ navigation }: Props) => {
     try {
       console.log('Profile Photos Request:', ENDPOINTS.PROFILE_PHOTOS);
       const res = await Api.uploadProfilePhotos(selectedPhotos);
+      const uploaded =
+        res?.status == 200 || res?.success === true || res?.success == 200;
 
-      if (res?.status == 200) {
+      if (uploaded) {
         console.log('Profile Photos Success:', res);
-        const cached = saveProfileCache(res?.data ?? res);
+        let cached = saveProfileCache(res?.data ?? res);
+
+        try {
+          const profileRes = await Api.getProfile();
+          if (profileRes?.status == 200) {
+            console.log('Profile Photos Refresh Success:', profileRes?.data);
+            cached = saveProfileCache(profileRes.data);
+          }
+        } catch (refreshError) {
+          console.log('Profile Photos Refresh Error:', refreshError);
+        }
+
         setRemotePhotos(extractProfilePhotoSlots(cached));
         setLocalPhotos(createEmptyPhotos());
         Toast.show(res?.message ?? 'Photos uploaded', Toast.LONG);

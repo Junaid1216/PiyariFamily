@@ -1,8 +1,15 @@
 export { Api } from './Api';
+export { hydrateMatchImages, getImageCacheKey } from './hydrateMatchImages';
 export { apiClient, axiosInstance } from './apiClient';
 export { API_CONFIG } from './config';
+export { resolveMediaUrl, toRemoteImageSource } from './mediaUrl';
 export { ENDPOINTS } from './endpoints';
 export { getApiErrorMessage } from './handleApiError';
+export { findCountryMatch, mapCountries, toFlagCountryCode } from './mappers/countryMapper';
+export type {
+  CountriesResponse,
+  CountryApiItem,
+} from './mappers/countryMapper';
 export { mapSubscriptions } from './mappers/subscriptionMapper';
 export type {
   SubscriptionApiPlan,
@@ -14,6 +21,7 @@ export {
   buildMatchSearchParams,
   mapHomeGreeting,
   mapHomeMatches,
+  mapListToHomeMatches,
   mapBestMatch,
   mapMatchList,
   mapMatchProfileDetail,
@@ -45,6 +53,7 @@ export type {
   MatchListPagination,
   MatchListResponse,
   MatchProfileResponse,
+  MatchProfilePreview,
   MatchSearchParams,
   SuggestedMatch,
 } from './mappers/matchMapper';
@@ -58,8 +67,10 @@ export type {
   ReferralStatsResponse,
 } from './mappers/referralMapper';
 export {
+  extractShortlistProfiles,
   mapShortlistItem,
   mapShortlistProfiles,
+  pickShortlistTotal,
 } from './mappers/shortlistMapper';
 export type {
   ShortlistApiItem,
@@ -68,7 +79,7 @@ export type {
   ShortlistTab,
   ShortlistedProfile,
 } from './mappers/shortlistMapper';
-export { mapProfileToForm, mapFormToProfilePayload, mapProfileToSettings, normalizeProfileData, resolveProfileData, saveProfileCache, extractPhotoUrl, extractProfilePhotoSlots } from './mappers/profileMapper';
+export { mapProfileToForm, mapFormToProfilePayload, mapProfileToSettings, normalizeProfileData, resolveProfileData, saveProfileCache, extractPhotoUrl, extractProfilePhotoSlots, pickImageUrl } from './mappers/profileMapper';
 export type { EditProfileFormData, ProfileApiData, SettingsProfileData } from './mappers/profileMapper';
 export { profileStorage } from './profileStorage';
 export { accountStorage } from './accountStorage';

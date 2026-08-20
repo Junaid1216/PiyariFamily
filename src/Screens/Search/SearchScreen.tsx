@@ -26,6 +26,8 @@ import {
   ENDPOINTS,
   buildMatchSearchParams,
   getApiErrorMessage,
+  getImageCacheKey,
+  hydrateMatchImages,
   mapMatchList,
   type ApiErrorResponse,
   type SuggestedMatch,
@@ -107,7 +109,9 @@ const SearchScreen = () => {
 
       if (res?.status == 200) {
         console.log('Match Search Success:', res?.data);
-        setSuggestedMatches(mapMatchList(res?.data));
+        const mapped = mapMatchList(res?.data);
+        setSuggestedMatches(mapped);
+        setSuggestedMatches(await hydrateMatchImages(mapped));
       } else {
         console.log('Match Search Failed:', res?.data);
         setSuggestedMatches([]);
@@ -305,11 +309,19 @@ const SearchScreen = () => {
                 style={styles.suggestedCard}
                 activeOpacity={0.9}
                 onPress={() =>
-                  navigation.navigate('ProfileDetail', { profileId: match.id })
+                  navigation.navigate('ProfileDetail', {
+                    profileId: match.id,
+                    name: match.name,
+                    age: match.age,
+                    location: match.location,
+                    image: match.image,
+                    isVerified: match.isVerified,
+                  })
                 }
               >
                 <View style={styles.suggestedImageWrap}>
                   <Image
+                    key={getImageCacheKey(match.image, match.id)}
                     source={match.image}
                     style={styles.suggestedImage}
                     resizeMode="cover"

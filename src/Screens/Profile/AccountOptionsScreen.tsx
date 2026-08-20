@@ -8,7 +8,7 @@ import {
   View,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
-import { useNavigation, CommonActions } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -23,6 +23,7 @@ import {
   ENDPOINTS,
 } from '../../API';
 import { ProfileStackParamList } from '../../Navigation/ProfileStackNavigator';
+import { resetToLogin } from '../../Functions/authNavigation';
 import { fs, hp, wp } from '../../Functions/responsive';
 import {
   clearAuth,
@@ -61,12 +62,7 @@ const AccountOptionsScreen = () => {
   };
 
   const goToLogin = () => {
-    navigation.getParent()?.getParent()?.getParent()?.dispatch(
-      CommonActions.reset({
-        index: 0,
-        routes: [{ name: 'Login' }],
-      }),
-    );
+    resetToLogin(navigation);
   };
 
   const handleDeactivate = async () => {
@@ -87,7 +83,7 @@ const AccountOptionsScreen = () => {
           JSON.stringify(res, null, 2),
         );
 
-        if (res?.status == 200) {
+        if (res?.isSuccess || res?.status == 200 || res?.success == 200) {
           console.log(
             'Deactivate Account Success:',
             JSON.stringify(res, null, 2),

@@ -25,6 +25,7 @@ import {
   Api,
   ENDPOINTS,
   getApiErrorMessage,
+  resolveProfileData,
   saveProfileCache,
   type ApiErrorResponse,
 } from '../../API';
@@ -38,7 +39,9 @@ import {
   INCOME_RANGE_TO_API,
   IncomeRange,
   PROFILE_SETUP_TOTAL_STEPS,
+  RESIDENCE_STATUS_FROM_API,
   RESIDENCE_STATUS_OPTIONS,
+  RESIDENCE_STATUS_TO_API,
   ResidenceStatus,
 } from '../../Constant/ProfileSetup';
 import { Fonts } from '../../Constant/Fonts';
@@ -66,6 +69,28 @@ const EMPLOYMENT_FROM_API: Record<string, EmploymentType> = {
   business: 'Business',
 };
 
+const matchIncomeRange = (
+  value?: string | number | null,
+): IncomeRange | '' => {
+  if (value === undefined || value === null || value === '') {
+    return '';
+  }
+
+  const normalized = String(value).trim();
+  const byLabel = INCOME_RANGE_OPTIONS.find(
+    option => option.toLowerCase() === normalized.toLowerCase(),
+  );
+  if (byLabel) {
+    return byLabel;
+  }
+
+  const byApi = (
+    Object.entries(INCOME_RANGE_TO_API) as Array<[IncomeRange, string]>
+  ).find(([, apiValue]) => apiValue === normalized);
+
+  return byApi?.[0] ?? '';
+};
+
 const CareerScreen = ({ navigation }: Props) => {
   const insets = useSafeAreaInsets();
   const [employmentType, setEmploymentType] =
@@ -84,24 +109,88 @@ const CareerScreen = ({ navigation }: Props) => {
     useCallback(() => {
       console.log('Redux Career:', store.getState());
 
+      const applyCareer = (profile: {
+        employment_type?: string | null;
+        job_title?: string | null;
+        profession?: string | null;
+        company?: string | null;
+        monthly_income?: string | number | null;
+        annual_income?: string | number | null;
+        residential_status?: string | null;
+        residence_status?: string | null;
+      }) => {
+        const employment =
+          EMPLOYMENT_FROM_API[profile.employment_type?.toLowerCase() ?? ''];
+        if (employment) {
+          setEmploymentType(employment);
+        }
+        if (profile.job_title) {
+          setJobTitle(profile.job_title);
+        } else if (profile.profession) {
+          setJobTitle(profile.profession);
+        }
+        if (profile.company) {
+          setCompany(profile.company);
+        }
+
+        const income = matchIncomeRange(
+          profile.monthly_income ?? profile.annual_income,
+        );
+        if (income) {
+          setIncomeRange(income);
+        }
+
+        const residence =
+          RESIDENCE_STATUS_FROM_API[
+            (profile.residential_status ?? profile.residence_status ?? '')
+              .toLowerCase()
+              .replace(/_/g, ' ')
+          ] ??
+          RESIDENCE_STATUS_FROM_API[
+            (profile.residential_status ?? profile.residence_status ?? '')
+              .toLowerCase()
+          ];
+        if (residence) {
+          setResidenceStatus(residence);
+        }
+      };
+
       const cachedProfile = store.getState().profile.profile;
-      if (!cachedProfile) {
-        return;
+      if (cachedProfile) {
+        applyCareer(cachedProfile);
       }
 
-      const employment =
-        EMPLOYMENT_FROM_API[cachedProfile.employment_type?.toLowerCase() ?? ''];
-      if (employment) {
-        setEmploymentType(employment);
-      }
-      if (cachedProfile.job_title) {
-        setJobTitle(cachedProfile.job_title);
-      } else if (cachedProfile.profession) {
-        setJobTitle(cachedProfile.profession);
-      }
-      if (cachedProfile.company) {
-        setCompany(cachedProfile.company);
-      }
+      let cancelled = false;
+
+      const loadCareer = async () => {
+        try {
+          console.log('Profile Career Prefill Request:', ENDPOINTS.PROFILE);
+          const res = await Api.getProfile();
+
+          if (cancelled) {
+            return;
+          }
+
+          if (res?.status == 200) {
+            console.log('Profile Career Prefill Success:', res?.data);
+            applyCareer(resolveProfileData(res?.data));
+          } else {
+            console.log('Profile Career Prefill Failed:', res?.data);
+          }
+        } catch (error) {
+          const axiosError = error as AxiosError<ApiErrorResponse>;
+          console.log(
+            'Profile Career Prefill Error:',
+            axiosError?.response?.data || error,
+          );
+        }
+      };
+
+      loadCareer();
+
+      return () => {
+        cancelled = true;
+      };
     }, []),
   );
 
@@ -122,6 +211,9 @@ const CareerScreen = ({ navigation }: Props) => {
       return;
     }
 
+    const incomeValue = INCOME_RANGE_TO_API[incomeRange];
+    const residenceValue = RESIDENCE_STATUS_TO_API[residenceStatus];
+
     setSaving(true);
 
     try {
@@ -130,16 +222,24 @@ const CareerScreen = ({ navigation }: Props) => {
         job_title: jobTitle.trim(),
         employment_type: EMPLOYMENT_TYPE_TO_API[employmentType],
         company: company.trim(),
-        annual_income: INCOME_RANGE_TO_API[incomeRange],
+        annual_income: incomeValue,
+        monthly_income: incomeValue,
+        residential_status: residenceValue,
+        residence_status: residenceValue,
       });
 
-      if (res?.status == 200) {
+      if (res?.status == 200 || res?.success === true || res?.success == 200) {
         console.log('Profile Career Success:', res);
         saveProfileCache({
+          ...(res.user ?? {}),
           job_title: jobTitle.trim(),
           employment_type: EMPLOYMENT_TYPE_TO_API[employmentType],
           company: company.trim(),
           profession: jobTitle.trim(),
+          annual_income: incomeValue,
+          monthly_income: incomeValue,
+          residential_status: residenceValue,
+          residence_status: residenceValue,
         });
         Toast.show(res?.message ?? 'Career details saved', Toast.LONG);
         navigation.navigate('PhysicalDetails');
@@ -306,8 +406,10 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: FontSizes.body,
     color: Colors.label,
-    marginBottom: hp('1%'),
+    marginBottom: AuthStyles.fieldLabelGap,
     fontFamily: Fonts.medium,
+    includeFontPadding: false,
+    lineHeight: FontSizes.body + 2,
   },
   segmentContainer: {
     backgroundColor: Colors.white,

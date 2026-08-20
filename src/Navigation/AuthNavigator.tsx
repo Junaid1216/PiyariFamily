@@ -31,7 +31,12 @@ export type AuthStackParamList = {
   Onboarding: undefined;
   Login: undefined;
   SignUp: undefined;
-  VerifyEmail: { email: string };
+  VerifyEmail: {
+    email: string;
+    autoSend?: boolean;
+    password?: string;
+    name?: string;
+  };
   ForgotPassword: undefined;
   CheckEmail: { email: string };
   CodeVerified: { email: string };

@@ -5,6 +5,7 @@ export const AuthStyles = {
   inputRadius: wp('3.2%'),
   buttonRadius: wp('3.2%'),
   inputHeight: hp('6.4%'),
+  fieldLabelGap: hp('0.35%'),
   buttonHeight: hp('6.4%'),
   logoSize: wp('17%'),
   logoRadius: wp('4.3%'),

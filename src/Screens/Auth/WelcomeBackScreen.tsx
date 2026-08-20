@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -14,6 +14,15 @@ import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
 import { AuthStackParamList } from '../../Navigation/AuthNavigator';
 import { fs, hp, wp } from '../../Functions/responsive';
+import {
+  clearAuth,
+  clearHomeMatches,
+  clearProfile,
+  clearReferral,
+  clearShortlist,
+  store,
+  useAppDispatch,
+} from '../../Redux';
 
 type NavigationProp = NativeStackNavigationProp<
   AuthStackParamList,
@@ -22,6 +31,10 @@ type NavigationProp = NativeStackNavigationProp<
 
 const WelcomeBackScreen = () => {
   const navigation = useNavigation<NavigationProp>();
+
+  useEffect(() => {
+    console.log('Redux WelcomeBack:', store.getState());
+  }, []);
 
   const handleLogin = () => {
     navigation.reset({

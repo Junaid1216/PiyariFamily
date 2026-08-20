@@ -325,33 +325,40 @@ const FaithCommunityScreen = ({ navigation }: Props) => {
           </TouchableOpacity>
           {openDropdown === 'languages' ? (
             <View style={styles.dropdownMenu}>
-              {OTHER_LANGUAGE_OPTIONS.map(option => {
-                const isSelected = otherLanguages.includes(option);
+              <ScrollView
+                nestedScrollEnabled
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                style={styles.dropdownScroll}
+              >
+                {OTHER_LANGUAGE_OPTIONS.map(option => {
+                  const isSelected = otherLanguages.includes(option);
 
-                return (
-                  <TouchableOpacity
-                    key={option}
-                    style={[
-                      styles.dropdownOption,
-                      isSelected && styles.dropdownOptionSelected,
-                    ]}
-                    activeOpacity={0.85}
-                    onPress={() => toggleLanguage(option)}
-                  >
-                    <Text
+                  return (
+                    <TouchableOpacity
+                      key={option}
                       style={[
-                        styles.dropdownOptionText,
-                        isSelected && styles.dropdownOptionTextSelected,
+                        styles.dropdownOption,
+                        isSelected && styles.dropdownOptionSelected,
                       ]}
+                      activeOpacity={0.85}
+                      onPress={() => toggleLanguage(option)}
                     >
-                      {option}
-                    </Text>
-                    {isSelected ? (
-                      <Icon name="check" size={fs(18)} color={Colors.gold} />
-                    ) : null}
-                  </TouchableOpacity>
-                );
-              })}
+                      <Text
+                        style={[
+                          styles.dropdownOptionText,
+                          isSelected && styles.dropdownOptionTextSelected,
+                        ]}
+                      >
+                        {option}
+                      </Text>
+                      {isSelected ? (
+                        <Icon name="check" size={fs(18)} color={Colors.gold} />
+                      ) : null}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
             </View>
           ) : null}
           <Text style={styles.hintText}>{Strings.maxLanguagesHint}</Text>
@@ -431,8 +438,10 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: FontSizes.body,
     color: Colors.label,
-    marginBottom: hp('1%'),
+    marginBottom: AuthStyles.fieldLabelGap,
     fontFamily: Fonts.medium,
+    includeFontPadding: false,
+    lineHeight: FontSizes.body + 2,
   },
   fieldSpacing: {
     marginBottom: hp('1.2%'),
@@ -479,7 +488,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1.2,
-    borderColor: Colors.border,
+    borderColor: Colors.dividerPink,
     borderRadius: AuthStyles.inputRadius,
     backgroundColor: Colors.inputBg,
     paddingHorizontal: wp('3.7%'),
@@ -497,11 +506,14 @@ const styles = StyleSheet.create({
   },
   dropdownMenu: {
     borderWidth: 1.2,
-    borderColor: Colors.border,
+    borderColor: Colors.dividerPink,
     borderRadius: AuthStyles.inputRadius,
     backgroundColor: Colors.white,
     overflow: 'hidden',
     marginBottom: hp('0.8%'),
+  },
+  dropdownScroll: {
+    maxHeight: hp('28%'),
   },
   dropdownOption: {
     flexDirection: 'row',
@@ -510,7 +522,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: wp('4%'),
     paddingVertical: hp('1.4%'),
     borderBottomWidth: 1,
-    borderBottomColor: Colors.divider,
+    borderBottomColor: Colors.dividerPink,
   },
   dropdownOptionSelected: {
     backgroundColor: Colors.inputBg,

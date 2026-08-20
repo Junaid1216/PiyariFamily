@@ -102,15 +102,36 @@ export const toProfileUpdateFormData = (
 export const toPhotoUploadFormData = (photos: UploadFile[]) => {
   const formData = new FormData();
 
-  photos.forEach(photo => {
+  photos.forEach((photo, index) => {
     const file = normalizeUploadFile(photo.uri, photo.name, photo.type);
-
-    formData.append('photos[]', {
+    const payload = {
       uri: file.uri,
       type: file.type,
       name: file.name,
-    } as unknown as Blob);
+    } as unknown as Blob;
+
+    formData.append('photos[]', payload);
+    formData.append(`photos[${index}]`, payload);
   });
+
+  const mainPhoto = photos[0];
+
+  if (mainPhoto) {
+    const file = normalizeUploadFile(
+      mainPhoto.uri,
+      mainPhoto.name,
+      mainPhoto.type,
+    );
+    const payload = {
+      uri: file.uri,
+      type: file.type,
+      name: file.name,
+    } as unknown as Blob;
+
+    formData.append('photo', payload);
+    formData.append('image', payload);
+    formData.append('profile_photo', payload);
+  }
 
   return formData;
 };

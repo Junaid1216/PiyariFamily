@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useFocusEffect, useNavigation, CommonActions } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -22,6 +22,7 @@ import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
 import { Api, ENDPOINTS, authService, getApiErrorMessage, mapProfileToSettings, resolveProfileData, type ApiErrorResponse } from '../../API';
 import { ProfileStackParamList } from '../../Navigation/ProfileStackNavigator';
+import { resetToLogin } from '../../Functions/authNavigation';
 import { fs, hp, wp } from '../../Functions/responsive';
 import { useAppDispatch, useAppSelector, selectProfilePhoto, selectUser, setProfile, store } from '../../Redux';
 
@@ -89,7 +90,6 @@ const SettingsScreen = () => {
         const rawProfile = resolveProfileData(res?.data);
         const profile = mapProfileToSettings(rawProfile);
         dispatch(setProfile(rawProfile));
-        console.log('Redux Settings (after fetch):', store.getState());
         setProfileName(profile.name);
         setProfileMeta(profile.meta);
         setIsVerified(profile.isVerified);
@@ -120,27 +120,14 @@ const SettingsScreen = () => {
     try {
       console.log('Logout Request:', ENDPOINTS.AUTH.LOGOUT);
       const res = await authService.logout();
-
-      if (res?.status == 200) {
-        console.log('Logout Success:', res);
-        console.log('Redux Settings (after logout):', store.getState());
-        Toast.show(res?.message ?? 'Logged out successfully', Toast.LONG);
-        navigation.getParent()?.getParent()?.getParent()?.dispatch(
-          CommonActions.reset({
-            index: 0,
-            routes: [{ name: 'Login' }],
-          }),
-        );
-      } else {
-        console.log('Logout Failed:', res);
-        Toast.show(res?.message ?? 'Failed to log out', Toast.LONG);
-      }
+      Toast.show(res?.message ?? 'Logged out successfully', Toast.LONG);
     } catch (error) {
       const axiosError = error as AxiosError<ApiErrorResponse>;
       console.log('Logout Error:', axiosError?.response?.data || error);
-      Toast.show(getApiErrorMessage(axiosError, 'Failed to log out'), Toast.LONG);
+      Toast.show('Logged out successfully', Toast.LONG);
     } finally {
       setLoggingOut(false);
+      resetToLogin(navigation);
     }
   };
 

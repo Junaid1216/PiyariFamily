@@ -1,8 +1,30 @@
 import axios, { AxiosError, AxiosRequestConfig } from 'axios';
 import { API_CONFIG } from './config';
+import { ENDPOINTS } from './endpoints';
 import { toFormData, type FormValue } from './formData';
 import { tokenStorage } from './tokenStorage';
 import type { ApiErrorResponse, ApiResult } from './types';
+
+const PUBLIC_AUTH_PATHS = [
+  ENDPOINTS.AUTH.LOGIN,
+  ENDPOINTS.AUTH.REGISTER,
+  ENDPOINTS.AUTH.VERIFY_EMAIL_OTP,
+  ENDPOINTS.AUTH.RESEND_EMAIL_OTP,
+  ENDPOINTS.AUTH.FORGOT_PASSWORD,
+  ENDPOINTS.AUTH.VERIFY_RESET_OTP,
+  ENDPOINTS.AUTH.SET_NEW_PASSWORD,
+];
+
+const isPublicAuthRequest = (url?: string) => {
+  if (!url) {
+    return false;
+  }
+
+  const path = url.split('?')[0];
+  return PUBLIC_AUTH_PATHS.some(
+    endpoint => path === endpoint || path.endsWith(endpoint),
+  );
+};
 
 const axiosInstance = axios.create({
   baseURL: API_CONFIG.BASE_URL,
@@ -13,6 +35,14 @@ const axiosInstance = axios.create({
 });
 
 axiosInstance.interceptors.request.use(config => {
+  if (isPublicAuthRequest(config.url)) {
+    if (config.headers) {
+      delete config.headers.Authorization;
+      delete config.headers.authorization;
+    }
+    return config;
+  }
+
   const token = tokenStorage.getAccessToken();
 
   if (token) {
@@ -25,7 +55,9 @@ axiosInstance.interceptors.request.use(config => {
 axiosInstance.interceptors.response.use(
   response => response,
   (error: AxiosError<ApiErrorResponse>) => {
-    if (error.response?.status === 401) {
+    const skipTokenClear = Boolean((error.config as { skipTokenClear?: boolean } | undefined)?.skipTokenClear);
+
+    if (error.response?.status === 401 && !skipTokenClear) {
       tokenStorage.clear();
     }
 

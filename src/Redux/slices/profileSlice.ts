@@ -1,6 +1,7 @@
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 import type { AccountStatus } from '../../API/accountStorage';
 import type { ProfileApiData } from '../../API/mappers/profileMapper';
+import { pickImageUrl } from '../../API/mappers/profileMapper';
 
 export type ProfileState = {
   profile: ProfileApiData | null;
@@ -39,8 +40,6 @@ export const selectIsAccountInactive = (state: { profile: ProfileState }) =>
   state.profile.accountStatus === 'inactive';
 
 export const selectProfilePhoto = (state: { profile: ProfileState }) =>
-  state.profile.profile?.profile_photo ??
-  state.profile.profile?.image ??
-  null;
+  pickImageUrl(state.profile.profile) || null;
 
 export default profileSlice.reducer;

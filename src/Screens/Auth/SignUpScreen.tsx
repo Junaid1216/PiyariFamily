@@ -26,19 +26,107 @@ import { hp, wp } from '../../Functions/responsive';
 type Props = {
   navigation: {
     goBack: () => void;
-    navigate: (screen: string, params?: { email: string }) => void;
+    canGoBack?: () => boolean;
+    replace: (screen: string) => void;
+    navigate: (
+      screen: string,
+      params?: {
+        email: string;
+        autoSend?: boolean;
+        password?: string;
+        name?: string;
+      },
+    ) => void;
   };
+};
+
+const isEmailAlreadyRegistered = (error: unknown) => {
+  const data = (error as any)?.response?.data;
+  const fieldErrors = data?.errors
+    ? Object.values(data.errors).flat().join(' ')
+    : '';
+  const text = `${data?.message ?? ''} ${fieldErrors}`.toLowerCase();
+  return (
+    text.includes('already been taken') ||
+    text.includes('already exists') ||
+    text.includes('already registered')
+  );
 };
 
 const SignUpScreen = ({ navigation }: Props) => {
   const insets = useSafeAreaInsets();
-  const [fullName, setFullName] = useState('ali');
-  const [email, setEmail] = useState('alisher6269@gmail.com');
-  const [phoneNumber, setPhoneNumber] = useState('+998991234567');
-  const [password, setPassword] = useState('12345678');
-  const [confirmPassword, setConfirmPassword] = useState('12345678');
-  const [agreed, setAgreed] = useState(true);
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [agreed, setAgreed] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  const handleBack = () => {
+    if (navigation.canGoBack?.()) {
+      navigation.goBack();
+      return;
+    }
+
+    navigation.replace('Login');
+  };
+
+  const openVerifyEmail = (registeredEmail: string, autoSend: boolean) => {
+    navigation.navigate('VerifyEmail', {
+      email: registeredEmail.trim(),
+      autoSend,
+      password,
+      name: fullName.trim(),
+    });
+  };
+
+  const continueIfLoggedIn = (response: {
+    token?: string;
+    access_token?: string;
+    requires_verification?: boolean;
+    email?: string;
+    message?: string;
+  }) => {
+    const token = response.token || response.access_token;
+    if (token) {
+      Toast.show(response.message || 'Logged in successfully', Toast.LONG);
+      navigation.replace('SelectCountry');
+      return true;
+    }
+
+    if (response.requires_verification) {
+      openVerifyEmail(response.email || email.trim(), true);
+      return true;
+    }
+
+    return false;
+  };
+
+  const loginWithSignupCredentials = async () => {
+    try {
+      const response = await authService.login({
+        email: email.trim(),
+        password,
+      });
+
+      if (continueIfLoggedIn(response)) {
+        return true;
+      }
+    } catch (loginError) {
+      const errorData = (loginError as any)?.response?.data;
+      if (errorData?.requires_verification) {
+        Toast.show(
+          errorData.message || 'Please verify your email first.',
+          Toast.LONG,
+        );
+        openVerifyEmail(errorData.email || email.trim(), true);
+        return true;
+      }
+    }
+
+    return false;
+  };
 
   const handleSignUp = async () => {
     if (
@@ -72,16 +160,38 @@ const SignUpScreen = ({ navigation }: Props) => {
         password_confirmation: confirmPassword,
       });
 
-      if (response?.status == 200) {
+      if (response?.status == 200 || response?.success == 200 || response?.success === true) {
         console.log('Sign Up Success:', response);
         Toast.show(response.message || 'Account created successfully', Toast.LONG);
-        navigation.navigate('VerifyEmail', { email: email.trim() });
-      } else {
-        console.log('Sign Up Failed:', response);
-        Toast.show(response.message || 'Registration failed. Please try again.');
+        const registeredEmail =
+          response.data?.email ||
+          response.user?.email ||
+          response.email ||
+          email.trim();
+        openVerifyEmail(registeredEmail, false);
+        return;
       }
+
+      if (continueIfLoggedIn(response)) {
+        return;
+      }
+
+      console.log('Sign Up Failed:', response);
+      Toast.show(response.message || 'Registration failed. Please try again.');
     } catch (error) {
       console.log('Sign Up Error:', (error as any)?.response?.data || error);
+
+      if (isEmailAlreadyRegistered(error)) {
+        const loggedIn = await loginWithSignupCredentials();
+        if (loggedIn) {
+          return;
+        }
+
+        Toast.show('Please verify the OTP sent to your email.', Toast.LONG);
+        openVerifyEmail(email.trim(), true);
+        return;
+      }
+
       Toast.show(getApiErrorMessage(error));
     } finally {
       setLoading(false);
@@ -103,7 +213,7 @@ const SignUpScreen = ({ navigation }: Props) => {
             enableOnAndroid
             bounces={false}
           >
-            <BackButton onPress={() => navigation.goBack()} />
+            <BackButton onPress={handleBack} />
 
             <View style={styles.formSection}>
               <Text style={styles.title}>{Strings.createYourAccount}</Text>

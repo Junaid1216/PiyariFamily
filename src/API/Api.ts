@@ -1,3 +1,4 @@
+import { AxiosRequestConfig } from 'axios';
 import { apiClient } from './apiClient';
 import { ENDPOINTS } from './endpoints';
 import { toPhotoUploadFormData, toProfileUpdateFormData, type FormValue, type UploadFile } from './formData';
@@ -11,6 +12,7 @@ import type {
   MatchSearchParams,
 } from './mappers/matchMapper';
 import type { ReferralHistoryResponse, ReferralStatsResponse } from './mappers/referralMapper';
+import type { CountriesResponse } from './mappers/countryMapper';
 import type { SubscriptionsResponse } from './mappers/subscriptionMapper';
 import type { ShortlistInterestResponse, ShortlistResponse, ShortlistTab } from './mappers/shortlistMapper';
 
@@ -32,11 +34,50 @@ type UpdateProfileResponse = MessageResponse & {
 type AccountStatusResponse = {
   success?: number | boolean;
   message?: string;
-  status?: 'active' | 'inactive';
+  status?: number | 'active' | 'inactive';
+  account_status?: 'active' | 'inactive';
+  is_deactivated?: boolean;
   can_activate?: boolean;
   can_deactivate?: boolean;
   user?: ProfileApiData;
 };
+
+const isAccountStatusValue = (
+  value?: AccountStatusResponse['status'] | AccountStatusResponse['account_status'],
+): value is 'active' | 'inactive' =>
+  value === 'active' || value === 'inactive';
+
+const resolveUpdatedAccountStatus = (
+  data: AccountStatusResponse,
+  action: 'deactivate' | 'activate',
+): 'active' | 'inactive' => {
+  if (isAccountStatusValue(data.account_status)) {
+    return data.account_status;
+  }
+
+  if (isAccountStatusValue(data.status)) {
+    return data.status;
+  }
+
+  if (data.is_deactivated === true) {
+    return 'inactive';
+  }
+
+  if (data.is_deactivated === false) {
+    return 'active';
+  }
+
+  return action === 'deactivate' ? 'inactive' : 'active';
+};
+
+const isAccountUpdateSuccess = (
+  httpStatus: number,
+  data: AccountStatusResponse,
+) =>
+  httpStatus === 200 ||
+  httpStatus === 201 ||
+  data.success === true ||
+  data.success == 200;
 
 type VerifyPhoneResponse = MessageResponse & {
   user?: ProfileApiData;
@@ -51,7 +92,10 @@ export type ProfileFaithPayload = {
 };
 
 export const Api = {
-  getProfile: () => apiClient.get<ProfileResponse>(ENDPOINTS.PROFILE),
+  getCountries: () => apiClient.get<CountriesResponse>(ENDPOINTS.COUNTRIES),
+
+  getProfile: (config?: AxiosRequestConfig & { skipTokenClear?: boolean }) =>
+    apiClient.get<ProfileResponse>(ENDPOINTS.PROFILE, config),
 
   updateProfileCountry: async (payload: Record<string, FormValue>) => {
     const { status, data } = await apiClient.postForm<UpdateProfileResponse>(
@@ -72,7 +116,7 @@ export const Api = {
   },
 
   updateProfileEducation: async (payload: Record<string, FormValue>) => {
-    const { status, data } = await apiClient.postForm<MessageResponse>(
+    const { status, data } = await apiClient.postForm<UpdateProfileResponse>(
       ENDPOINTS.PROFILE_EDUCATION,
       payload,
     );
@@ -193,10 +237,17 @@ export const Api = {
       { action },
     );
 
+    const accountStatus = resolveUpdatedAccountStatus(data, action);
+
     return {
       ...data,
       status,
-      accountStatus: data.status,
+      success: data.success,
+      message: data.message,
+      account_status: accountStatus,
+      accountStatus,
+      is_deactivated: accountStatus === 'inactive',
+      isSuccess: isAccountUpdateSuccess(status, data),
     };
   },
 

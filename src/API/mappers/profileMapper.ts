@@ -1,6 +1,7 @@
 import type { OtherLanguage } from '../../Constant/ProfileSetup';
 import { PROFILE_PHOTO_SLOTS } from '../../Constant/ProfileSetup';
 import type { FormValue } from '../formData';
+import { resolveMediaUrl } from '../mediaUrl';
 import { profileStorage } from '../profileStorage';
 import { userStorage } from '../userStorage';
 
@@ -15,6 +16,7 @@ export type ProfileApiData = {
   about_me?: string;
   city?: string | null;
   country?: string | null;
+  country_id?: number | string | null;
   state?: string | null;
   height?: string | null;
   weight?: string | null;
@@ -38,6 +40,7 @@ export type ProfileApiData = {
   additional_photos_visible?: boolean;
   qualification?: string | null;
   education?: string | null;
+  highest_education?: string | null;
   field_of_study?: string | null;
   university?: string | null;
   graduation_year?: string | null;
@@ -45,6 +48,8 @@ export type ProfileApiData = {
   company?: string | null;
   employment_type?: string | null;
   profession?: string | null;
+  monthly_income?: string | number | null;
+  annual_income?: string | number | null;
   religion?: string | null;
   sect?: string | null;
   photos?: Array<Record<string, unknown> | string> | null;
@@ -122,6 +127,48 @@ const mapGetProfileFields = (
 ): ProfileApiData => {
   const profile = { ...obj } as ProfileApiData;
 
+  const pick = (...keys: string[]) => {
+    for (const key of keys) {
+      const value = obj[key];
+      if (value !== undefined && value !== null && value !== '') {
+        return value;
+      }
+    }
+
+    return undefined;
+  };
+
+  const name = pick('name', 'full_name', 'fullName');
+  if (typeof name === 'string') {
+    profile.name = name;
+  }
+
+  const birthday = pick('birthday', 'dob', 'date_of_birth', 'dateOfBirth');
+  if (typeof birthday === 'string') {
+    profile.birthday = birthday;
+  }
+
+  const marital = pick('marital_status', 'maritalStatus', 'marital status');
+  if (typeof marital === 'string') {
+    profile.marital_status = marital;
+  }
+
+  const gender = pick('gender');
+  if (typeof gender === 'string') {
+    profile.gender = gender.toLowerCase();
+  }
+
+  const qualification = pick(
+    'qualification',
+    'highest_education',
+    'education',
+  );
+  if (typeof qualification === 'string') {
+    profile.qualification = qualification;
+    profile.highest_education = qualification;
+    profile.education = qualification;
+  }
+
   if (profile.image && !profile.profile_photo) {
     profile.profile_photo = profile.image;
   }
@@ -161,6 +208,7 @@ export const resolveProfileData = (source: unknown): ProfileApiData => {
     bio: pickProfileField(fromApi.bio, cached?.bio),
     city: pickProfileField(fromApi.city, cached?.city),
     country: pickProfileField(fromApi.country, cached?.country),
+    country_id: pickProfileField(fromApi.country_id, cached?.country_id),
     height: pickProfileField(fromApi.height, cached?.height),
     mother_tongue: pickProfileField(
       fromApi.mother_tongue,
@@ -223,26 +271,199 @@ export const saveProfileCache = (source: unknown): ProfileApiData => {
   return resolved;
 };
 
-export const extractPhotoUrl = (photo: unknown): string | null => {
-  if (typeof photo === 'string' && photo.trim()) {
-    return photo;
+const PHOTO_FIELD_KEYS = [
+  'profile_photo',
+  'profile_picture',
+  'profile_image',
+  'profilePhoto',
+  'profile_photo_url',
+  'photo_url',
+  'image_url',
+  'thumbnail_url',
+  'original_url',
+  'full_url',
+  'media_url',
+  'file_url',
+  'image',
+  'photo',
+  'avatar',
+  'picture',
+  'thumbnail',
+  'url',
+  'path',
+  'src',
+  'file',
+  'filename',
+] as const;
+
+const NESTED_PHOTO_KEYS = [
+  'user',
+  'profile',
+  'data',
+  'match',
+  'photos',
+  'media',
+  'gallery',
+  'images',
+  'files',
+] as const;
+
+const isEmptyPhotoValue = (value: string) => {
+  const trimmed = value.trim().toLowerCase();
+  return !trimmed || trimmed === 'null' || trimmed === 'undefined';
+};
+
+const looksLikeImagePath = (value: string) => {
+  if (isEmptyPhotoValue(value)) {
+    return false;
   }
 
+  if (/^data:image\//i.test(value)) {
+    return true;
+  }
+
+  if (/\.(jpe?g|png|webp|gif|bmp|heic|heif)(\?|#|$)/i.test(value)) {
+    return true;
+  }
+
+  return /uploads\/|storage\/|profiles\/|\/store\//i.test(value);
+};
+
+const isMainPhoto = (photo: unknown) => {
   if (!photo || typeof photo !== 'object') {
-    return null;
+    return false;
   }
 
-  const obj = photo as Record<string, unknown>;
-  const candidates = ['url', 'image', 'path', 'profile_photo', 'photo'];
+  const flag = (photo as Record<string, unknown>).is_main;
+  return flag === true || flag === 1 || flag === '1';
+};
 
-  for (const key of candidates) {
-    if (typeof obj[key] === 'string' && obj[key]) {
-      return obj[key] as string;
+const pickFromPhotosArray = (photos: unknown): string => {
+  if (!Array.isArray(photos) || photos.length === 0) {
+    return '';
+  }
+
+  const ordered = [...photos].sort(
+    (left, right) => Number(isMainPhoto(right)) - Number(isMainPhoto(left)),
+  );
+
+  for (const photo of ordered) {
+    if (typeof photo === 'string' && looksLikeImagePath(photo)) {
+      return resolveMediaUrl(photo);
+    }
+
+    if (!photo || typeof photo !== 'object') {
+      continue;
+    }
+
+    const obj = photo as Record<string, unknown>;
+    const candidates = [
+      obj.url,
+      obj.image,
+      obj.path,
+      obj.profile_photo,
+      obj.photo,
+      obj.src,
+    ];
+
+    for (const candidate of candidates) {
+      if (typeof candidate === 'string' && !isEmptyPhotoValue(candidate)) {
+        return resolveMediaUrl(candidate.trim());
+      }
     }
   }
 
-  return null;
+  return '';
 };
+
+export const pickImageUrl = (item?: unknown, depth = 0): string => {
+  if (item == null || depth > 5) {
+    return '';
+  }
+
+  if (typeof item === 'string') {
+    const trimmed = item.trim();
+
+    if (isEmptyPhotoValue(trimmed)) {
+      return '';
+    }
+
+    if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+      try {
+        return pickImageUrl(JSON.parse(trimmed), depth + 1);
+      } catch {
+        // Keep checking the raw string below.
+      }
+    }
+
+    return looksLikeImagePath(trimmed) ? resolveMediaUrl(trimmed) : '';
+  }
+
+  if (Array.isArray(item)) {
+    const fromArray = pickFromPhotosArray(item);
+    if (fromArray) {
+      return fromArray;
+    }
+
+    for (const entry of item) {
+      const url = pickImageUrl(entry, depth + 1);
+      if (url) {
+        return url;
+      }
+    }
+
+    return '';
+  }
+
+  if (typeof item !== 'object') {
+    return '';
+  }
+
+  const obj = item as Record<string, unknown>;
+  const fromPhotos = pickFromPhotosArray(obj.photos);
+  if (fromPhotos) {
+    return fromPhotos;
+  }
+
+  for (const key of PHOTO_FIELD_KEYS) {
+    const value = obj[key];
+
+    if (typeof value === 'string' && !isEmptyPhotoValue(value)) {
+      return resolveMediaUrl(value.trim());
+    }
+
+    if (value && typeof value === 'object') {
+      const url = pickImageUrl(value, depth + 1);
+      if (url) {
+        return url;
+      }
+    }
+  }
+
+  for (const key of NESTED_PHOTO_KEYS) {
+    if (!(key in obj) || key === 'photos') {
+      continue;
+    }
+
+    const url = pickImageUrl(obj[key], depth + 1);
+    if (url) {
+      return url;
+    }
+  }
+
+  if (depth === 0) {
+    for (const value of Object.values(obj)) {
+      if (typeof value === 'string' && looksLikeImagePath(value)) {
+        return resolveMediaUrl(value.trim());
+      }
+    }
+  }
+
+  return '';
+};
+
+export const extractPhotoUrl = (photo: unknown): string | null =>
+  pickImageUrl(photo) || null;
 
 export const extractProfilePhotoSlots = (
   profile?: ProfileApiData | null,
@@ -254,7 +475,7 @@ export const extractProfilePhotoSlots = (
     return slots;
   }
 
-  const mainPhoto = profile.profile_photo ?? profile.image ?? null;
+  const mainPhoto = pickImageUrl(profile) || null;
   if (mainPhoto) {
     slots[0] = mainPhoto;
   }
@@ -412,7 +633,7 @@ export const mapProfileToForm = (
           )
         : '',
     age: safeProfile.age ?? calculateAge(safeProfile.birthday),
-    profilePhoto: safeProfile.profile_photo ?? null,
+    profilePhoto: pickImageUrl(safeProfile) || null,
   };
 };
 

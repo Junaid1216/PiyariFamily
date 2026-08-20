@@ -10,6 +10,7 @@ export const ENDPOINTS = {
     CHANGE_PASSWORD: '/change-password',
     LOGOUT: '/logout',
   },
+  COUNTRIES: '/countries',
   PROFILE: '/profile',
   PROFILE_COUNTRY: '/profile/country',
   PROFILE_BASIC_INFO: '/profile/basic-info',

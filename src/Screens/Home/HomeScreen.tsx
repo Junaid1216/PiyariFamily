@@ -23,9 +23,15 @@ import { Images } from '../../Assets';
 import {
   Api,
   ENDPOINTS,
+  buildMatchSearchParams,
   getApiErrorMessage,
+  getImageCacheKey,
+  hydrateMatchImages,
   mapHomeGreeting,
   mapHomeMatches,
+  mapListToHomeMatches,
+  mapMatchList,
+  mapBestMatch,
   type ApiErrorResponse,
   type FeaturedMatch,
   type SuggestedMatch,
@@ -47,6 +53,7 @@ import {
   selectHomeGreeting,
   selectHomeSubtitle,
   selectIsAccountInactive,
+  selectProfile,
   selectSuggestedMatches,
   selectUser,
   setAccountStatus,
@@ -81,6 +88,7 @@ const HomeScreen = () => {
   const navigation = useNavigation<HomeNavigationProp>();
   const dispatch = useAppDispatch();
   const user = useAppSelector(selectUser);
+  const profile = useAppSelector(selectProfile);
   const isAccountInactive = useAppSelector(selectIsAccountInactive);
   const greeting = useAppSelector(selectHomeGreeting);
   const subtitle = useAppSelector(selectHomeSubtitle);
@@ -110,12 +118,56 @@ const HomeScreen = () => {
     }
 
     try {
+      console.log('Best Match Request:', ENDPOINTS.MATCHES_BEST);
+      Api.getBestMatch()
+        .then(bestRes => {
+          console.log('Best Match HTTP Status:', bestRes?.status);
+          if (bestRes?.status == 200) {
+            console.log('Best Match Success:', bestRes?.data);
+            console.log('Best Match Mapped:', mapBestMatch(bestRes?.data));
+          } else {
+            console.log('Best Match Failed:', bestRes?.data);
+          }
+        })
+        .catch(error => {
+          const axiosError = error as AxiosError<ApiErrorResponse>;
+          console.log(
+            'Best Match Error:',
+            axiosError?.response?.data || error,
+          );
+        });
+
       console.log('Home Matches Request:', ENDPOINTS.MATCHES_HOME);
       const res = await Api.getHomeMatches();
 
       if (res?.status == 200) {
         console.log('Home Matches Success:', res?.data);
-        const mapped = mapHomeMatches(res?.data);
+        let mapped = mapHomeMatches(res?.data);
+
+        if (
+          !mapped.featuredMatches.length &&
+          !mapped.suggestedMatches.length
+        ) {
+          const searchParams = buildMatchSearchParams({
+            profileGender: profile?.gender,
+          });
+          console.log(
+            'Home Matches empty, Search Fallback Request:',
+            ENDPOINTS.MATCHES_SEARCH,
+            searchParams,
+          );
+          const searchRes = await Api.getMatchSearch(searchParams);
+
+          if (searchRes?.status == 200) {
+            console.log('Home Search Fallback Success:', searchRes?.data);
+            mapped = mapListToHomeMatches(
+              mapMatchList(searchRes?.data),
+              mapped.greeting,
+            );
+          } else {
+            console.log('Home Search Fallback Failed:', searchRes?.data);
+          }
+        }
         const greetingParts = mapHomeGreeting(mapped.greeting);
         const title =
           greetingParts.title ||
@@ -123,17 +175,29 @@ const HomeScreen = () => {
             ? `Hello, ${user.name.split(' ')[0]}!`
             : Strings.homeGreeting);
 
+        const homePayload = {
+          greeting: title,
+          subtitle: greetingParts.subtitle || Strings.homeSubtitle,
+          featuredMatches: mapped.featuredMatches,
+          suggestedMatches: mapped.suggestedMatches,
+          totalMatches: mapped.totalMatches,
+        };
+
+        dispatch(setHomeMatches(homePayload));
+        setActiveIndex(0);
+
+        const [featuredMatches, suggestedMatches] = await Promise.all([
+          hydrateMatchImages(mapped.featuredMatches),
+          hydrateMatchImages(mapped.suggestedMatches),
+        ]);
+
         dispatch(
           setHomeMatches({
-            greeting: title,
-            subtitle: greetingParts.subtitle || Strings.homeSubtitle,
-            featuredMatches: mapped.featuredMatches,
-            suggestedMatches: mapped.suggestedMatches,
-            totalMatches: mapped.totalMatches,
+            ...homePayload,
+            featuredMatches,
+            suggestedMatches,
           }),
         );
-        console.log('Redux HomeScreen:', store.getState());
-        setActiveIndex(0);
       } else {
         console.log('Home Matches Failed:', res?.data);
         dispatch(clearHomeMatches());
@@ -150,7 +214,7 @@ const HomeScreen = () => {
     } finally {
       setLoading(false);
     }
-  }, [dispatch, isAccountInactive, user?.name]);
+  }, [dispatch, isAccountInactive, profile?.gender, user?.name]);
 
   const handleReactivate = async () => {
     if (reactivating) {
@@ -170,7 +234,7 @@ const HomeScreen = () => {
           JSON.stringify(res, null, 2),
         );
 
-        if (res?.status == 200) {
+        if (res?.isSuccess || res?.status == 200 || res?.success == 200) {
           console.log(
             'Activate Account Success:',
             JSON.stringify(res, null, 2),
@@ -249,6 +313,7 @@ const HomeScreen = () => {
           navigation.navigate('MatchSuccess', {
             name: current.name.split(' ')[0],
             fullName: current.name,
+            matchId: current.id,
             matchImage: current.image,
             mutualMatch: Boolean(res.mutual_match),
           });
@@ -282,8 +347,15 @@ const HomeScreen = () => {
   };
 
   const openProfileDetail = useCallback(
-    (profileId: string) => {
-      navigation.navigate('ProfileDetail', { profileId });
+    (match: FeaturedMatch | SuggestedMatch) => {
+      navigation.navigate('ProfileDetail', {
+        profileId: match.id,
+        name: match.name,
+        age: match.age,
+        location: match.location,
+        image: match.image,
+        isVerified: match.isVerified,
+      });
     },
     [navigation],
   );
@@ -292,9 +364,10 @@ const HomeScreen = () => {
     <TouchableOpacity
       style={[styles.featuredCard, { width: CARD_WIDTH }]}
       activeOpacity={0.92}
-      onPress={() => openProfileDetail(item.id)}
+      onPress={() => openProfileDetail(item)}
     >
       <Image
+        key={getImageCacheKey(item.image, item.id)}
         source={item.image}
         style={styles.featuredImage}
         resizeMode="cover"
@@ -545,10 +618,11 @@ const HomeScreen = () => {
               key={match.id}
               style={styles.suggestedCard}
               activeOpacity={0.9}
-              onPress={() => openProfileDetail(match.id)}
+              onPress={() => openProfileDetail(match)}
             >
               <View style={styles.suggestedImageWrap}>
                 <Image
+                  key={getImageCacheKey(match.image, match.id)}
                   source={match.image}
                   style={styles.suggestedImage}
                   resizeMode="cover"

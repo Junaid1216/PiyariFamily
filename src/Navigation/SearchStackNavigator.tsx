@@ -1,5 +1,6 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { ImageSourcePropType } from 'react-native';
 import FilterMatchesScreen from '../Screens/Like/FilterMatchesScreen';
 import ProfileDetailScreen from '../Screens/Home/ProfileDetailScreen';
 import { SearchScreen } from '../Screens/Search';
@@ -14,7 +15,14 @@ export type SearchStackParamList = {
       }
     | undefined;
   FilterMatches: undefined;
-  ProfileDetail: { profileId: string };
+  ProfileDetail: {
+    profileId: string;
+    name?: string;
+    age?: number;
+    location?: string;
+    image?: ImageSourcePropType;
+    isVerified?: boolean;
+  };
 };
 
 const Stack = createNativeStackNavigator<SearchStackParamList>();

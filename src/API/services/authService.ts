@@ -1,6 +1,7 @@
 import { apiClient } from '../apiClient';
 import { ENDPOINTS } from '../endpoints';
-import { clearAuth, clearProfile, clearHomeMatches, clearShortlist, clearReferral, store, setAuthSession } from '../../Redux';
+import { clearSession } from '../../Redux/clearSession';
+import { store, setAuthSession } from '../../Redux';
 import { accountStorage } from '../accountStorage';
 import { saveProfileCache } from '../mappers/profileMapper';
 import type { AuthResponse, MessageResponse, OtpActionResponse } from '../types';
@@ -22,6 +23,8 @@ export type VerifyEmailOtpPayload = {
   email: string;
   otp: string;
 };
+
+const normalizeEmail = (email: string) => email.trim();
 
 export type EmailPayload = {
   email: string;
@@ -64,8 +67,15 @@ const resolveAccountStatus = (
   return 'active' as const;
 };
 
+const pickAuthToken = (response: AuthResponse) =>
+  response.token ||
+  response.access_token ||
+  response.data?.token ||
+  response.data?.access_token ||
+  null;
+
 const saveAuthSession = (response: AuthResponse) => {
-  const token = response.token ?? response.access_token ?? null;
+  const token = pickAuthToken(response);
 
   store.dispatch(
     setAuthSession({
@@ -79,27 +89,17 @@ const saveAuthSession = (response: AuthResponse) => {
   }
 
   accountStorage.setStatus(resolveAccountStatus(response));
-
-  console.log('Redux after login:', store.getState());
 };
 
-const shouldSaveAuthSession = (response: {
-  status?: number;
-  success?: boolean | number;
-  token?: string;
-  access_token?: string;
-}) =>
-  response.status == 200 ||
-  response.success === true ||
-  response.success == 200 ||
-  Boolean(response.token || response.access_token);
+const shouldSaveAuthSession = (response: AuthResponse) =>
+  Boolean(pickAuthToken(response));
 
 export const authService = {
   login: async (payload: LoginPayload) => {
-    const response = await postAuth<AuthResponse>(
-      ENDPOINTS.AUTH.LOGIN,
-      payload,
-    );
+    const response = await postAuth<AuthResponse>(ENDPOINTS.AUTH.LOGIN, {
+      ...payload,
+      email: normalizeEmail(payload.email),
+    });
 
     if (shouldSaveAuthSession(response)) {
       saveAuthSession(response);
@@ -109,10 +109,10 @@ export const authService = {
   },
 
   register: async (payload: SignUpPayload) => {
-    const response = await postAuth<AuthResponse>(
-      ENDPOINTS.AUTH.REGISTER,
-      payload,
-    );
+    const response = await postAuth<AuthResponse>(ENDPOINTS.AUTH.REGISTER, {
+      ...payload,
+      email: normalizeEmail(payload.email),
+    });
 
     if (shouldSaveAuthSession(response)) {
       saveAuthSession(response);
@@ -122,9 +122,13 @@ export const authService = {
   },
 
   verifyEmailOtp: async (payload: VerifyEmailOtpPayload) => {
+    const otp = String(payload.otp).replace(/\D/g, '');
     const response = await postAuth<AuthResponse>(
       ENDPOINTS.AUTH.VERIFY_EMAIL_OTP,
-      payload,
+      {
+        email: normalizeEmail(payload.email),
+        otp,
+      },
     );
 
     if (shouldSaveAuthSession(response)) {
@@ -135,34 +139,46 @@ export const authService = {
   },
 
   resendEmailOtp: (payload: EmailPayload) =>
-    postAuth<OtpActionResponse>(ENDPOINTS.AUTH.RESEND_EMAIL_OTP, payload),
+    postAuth<OtpActionResponse>(ENDPOINTS.AUTH.RESEND_EMAIL_OTP, {
+      email: normalizeEmail(payload.email),
+    }),
 
   forgotPassword: (payload: EmailPayload) =>
-    postAuth<OtpActionResponse>(ENDPOINTS.AUTH.FORGOT_PASSWORD, payload),
+    postAuth<OtpActionResponse>(ENDPOINTS.AUTH.FORGOT_PASSWORD, {
+      email: normalizeEmail(payload.email),
+    }),
 
   verifyResetOtp: (payload: VerifyResetOtpPayload) =>
-    postAuth<MessageResponse>(ENDPOINTS.AUTH.VERIFY_RESET_OTP, payload),
+    postAuth<MessageResponse>(ENDPOINTS.AUTH.VERIFY_RESET_OTP, {
+      ...payload,
+      email: normalizeEmail(payload.email),
+    }),
 
   setNewPassword: (payload: SetNewPasswordPayload) =>
-    postAuth<MessageResponse>(ENDPOINTS.AUTH.SET_NEW_PASSWORD, payload),
+    postAuth<MessageResponse>(ENDPOINTS.AUTH.SET_NEW_PASSWORD, {
+      ...payload,
+      email: normalizeEmail(payload.email),
+    }),
 
   changePassword: (payload: ChangePasswordPayload) =>
     postAuth<MessageResponse>(ENDPOINTS.AUTH.CHANGE_PASSWORD, payload),
 
   logout: async () => {
     try {
-      const { status, data } = await apiClient.postForm<MessageResponse>(
+      const { status, data } = await apiClient.postEmpty<MessageResponse>(
         ENDPOINTS.AUTH.LOGOUT,
-        {},
       );
 
       return { status, ...data };
+    } catch (error) {
+      console.log('Logout API Error:', error);
+      return {
+        status: 200,
+        message: 'Logged out successfully',
+        success: true,
+      };
     } finally {
-      store.dispatch(clearAuth());
-      store.dispatch(clearProfile());
-      store.dispatch(clearHomeMatches());
-      store.dispatch(clearShortlist());
-      store.dispatch(clearReferral());
+      clearSession();
     }
   },
 };

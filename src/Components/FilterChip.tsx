@@ -9,12 +9,26 @@ type Props = {
   selected?: boolean;
   onPress?: () => void;
   style?: ViewStyle;
+  unselectedBackgroundColor?: string;
 };
 
-const FilterChip = ({ label, selected = false, onPress, style }: Props) => {
+const FilterChip = ({
+  label,
+  selected = false,
+  onPress,
+  style,
+  unselectedBackgroundColor,
+}: Props) => {
   return (
     <TouchableOpacity
-      style={[styles.chip, selected && styles.chipSelected, style]}
+      style={[
+        styles.chip,
+        !selected && unselectedBackgroundColor
+          ? { backgroundColor: unselectedBackgroundColor }
+          : null,
+        selected && styles.chipSelected,
+        style,
+      ]}
       activeOpacity={0.85}
       onPress={onPress}
     >

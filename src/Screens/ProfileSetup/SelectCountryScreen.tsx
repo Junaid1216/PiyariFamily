@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   FlatList,
   StyleSheet,
   Text,
@@ -7,7 +8,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { CountryCode } from 'react-native-country-picker-modal';
 import {
   SafeAreaView,
   useSafeAreaInsets,
@@ -15,148 +15,183 @@ import {
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-simple-toast';
 import { AxiosError } from 'axios';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import BackButton from '../../Components/BackButton';
 import PrimaryButton from '../../Components/PrimaryButton';
 import {
   Api,
   ENDPOINTS,
   getApiErrorMessage,
+  mapCountries,
   resolveProfileData,
   saveProfileCache,
+  toFlagCountryCode,
   type ApiErrorResponse,
 } from '../../API';
 import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
-import {
-  CountryOption,
-  PROFILE_COUNTRIES,
-} from '../../Constant/ProfileSetup';
+import { CountryOption, PROFILE_COUNTRIES } from '../../Constant/ProfileSetup';
 import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
+import { AuthStackParamList } from '../../Navigation/AuthNavigator';
 import { getFooterBottomPadding } from '../../Functions/safeArea';
 import { fs, hp, wp } from '../../Functions/responsive';
 import { store } from '../../Redux';
 import type { ProfileApiData } from '../../API/mappers/profileMapper';
 
-type Props = {
-  navigation: {
-    goBack: () => void;
-    navigate: (screen: string) => void;
-  };
-};
+type NavigationProp = NativeStackNavigationProp<
+  AuthStackParamList,
+  'SelectCountry'
+>;
 
-const getFlagEmoji = (countryCode: CountryCode) =>
-  countryCode
-    .toUpperCase()
+const getFlagEmoji = (countryCode: string) => {
+  const flagCode = toFlagCountryCode(countryCode);
+
+  if (!flagCode) {
+    return '🏳️';
+  }
+
+  return flagCode
     .split('')
     .map(char => String.fromCodePoint(127397 + char.charCodeAt(0)))
     .join('');
+};
 
 const CountrySeparator = () => <View style={styles.separator} />;
 
-const applyCountryPrefill = (profile: ProfileApiData) => {
-  if (profile.country) {
-    const matchedCountry = PROFILE_COUNTRIES.find(
-      country =>
-        country.name.toLowerCase() === profile.country?.toLowerCase(),
-    );
+const applyCountryPrefill = (profile: ProfileApiData) => ({
+  city: profile.city ?? '',
+  state: profile.state ?? '',
+});
 
-    if (matchedCountry) {
-      return {
-        selectedCode: matchedCountry.code,
-        city: profile.city ?? '',
-        state: profile.state ?? '',
-      };
-    }
-  }
-
-  return {
-    city: profile.city ?? '',
-    state: profile.state ?? '',
-  };
-};
-
-const SelectCountryScreen = ({ navigation }: Props) => {
+const SelectCountryScreen = () => {
+  const navigation = useNavigation<NavigationProp>();
   const insets = useSafeAreaInsets();
   const [search, setSearch] = useState('');
-  const [selectedCode, setSelectedCode] = useState<CountryCode>('PK');
+  const [countries, setCountries] =
+    useState<CountryOption[]>(PROFILE_COUNTRIES);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
   const [city, setCity] = useState('');
   const [state, setState] = useState('');
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   const filteredCountries = useMemo(() => {
     const query = search.trim().toLowerCase();
     if (!query) {
-      return PROFILE_COUNTRIES;
+      return countries;
     }
 
-    return PROFILE_COUNTRIES.filter(country =>
+    return countries.filter(country =>
       country.name.toLowerCase().includes(query),
     );
-  }, [search]);
+  }, [countries, search]);
 
   const selectedCountry = useMemo(
-    () => PROFILE_COUNTRIES.find(country => country.code === selectedCode),
-    [selectedCode],
+    () => countries.find(country => country.id === selectedId),
+    [countries, selectedId],
   );
 
   useFocusEffect(
     useCallback(() => {
       console.log('Redux SelectCountry:', store.getState());
 
-      const cachedProfile = store.getState().profile.profile;
-      if (cachedProfile) {
-        const prefill = applyCountryPrefill(cachedProfile);
-        if (prefill.selectedCode) {
-          setSelectedCode(prefill.selectedCode);
-        }
-        if (prefill.city) {
-          setCity(prefill.city);
-        }
-        if (prefill.state) {
-          setState(prefill.state);
-        }
-      }
-
       let cancelled = false;
 
-      const loadProfileCountry = async () => {
+      const loadCountriesAndPrefill = async () => {
+        setLoading(true);
+
+        let nextCountries = PROFILE_COUNTRIES;
+
         try {
-          console.log('Profile Country Prefill Request:', ENDPOINTS.PROFILE);
-          const res = await Api.getProfile();
+          console.log('Countries Request:', ENDPOINTS.COUNTRIES);
+          const res = await Api.getCountries();
 
           if (cancelled) {
             return;
           }
 
           if (res?.status == 200) {
-            console.log('Profile Country Prefill Success:', res?.data);
-            const profile = resolveProfileData(res?.data);
-            const prefill = applyCountryPrefill(profile);
-
-            if (prefill.selectedCode) {
-              setSelectedCode(prefill.selectedCode);
-            }
-            if (prefill.city) {
-              setCity(prefill.city);
-            }
-            if (prefill.state) {
-              setState(prefill.state);
-            }
+            console.log('Countries Success:', res?.data);
+            nextCountries = mapCountries(res?.data);
           } else {
-            console.log('Profile Country Prefill Failed:', res?.data);
+            console.log('Countries Failed:', res?.data);
+            nextCountries = mapCountries();
+            Toast.show(
+              res?.data?.message ?? 'Failed to load countries',
+              Toast.LONG,
+            );
           }
         } catch (error) {
           const axiosError = error as AxiosError<ApiErrorResponse>;
-          console.log(
-            'Profile Country Prefill Error:',
-            axiosError?.response?.data || error,
+          console.log('Countries Error:', axiosError?.response?.data || error);
+          nextCountries = mapCountries();
+          Toast.show(
+            getApiErrorMessage(error, 'Failed to load countries'),
+            Toast.LONG,
           );
         }
+
+        if (cancelled) {
+          return;
+        }
+
+        setCountries(nextCountries);
+        setSelectedId(null);
+
+        const cachedProfile = store.getState().profile.profile;
+        if (cachedProfile) {
+          const prefill = applyCountryPrefill(cachedProfile);
+          if (prefill.city) {
+            setCity(prefill.city);
+          }
+          if (prefill.state) {
+            setState(prefill.state);
+          }
+        }
+
+        const token = store.getState().auth.accessToken;
+
+        if (token) {
+          try {
+            console.log('Profile Country Prefill Request:', ENDPOINTS.PROFILE);
+            const res = await Api.getProfile({ skipTokenClear: true });
+
+            if (cancelled) {
+              return;
+            }
+
+            if (res?.status == 200) {
+              console.log('Profile Country Prefill Success:', res?.data);
+              const profile = resolveProfileData(res?.data);
+              const prefill = applyCountryPrefill(profile);
+              if (prefill.city) {
+                setCity(prefill.city);
+              }
+              if (prefill.state) {
+                setState(prefill.state);
+              }
+            } else {
+              console.log('Profile Country Prefill Failed:', res?.data);
+            }
+          } catch (error) {
+            const axiosError = error as AxiosError<ApiErrorResponse>;
+            console.log(
+              'Profile Country Prefill Error:',
+              axiosError?.response?.data || error,
+            );
+          }
+        }
+
+        if (cancelled) {
+          return;
+        }
+
+        setLoading(false);
       };
 
-      loadProfileCountry();
+      loadCountriesAndPrefill();
 
       return () => {
         cancelled = true;
@@ -175,6 +210,7 @@ const SelectCountryScreen = ({ navigation }: Props) => {
       console.log('Profile Country Request:', ENDPOINTS.PROFILE_COUNTRY);
       const res = await Api.updateProfileCountry({
         country: selectedCountry.name,
+        country_id: selectedCountry.id,
         city: city.trim(),
         state: state.trim(),
       });
@@ -183,6 +219,7 @@ const SelectCountryScreen = ({ navigation }: Props) => {
         console.log('Profile Country Success:', res);
         saveProfileCache({
           country: selectedCountry.name,
+          country_id: selectedCountry.id,
           city: city.trim(),
           state: state.trim(),
         });
@@ -194,7 +231,24 @@ const SelectCountryScreen = ({ navigation }: Props) => {
       }
     } catch (error) {
       const axiosError = error as AxiosError<ApiErrorResponse>;
-      console.log('Profile Country Error:', axiosError?.response?.data || error);
+      console.log(
+        'Profile Country Error:',
+        axiosError?.response?.data || error,
+      );
+      const message = `${axiosError?.response?.data?.message ?? ''}`.toLowerCase();
+      if (
+        axiosError?.response?.status === 401 ||
+        message.includes('unauthenticated')
+      ) {
+        saveProfileCache({
+          country: selectedCountry.name,
+          country_id: selectedCountry.id,
+          city: city.trim(),
+          state: state.trim(),
+        });
+        navigation.navigate('BasicInfo');
+        return;
+      }
       Toast.show(
         getApiErrorMessage(error, 'Failed to save country'),
         Toast.LONG,
@@ -204,10 +258,19 @@ const SelectCountryScreen = ({ navigation }: Props) => {
     }
   }, [city, navigation, saving, selectedCountry, state]);
 
+  const handleBack = () => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+      return;
+    }
+
+    navigation.replace('Login');
+  };
+
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
       <View style={styles.content}>
-        <BackButton variant="pink" onPress={() => navigation.goBack()} />
+        <BackButton variant="pink" onPress={handleBack} />
 
         <Text style={styles.title}>{Strings.selectCountryTitle}</Text>
         <Text style={styles.subtitle}>{Strings.selectCountrySubtitle}</Text>
@@ -216,7 +279,7 @@ const SelectCountryScreen = ({ navigation }: Props) => {
           <Icon
             name="magnify"
             size={fs(20)}
-            color={Colors.textLight}
+            color={Colors.brandRed}
             style={styles.searchIcon}
           />
           <TextInput
@@ -230,51 +293,57 @@ const SelectCountryScreen = ({ navigation }: Props) => {
           />
         </View>
 
-        <FlatList
-          data={filteredCountries}
-          keyExtractor={(item: CountryOption) => `${item.code}-${item.name}`}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.listContent}
-          ItemSeparatorComponent={CountrySeparator}
-          ListEmptyComponent={
-            <Text style={styles.emptyText}>No countries found</Text>
-          }
-          renderItem={({ item }) => {
-            const isSelected = item.code === selectedCode;
+        {loading ? (
+          <View style={styles.loaderWrap}>
+            <ActivityIndicator size="large" color={Colors.primary} />
+          </View>
+        ) : (
+          <FlatList
+            data={filteredCountries}
+            keyExtractor={(item: CountryOption) => String(item.id)}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.listContent}
+            ItemSeparatorComponent={CountrySeparator}
+            ListEmptyComponent={
+              <Text style={styles.emptyText}>No countries found</Text>
+            }
+            renderItem={({ item }) => {
+              const isSelected = item.id === selectedId;
 
-            return (
-              <TouchableOpacity
-                style={[
-                  styles.countryRow,
-                  isSelected && styles.countryRowSelected,
-                ]}
-                activeOpacity={0.85}
-                onPress={() => setSelectedCode(item.code)}
-              >
-                <Text style={styles.countryFlag}>
-                  {getFlagEmoji(item.code)}
-                </Text>
-                <Text
+              return (
+                <TouchableOpacity
                   style={[
-                    styles.countryName,
-                    isSelected && styles.countryNameSelected,
+                    styles.countryRow,
+                    isSelected && styles.countryRowSelected,
                   ]}
+                  activeOpacity={0.85}
+                  onPress={() => setSelectedId(item.id)}
                 >
-                  {item.name}
-                </Text>
-                {isSelected ? (
-                  <Icon name="check" size={fs(18)} color={Colors.gold} />
-                ) : (
-                  <Icon
-                    name="chevron-right"
-                    size={fs(22)}
-                    color={Colors.iconMuted}
-                  />
-                )}
-              </TouchableOpacity>
-            );
-          }}
-        />
+                  <Text style={styles.countryFlag}>
+                    {getFlagEmoji(item.code)}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.countryName,
+                      isSelected && styles.countryNameSelected,
+                    ]}
+                  >
+                    {item.name}
+                  </Text>
+                  {isSelected ? (
+                    <Icon name="check" size={fs(18)} color={Colors.gold} />
+                  ) : (
+                    <Icon
+                      name="chevron-right"
+                      size={fs(28)}
+                      color="#FF205666"
+                    />
+                  )}
+                </TouchableOpacity>
+              );
+            }}
+          />
+        )}
       </View>
 
       <View
@@ -287,7 +356,7 @@ const SelectCountryScreen = ({ navigation }: Props) => {
           title={Strings.continueBtn}
           onPress={saveProfileCountry}
           loading={saving}
-          disabled={!selectedCountry}
+          disabled={!selectedCountry || loading}
           showArrow
         />
       </View>
@@ -309,6 +378,7 @@ const styles = StyleSheet.create({
     fontSize: FontSizes.h2,
     fontFamily: Fonts.bold,
     color: Colors.primary,
+    textAlign: 'center',
     marginBottom: hp('0.6%'),
     letterSpacing: -0.3,
   },
@@ -344,6 +414,11 @@ const styles = StyleSheet.create({
     paddingBottom: hp('1%'),
     flexGrow: 1,
   },
+  loaderWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   emptyText: {
     textAlign: 'center',
     fontSize: FontSizes.body,
@@ -378,9 +453,8 @@ const styles = StyleSheet.create({
     color: Colors.primary,
   },
   separator: {
-    height: 1,
-    backgroundColor: Colors.divider,
-    marginLeft: wp('2%'),
+    height: wp(0.2),
+    backgroundColor: Colors.dividerPink,
   },
   footer: {
     paddingHorizontal: AuthStyles.horizontalPadding,

@@ -171,7 +171,7 @@ const OnboardingScreen = ({ navigation }: Props) => {
         >
           <PrimaryButton
             title={Strings.getStarted}
-            onPress={() => navigation.replace('SignUp')}
+            onPress={() => navigation.navigate('SignUp')}
             showArrow
             style={styles.button}
           />
@@ -179,7 +179,7 @@ const OnboardingScreen = ({ navigation }: Props) => {
           <AuthFooter
             prefix={Strings.alreadyHaveAccount}
             linkText={Strings.logInLink}
-            onPress={() => navigation.replace('Login')}
+            onPress={() => navigation.navigate('Login')}
           />
         </View>
       </SafeAreaView>

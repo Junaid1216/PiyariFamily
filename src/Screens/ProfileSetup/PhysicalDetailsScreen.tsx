@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import {
+  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -27,17 +28,16 @@ import {
   Api,
   ENDPOINTS,
   getApiErrorMessage,
+  resolveProfileData,
   saveProfileCache,
   type ApiErrorResponse,
 } from '../../API';
 import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import {
-  BODY_TYPE_FROM_API,
   BODY_TYPE_OPTIONS,
   BODY_TYPE_TO_API,
   BodyType,
-  COMPLEXION_FROM_API,
   COMPLEXION_OPTIONS,
   COMPLEXION_TO_API,
   Complexion,
@@ -84,8 +84,8 @@ const PhysicalDetailsScreen = ({ navigation }: Props) => {
   const [feet, setFeet] = useState('');
   const [inches, setInches] = useState('');
   const [weight, setWeight] = useState('');
-  const [bodyType, setBodyType] = useState<BodyType>('Athletic');
-  const [complexion, setComplexion] = useState<Complexion>('Fair');
+  const [bodyType, setBodyType] = useState<BodyType | ''>('');
+  const [complexion, setComplexion] = useState<Complexion | ''>('');
   const [hasDisability, setHasDisability] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<'feet' | 'inches' | null>(
     null,
@@ -96,34 +96,58 @@ const PhysicalDetailsScreen = ({ navigation }: Props) => {
     useCallback(() => {
       console.log('Redux PhysicalDetails:', store.getState());
 
+      const applyPhysical = (profile: {
+        height?: string | null;
+        weight?: string | null;
+      }) => {
+        const heightParts = parseHeight(profile.height);
+        if (heightParts.feet) {
+          setFeet(heightParts.feet);
+        }
+        if (heightParts.inches) {
+          setInches(heightParts.inches);
+        }
+        if (profile.weight) {
+          setWeight(String(profile.weight).replace(/kg$/i, ''));
+        }
+      };
+
       const cachedProfile = store.getState().profile.profile;
-      if (!cachedProfile) {
-        return;
+      if (cachedProfile) {
+        applyPhysical(cachedProfile);
       }
 
-      const heightParts = parseHeight(cachedProfile.height);
-      if (heightParts.feet) {
-        setFeet(heightParts.feet);
-      }
-      if (heightParts.inches) {
-        setInches(heightParts.inches);
-      }
-      if (cachedProfile.weight) {
-        setWeight(cachedProfile.weight.replace(/kg$/i, ''));
-      }
-      const bodyTypeValue =
-        BODY_TYPE_FROM_API[cachedProfile.body_type?.toLowerCase() ?? ''];
-      if (bodyTypeValue) {
-        setBodyType(bodyTypeValue);
-      }
-      const complexionValue =
-        COMPLEXION_FROM_API[cachedProfile.complexion?.toLowerCase() ?? ''];
-      if (complexionValue) {
-        setComplexion(complexionValue);
-      }
-      if (cachedProfile.physical_disability !== undefined) {
-        setHasDisability(Boolean(cachedProfile.physical_disability));
-      }
+      let cancelled = false;
+
+      const loadPhysical = async () => {
+        try {
+          console.log('Profile Physical Prefill Request:', ENDPOINTS.PROFILE);
+          const res = await Api.getProfile();
+
+          if (cancelled) {
+            return;
+          }
+
+          if (res?.status == 200) {
+            console.log('Profile Physical Prefill Success:', res?.data);
+            applyPhysical(resolveProfileData(res?.data));
+          } else {
+            console.log('Profile Physical Prefill Failed:', res?.data);
+          }
+        } catch (error) {
+          const axiosError = error as AxiosError<ApiErrorResponse>;
+          console.log(
+            'Profile Physical Prefill Error:',
+            axiosError?.response?.data || error,
+          );
+        }
+      };
+
+      loadPhysical();
+
+      return () => {
+        cancelled = true;
+      };
     }, []),
   );
 
@@ -138,26 +162,35 @@ const PhysicalDetailsScreen = ({ navigation }: Props) => {
 
     const height = `${feet}.${inches}`;
     const formattedWeight = formatWeightForApi(weight);
+    const payload: Record<string, string> = {
+      height,
+      physical_disability: hasDisability ? '1' : '0',
+    };
+
+    if (formattedWeight) {
+      payload.weight = formattedWeight;
+    }
+    if (bodyType) {
+      payload.body_type = BODY_TYPE_TO_API[bodyType];
+    }
+    if (complexion) {
+      payload.complexion = COMPLEXION_TO_API[complexion];
+    }
 
     setSaving(true);
 
     try {
       console.log('Profile Physical Request:', ENDPOINTS.PROFILE_PHYSICAL);
-      const res = await Api.updateProfilePhysical({
-        height,
-        weight: formattedWeight,
-        body_type: BODY_TYPE_TO_API[bodyType],
-        complexion: COMPLEXION_TO_API[complexion],
-        physical_disability: hasDisability ? '1' : '0',
-      });
+      const res = await Api.updateProfilePhysical(payload);
 
-      if (res?.status == 200) {
+      if (res?.status == 200 || res?.success === true || res?.success == 200) {
         console.log('Profile Physical Success:', res);
         saveProfileCache({
+          ...(res.user ?? {}),
           height,
-          weight: formattedWeight,
-          body_type: BODY_TYPE_TO_API[bodyType],
-          complexion: COMPLEXION_TO_API[complexion],
+          weight: formattedWeight || undefined,
+          body_type: bodyType ? BODY_TYPE_TO_API[bodyType] : undefined,
+          complexion: complexion ? COMPLEXION_TO_API[complexion] : undefined,
           physical_disability: hasDisability,
         });
         Toast.show(res?.message ?? 'Physical details saved', Toast.LONG);
@@ -233,11 +266,10 @@ const PhysicalDetailsScreen = ({ navigation }: Props) => {
 
           <Text style={styles.fieldLabel}>{Strings.weightLabel}</Text>
           <View style={styles.weightRow}>
-            <Icon
-              name="scale-bathroom"
-              size={fs(20)}
-              color={Colors.primary}
-              style={styles.weightIcon}
+            <Image
+              source={Images.weightIcon}
+              style={styles.weightIconImage}
+              resizeMode="contain"
             />
             <TextInput
               style={styles.weightInput}
@@ -259,6 +291,7 @@ const PhysicalDetailsScreen = ({ navigation }: Props) => {
                 key={option}
                 label={option}
                 selected={bodyType === option}
+                unselectedBackgroundColor={Colors.white}
                 onPress={() => setBodyType(option)}
               />
             ))}
@@ -271,6 +304,7 @@ const PhysicalDetailsScreen = ({ navigation }: Props) => {
                 key={option}
                 label={option}
                 selected={complexion === option}
+                unselectedBackgroundColor={Colors.white}
                 onPress={() => setComplexion(option)}
               />
             ))}
@@ -355,8 +389,10 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: FontSizes.body,
     color: Colors.label,
-    marginBottom: hp('1%'),
+    marginBottom: AuthStyles.fieldLabelGap,
     fontFamily: Fonts.medium,
+    includeFontPadding: false,
+    lineHeight: FontSizes.body + 2,
   },
   heightRow: {
     flexDirection: 'row',
@@ -370,14 +406,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1.2,
-    borderColor: Colors.border,
+    borderColor: Colors.dividerPink,
     borderRadius: AuthStyles.inputRadius,
     backgroundColor: Colors.inputBg,
     paddingHorizontal: wp('3.7%'),
     height: AuthStyles.inputHeight,
     marginBottom: hp('2.2%'),
   },
-  weightIcon: {
+  weightIconImage: {
+    width: fs(20),
+    height: fs(20),
     marginRight: wp('2.5%'),
   },
   weightInput: {
@@ -409,7 +447,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1.2,
-    borderColor: Colors.border,
+    borderColor: Colors.dividerPink,
     borderRadius: AuthStyles.inputRadius,
     backgroundColor: Colors.inputBg,
     paddingHorizontal: wp('3.7%'),

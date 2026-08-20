@@ -32,6 +32,7 @@ import {
   mapFilterSetup,
   mapMatchList,
   pickMatchListTotal,
+  hydrateMatchImages,
   withAnyOption,
   type ApiErrorResponse,
   type FilterSetupData,
@@ -228,7 +229,7 @@ const FilterMatchesScreen = () => {
       if (res?.status == 200) {
         console.log('Match Filter Success:', res?.data);
         Toast.show(res?.data?.message ?? 'Filters applied', Toast.LONG);
-        const matches = mapMatchList(res?.data);
+        const matches = await hydrateMatchImages(mapMatchList(res?.data));
         navigation.navigate('SearchMain', {
           filterMatches: matches,
           filterTotal: pickMatchListTotal(res?.data, matches.length),

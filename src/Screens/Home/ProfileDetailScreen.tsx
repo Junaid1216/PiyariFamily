@@ -25,10 +25,11 @@ import {
   Api,
   ENDPOINTS,
   getApiErrorMessage,
+  getImageCacheKey,
   mapMatchProfileDetail,
   type ApiErrorResponse,
 } from '../../API';
-import { PROFILE_DETAILS, type ProfileDetail } from '../../Constant/MatchProfiles';
+import { type ProfileDetail } from '../../Constant/MatchProfiles';
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
@@ -51,43 +52,50 @@ const ProfileDetailScreen = () => {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<RouteProps>();
   const isAccountInactive = useAppSelector(selectIsAccountInactive);
-  const { profileId } = route.params;
+  const { profileId, name, age, location, image, isVerified } = route.params;
+  const preview = {
+    name,
+    age,
+    location,
+    image,
+    isVerified,
+  };
   const [profile, setProfile] = useState<ProfileDetail | null>(
-    PROFILE_DETAILS[profileId] ?? null,
+    name ? mapMatchProfileDetail(null, profileId, preview) : null,
   );
-  const [loading, setLoading] = useState(!PROFILE_DETAILS[profileId]);
+  const [loading, setLoading] = useState(!name);
   const [sending, setSending] = useState(false);
 
   const fetchProfile = useCallback(async () => {
-    if (PROFILE_DETAILS[profileId]) {
-      setProfile(PROFILE_DETAILS[profileId]);
-      setLoading(false);
-      return;
+    if (!name) {
+      setLoading(true);
     }
 
-    setLoading(true);
-     
     try {
       console.log('Match Profile Request:', `${ENDPOINTS.MATCHES}/${profileId}`);
       const res = await Api.getMatchProfile(profileId);
 
       if (res?.status == 200) {
         console.log('Match Profile Success:', res?.data);
-        setProfile(mapMatchProfileDetail(res?.data, profileId));
+        setProfile(mapMatchProfileDetail(res?.data, profileId, preview));
       } else {
         console.log('Match Profile Failed:', res?.data);
-        setProfile(null);
+        if (!name) {
+          setProfile(null);
+        }
         Toast.show(res?.data?.message ?? 'Failed to load profile', Toast.LONG);
       }
     } catch (error) {
       const axiosError = error as AxiosError<ApiErrorResponse>;
       console.log('Match Profile Error:', axiosError?.response?.data || error);
-      setProfile(null);
+      if (!name) {
+        setProfile(null);
+      }
       Toast.show(getApiErrorMessage(error, 'Failed to load profile'), Toast.LONG);
     } finally {
       setLoading(false);
     }
-  }, [profileId]);
+  }, [profileId, name, age, location, image, isVerified]);
 
   useFocusEffect(
     useCallback(() => {
@@ -142,6 +150,7 @@ const ProfileDetailScreen = () => {
           navigation.navigate('MatchSuccess', {
             name: profile.fullName.split(' ')[0],
             fullName: profile.fullName,
+            matchId: profileId,
             matchImage: profile.image,
             mutualMatch: Boolean(res.mutual_match),
           });
@@ -176,6 +185,7 @@ const ProfileDetailScreen = () => {
       >
         <View style={styles.hero}>
           <Image
+            key={getImageCacheKey(profile.image, profile.id)}
             source={profile.image}
             style={styles.heroImage}
             resizeMode="cover"

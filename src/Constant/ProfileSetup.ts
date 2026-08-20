@@ -1,23 +1,23 @@
-import { CountryCode } from 'react-native-country-picker-modal';
-
 export type CountryOption = {
-  code: CountryCode;
+  id: number;
   name: string;
+  code: string;
+  slug: string;
 };
 
 export const PROFILE_COUNTRIES: CountryOption[] = [
-  { code: 'PK', name: 'Pakistan' },
-  { code: 'IN', name: 'India' },
-  { code: 'BD', name: 'Bangladesh' },
-  { code: 'LK', name: 'Sri Lanka' },
-  { code: 'NP', name: 'Nepal' },
-  { code: 'US', name: 'United States' },
-  { code: 'GB', name: 'United Kingdom' },
-  { code: 'CA', name: 'Canada' },
-  { code: 'AU', name: 'Australia' },
-  { code: 'AE', name: 'United Arab Emirates' },
-  { code: 'SG', name: 'Singapore' },
-  { code: 'MY', name: 'Malaysia' },
+  { id: 1, code: 'PK', name: 'Pakistan', slug: 'pakistan' },
+  { id: 2, code: 'IN', name: 'India', slug: 'india' },
+  { id: 3, code: 'BD', name: 'Bangladesh', slug: 'bangladesh' },
+  { id: 4, code: 'LK', name: 'Sri Lanka', slug: 'sri-lanka' },
+  { id: 5, code: 'NP', name: 'Nepal', slug: 'nepal' },
+  { id: 6, code: 'US', name: 'United States', slug: 'united-states' },
+  { id: 7, code: 'GB', name: 'United Kingdom', slug: 'united-kingdom' },
+  { id: 8, code: 'CA', name: 'Canada', slug: 'canada' },
+  { id: 9, code: 'AU', name: 'Australia', slug: 'australia' },
+  { id: 10, code: 'AE', name: 'United Arab Emirates', slug: 'united-arab-emirates' },
+  { id: 11, code: 'SG', name: 'Singapore', slug: 'singapore' },
+  { id: 12, code: 'MY', name: 'Malaysia', slug: 'malaysia' },
 ];
 
 export const PROFILE_SETUP_TOTAL_STEPS = 6;
@@ -38,6 +38,7 @@ export const MARITAL_STATUS_TO_API: Record<MaritalStatus, string> = {
 
 export const MARITAL_STATUS_FROM_API: Record<string, MaritalStatus> = {
   single: 'Single',
+  'never married': 'Single',
   divorced: 'Divorced',
   widowed: 'Widowed',
 };
@@ -69,6 +70,19 @@ export const RESIDENCE_STATUS_OPTIONS = [
 ] as const;
 
 export type ResidenceStatus = (typeof RESIDENCE_STATUS_OPTIONS)[number];
+
+export const RESIDENCE_STATUS_TO_API: Record<ResidenceStatus, string> = {
+  Owned: 'owned',
+  Rented: 'rented',
+  'Family Owned': 'family_owned',
+};
+
+export const RESIDENCE_STATUS_FROM_API: Record<string, ResidenceStatus> = {
+  owned: 'Owned',
+  rented: 'Rented',
+  'family owned': 'Family Owned',
+  family_owned: 'Family Owned',
+};
 
 export const EDIT_MARITAL_STATUS_OPTIONS = [
   'Never Married',

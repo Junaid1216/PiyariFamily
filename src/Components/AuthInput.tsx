@@ -90,8 +90,10 @@ const styles = StyleSheet.create({
   label: {
     fontSize: FontSizes.body,
     color: Colors.label,
-    marginBottom: hp('1%'),
+    marginBottom: AuthStyles.fieldLabelGap,
     fontFamily: Fonts.medium,
+    includeFontPadding: false,
+    lineHeight: FontSizes.body + 2,
   },
   labelCompact: {
     marginBottom: hp('0.4%'),

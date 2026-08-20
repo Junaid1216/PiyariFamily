@@ -22,6 +22,7 @@ import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
 import { authService, getApiErrorMessage } from '../../API';
+import { clearSession } from '../../Redux';
 import { AuthStackParamList } from '../../Navigation/AuthNavigator';
 import { fs, hp, wp } from '../../Functions/responsive';
 
@@ -69,6 +70,7 @@ const SetNewPasswordScreen = () => {
       });
 
       if (response?.status == 200) {
+        clearSession();
         Toast.show(response.message || 'Password updated successfully');
         navigation.replace('PasswordResetSuccess');
         return;

@@ -49,6 +49,9 @@ import {
   ENDPOINTS,
 
   mapBestMatch,
+  hydrateMatchImages,
+  pickImageUrl,
+  toRemoteImageSource,
 
   type ApiErrorResponse,
 
@@ -65,10 +68,15 @@ import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
 
 import { HomeStackParamList } from '../../Navigation/HomeStackNavigator';
-
 import { fs, hp, wp } from '../../Functions/responsive';
-
-
+import {
+  selectProfile,
+  selectProfilePhoto,
+  selectSuggestedMatches,
+  selectUser,
+  store,
+  useAppSelector,
+} from '../../Redux';
 
 type RouteProps = RouteProp<HomeStackParamList, 'MatchSuccess'>;
 
@@ -90,12 +98,23 @@ const MatchSuccessScreen = () => {
 
   const route = useRoute<RouteProps>();
 
-  const { name, fullName, matchImage, mutualMatch = false } = route.params;
+  const { name, fullName, matchImage, matchId, mutualMatch = false } =
+    route.params;
 
+  const user = useAppSelector(selectUser);
+  const profile = useAppSelector(selectProfile);
+  const profilePhoto = useAppSelector(selectProfilePhoto);
+  const suggestedMatches = useAppSelector(selectSuggestedMatches);
 
+  const fallbackUserAvatar = profilePhoto
+    ? toRemoteImageSource(profilePhoto)
+    : user?.gender === 'female'
+      ? Images.femaleProfile
+      : Images.maleProfile;
 
+  const [userAvatar, setUserAvatar] = useState(fallbackUserAvatar);
+  const [displayMatchImage, setDisplayMatchImage] = useState(matchImage);
   const [bestMatch, setBestMatch] = useState<BestMatchData | null>(null);
-
   const [loadingBestMatch, setLoadingBestMatch] = useState(true);
 
 
@@ -111,14 +130,21 @@ const MatchSuccessScreen = () => {
       console.log('Best Match Request:', ENDPOINTS.MATCHES_BEST);
 
       const res = await Api.getBestMatch();
-
-
+      console.log('Best Match HTTP Status:', res?.status);
 
       if (res?.status == 200) {
 
         console.log('Best Match Success:', res?.data);
 
-        setBestMatch(mapBestMatch(res?.data));
+        const mapped = mapBestMatch(res?.data);
+        console.log('Best Match Photo URL:', pickImageUrl(res?.data));
+        console.log('Best Match Mapped:', mapped);
+        if (mapped) {
+          const [hydrated] = await hydrateMatchImages([mapped]);
+          setBestMatch(hydrated);
+        } else {
+          setBestMatch(null);
+        }
 
       } else {
 
@@ -146,17 +172,60 @@ const MatchSuccessScreen = () => {
 
 
 
+  const hydrateSuccessPhotos = useCallback(async () => {
+    const userUrl = pickImageUrl(profile) || profilePhoto;
+    if (userUrl) {
+      console.log('Match Success User Photo:', userUrl);
+      setUserAvatar(toRemoteImageSource(userUrl));
+    }
+
+    if (!matchId) {
+      return;
+    }
+
+    try {
+      console.log('Match Success Match Photo Request:', `${ENDPOINTS.MATCHES}/${matchId}`);
+      const res = await Api.getMatchProfile(matchId);
+      console.log('Match Success Match Photo Response:', res?.data);
+      const photo = pickImageUrl(res?.data);
+      console.log('Match Success Match Photo URL:', photo);
+      if (photo) {
+        setDisplayMatchImage(toRemoteImageSource(photo));
+      }
+    } catch (error) {
+      const axiosError = error as AxiosError<ApiErrorResponse>;
+      console.log(
+        'Match Success Match Photo Error:',
+        axiosError?.response?.data || error,
+      );
+    }
+  }, [matchId, profile, profilePhoto]);
+
   useFocusEffect(
 
     useCallback(() => {
 
+      console.log('Redux MatchSuccess:', store.getState());
+
+      hydrateSuccessPhotos();
       fetchBestMatch();
 
-    }, [fetchBestMatch]),
+    }, [fetchBestMatch, hydrateSuccessPhotos]),
 
   );
 
-
+  const fallbackBestMatch =
+    bestMatch ??
+    (suggestedMatches[0]
+      ? {
+          id: suggestedMatches[0].id,
+          name: suggestedMatches[0].name,
+          age: suggestedMatches[0].age,
+          location: suggestedMatches[0].location,
+          matchScore: 0,
+          image: suggestedMatches[0].image,
+        }
+      : null);
 
   const matchSubtitle = Strings.matchSubtitle.replace('{name}', name);
 
@@ -214,11 +283,15 @@ const MatchSuccessScreen = () => {
 
               <Image
 
-                source={Images.maleProfile}
+                source={userAvatar}
 
                 style={styles.avatar}
 
                 resizeMode="cover"
+
+                onError={error =>
+                  console.log('Match Success User Image Error:', error.nativeEvent)
+                }
 
               />
 
@@ -234,11 +307,15 @@ const MatchSuccessScreen = () => {
 
               <Image
 
-                source={matchImage}
+                source={displayMatchImage}
 
                 style={styles.avatar}
 
                 resizeMode="cover"
+
+                onError={error =>
+                  console.log('Match Success Match Image Error:', error.nativeEvent)
+                }
 
               />
 
@@ -386,7 +463,7 @@ const MatchSuccessScreen = () => {
 
           <ActivityIndicator size="small" color={Colors.primary} />
 
-        ) : bestMatch ? (
+        ) : fallbackBestMatch ? (
 
           <TouchableOpacity
 
@@ -395,20 +472,28 @@ const MatchSuccessScreen = () => {
             activeOpacity={0.88}
 
             onPress={() =>
-
-              navigation.navigate('ProfileDetail', { profileId: bestMatch.id })
-
+              navigation.navigate('ProfileDetail', {
+                profileId: fallbackBestMatch.id,
+                name: fallbackBestMatch.name,
+                age: fallbackBestMatch.age,
+                location: fallbackBestMatch.location,
+                image: fallbackBestMatch.image,
+              })
             }
 
           >
 
             <Image
 
-              source={bestMatch.image}
+              source={fallbackBestMatch.image}
 
               style={styles.potentialAvatar}
 
               resizeMode="cover"
+
+              onError={error =>
+                console.log('Best Match Image Error:', error.nativeEvent)
+              }
 
             />
 
@@ -416,15 +501,19 @@ const MatchSuccessScreen = () => {
 
               <Text style={styles.potentialName}>
 
-                {bestMatch.name}
+                {fallbackBestMatch.name}
 
-                {bestMatch.age ? `, ${bestMatch.age}` : ''}
+                {fallbackBestMatch.age ? `, ${fallbackBestMatch.age}` : ''}
 
               </Text>
 
               <Text style={styles.potentialScore}>
 
-                {bestMatch.matchScore}% {Strings.bestMatchTitle}
+                {fallbackBestMatch.matchScore
+
+                  ? `${fallbackBestMatch.matchScore}% ${Strings.bestMatchTitle}`
+
+                  : Strings.bestMatchTitle}
 
               </Text>
 
@@ -531,6 +620,8 @@ const styles = StyleSheet.create({
     padding: 3,
 
     backgroundColor: Colors.white,
+
+    overflow: 'hidden',
 
   },
 
@@ -841,6 +932,10 @@ const styles = StyleSheet.create({
     borderWidth: 2,
 
     borderColor: Colors.gold,
+
+    overflow: 'hidden',
+
+    backgroundColor: Colors.inputBg,
 
   },
 

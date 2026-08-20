@@ -3,6 +3,7 @@ import {
   Image,
   ImageSourcePropType,
   ImageStyle,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -85,33 +86,40 @@ const SetupDropdown = ({
       </TouchableOpacity>
       {isOpen ? (
         <View style={styles.dropdownMenu}>
-          {options.map(option => {
-            const isSelected = value === option;
+          <ScrollView
+            nestedScrollEnabled
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            style={styles.dropdownScroll}
+          >
+            {options.map(option => {
+              const isSelected = value === option;
 
-            return (
-              <TouchableOpacity
-                key={option}
-                style={[
-                  styles.dropdownOption,
-                  isSelected && styles.dropdownOptionSelected,
-                ]}
-                activeOpacity={0.85}
-                onPress={() => onSelect(option)}
-              >
-                <Text
+              return (
+                <TouchableOpacity
+                  key={option}
                   style={[
-                    styles.dropdownOptionText,
-                    isSelected && styles.dropdownOptionTextSelected,
+                    styles.dropdownOption,
+                    isSelected && styles.dropdownOptionSelected,
                   ]}
+                  activeOpacity={0.85}
+                  onPress={() => onSelect(option)}
                 >
-                  {option}
-                </Text>
-                {isSelected ? (
-                  <Icon name="check" size={fs(18)} color={Colors.gold} />
-                ) : null}
-              </TouchableOpacity>
-            );
-          })}
+                  <Text
+                    style={[
+                      styles.dropdownOptionText,
+                      isSelected && styles.dropdownOptionTextSelected,
+                    ]}
+                  >
+                    {option}
+                  </Text>
+                  {isSelected ? (
+                    <Icon name="check" size={fs(18)} color={Colors.gold} />
+                  ) : null}
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
         </View>
       ) : null}
     </View>
@@ -122,14 +130,16 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: FontSizes.body,
     color: Colors.label,
-    marginBottom: hp('1%'),
+    marginBottom: AuthStyles.fieldLabelGap,
     fontFamily: Fonts.medium,
+    includeFontPadding: false,
+    lineHeight: FontSizes.body + 2,
   },
   dropdownRow: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1.2,
-    borderColor: Colors.border,
+    borderColor: Colors.dividerPink,
     borderRadius: AuthStyles.inputRadius,
     backgroundColor: Colors.inputBg,
     paddingHorizontal: wp('3.7%'),
@@ -161,11 +171,14 @@ const styles = StyleSheet.create({
   },
   dropdownMenu: {
     borderWidth: 1.2,
-    borderColor: Colors.border,
+    borderColor: Colors.dividerPink,
     borderRadius: AuthStyles.inputRadius,
     backgroundColor: Colors.white,
     overflow: 'hidden',
     marginBottom: hp('1%'),
+  },
+  dropdownScroll: {
+    maxHeight: hp('28%'),
   },
   dropdownOption: {
     flexDirection: 'row',
@@ -174,7 +187,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: wp('4%'),
     paddingVertical: hp('1.4%'),
     borderBottomWidth: 1,
-    borderBottomColor: Colors.divider,
+    borderBottomColor: Colors.dividerPink,
   },
   dropdownOptionSelected: {
     backgroundColor: Colors.inputBg,

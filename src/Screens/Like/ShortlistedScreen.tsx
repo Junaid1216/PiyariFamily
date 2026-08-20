@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -19,9 +19,15 @@ import ScreenHeader from '../../Components/ScreenHeader';
 import {
   Api,
   ENDPOINTS,
+  extractShortlistProfiles,
   getApiErrorMessage,
+  getImageCacheKey,
+  hydrateMatchImages,
+  isSuccessStatus,
   mapShortlistProfiles,
+  pickShortlistTotal,
   type ApiErrorResponse,
+  type ShortlistTab,
   type ShortlistedProfile,
 } from '../../API';
 import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
@@ -59,30 +65,27 @@ const ShortlistedScreen = () => {
 
   const profiles = bucket.profiles;
   const total = bucket.total;
+  const hasCacheRef = useRef(
+    cachedLiked.profiles.length > 0 || cachedLikedMe.profiles.length > 0,
+  );
+  hasCacheRef.current =
+    cachedLiked.profiles.length > 0 || cachedLikedMe.profiles.length > 0;
 
-  const fetchShortlist = useCallback(async () => {
-    setLoading(true);
-
-    const tab = activeTab === 'liked' ? 'i_liked' : 'liked_me';
-
+  const loadShortlistTab = useCallback(async (tab: ShortlistTab) => {
     try {
       console.log('Shortlist Request:', `${ENDPOINTS.SHORTLIST}?tab=${tab}`);
       const res = await Api.getShortlist(tab);
+      const body = res?.data;
+      const ok =
+        isSuccessStatus(res?.status) ||
+        body?.success == 200 ||
+        body?.success === true;
 
-      if (res?.status == 200) {
-        console.log('Shortlist Success:', res?.data);
-        const mapped = mapShortlistProfiles(res.data?.profiles);
-        const nextTotal = res.data?.total ?? res.data?.profiles?.length ?? 0;
+      console.log(`Shortlist HTTP Status [${tab}]:`, res?.status);
+      console.log(`Shortlist Success [${tab}]:`, body);
 
-        dispatch(
-          setShortlistData({
-            tab,
-            profiles: mapped,
-            total: nextTotal,
-          }),
-        );
-      } else {
-        console.log('Shortlist Failed:', res?.data);
+      if (!ok) {
+        console.log(`Shortlist Failed [${tab}]:`, body);
         dispatch(
           setShortlistData({
             tab,
@@ -90,14 +93,35 @@ const ShortlistedScreen = () => {
             total: 0,
           }),
         );
-        Toast.show(
-          res?.data?.message ?? 'Failed to load shortlisted profiles',
-          Toast.LONG,
-        );
+        return;
       }
+
+      const rawProfiles = extractShortlistProfiles(body);
+      console.log(`Shortlist Profiles Count [${tab}]:`, rawProfiles.length);
+      const mapped = await hydrateMatchImages(mapShortlistProfiles(rawProfiles));
+      console.log(
+        `Shortlist Mapped [${tab}]:`,
+        mapped.map(item => ({
+          id: item.id,
+          name: item.name,
+          age: item.age,
+          image: item.image,
+        })),
+      );
+
+      dispatch(
+        setShortlistData({
+          tab,
+          profiles: mapped,
+          total: pickShortlistTotal(body, mapped.length),
+        }),
+      );
     } catch (error) {
       const axiosError = error as AxiosError<ApiErrorResponse>;
-      console.log('Shortlist Error:', axiosError?.response?.data || error);
+      console.log(
+        `Shortlist Error [${tab}]:`,
+        axiosError?.response?.data || error,
+      );
       dispatch(
         setShortlistData({
           tab,
@@ -105,14 +129,32 @@ const ShortlistedScreen = () => {
           total: 0,
         }),
       );
-      Toast.show(
-        getApiErrorMessage(error, 'Failed to load shortlisted profiles'),
-        Toast.LONG,
-      );
+    }
+  }, [dispatch]);
+
+  const fetchShortlist = useCallback(async () => {
+    if (!hasCacheRef.current) {
+      setLoading(true);
+    }
+
+    try {
+      await Promise.all([
+        loadShortlistTab('liked_me'),
+        loadShortlistTab('i_liked'),
+      ]);
+    } catch (error) {
+      const axiosError = error as AxiosError<ApiErrorResponse>;
+      console.log('Shortlist Error:', axiosError?.response?.data || error);
+      if (!hasCacheRef.current) {
+        Toast.show(
+          getApiErrorMessage(error, 'Failed to load shortlisted profiles'),
+          Toast.LONG,
+        );
+      }
     } finally {
       setLoading(false);
     }
-  }, [activeTab, dispatch]);
+  }, [loadShortlistTab]);
 
   useFocusEffect(
     useCallback(() => {
@@ -122,7 +164,15 @@ const ShortlistedScreen = () => {
 
   const renderProfile = ({ item }: { item: ShortlistedProfile }) => (
     <View style={styles.card}>
-      <Image source={item.image} style={styles.avatar} resizeMode="cover" />
+      <Image
+        key={getImageCacheKey(item.image, item.id)}
+        source={item.image}
+        style={styles.avatar}
+        resizeMode="cover"
+        onError={error =>
+          console.log('Shortlist Image Error:', item.id, error.nativeEvent)
+        }
+      />
 
       <View style={styles.cardBody}>
         <View style={styles.cardTop}>
@@ -181,6 +231,11 @@ const ShortlistedScreen = () => {
             onPress={() =>
               navigation.navigate('ProfileDetail', {
                 profileId: item.id,
+                name: item.name,
+                age: item.age,
+                location: item.location,
+                image: item.image,
+                isVerified: item.isVerified,
               })
             }
           >
@@ -224,7 +279,9 @@ const ShortlistedScreen = () => {
               activeTab === 'liked' && styles.tabTextActive,
             ]}
           >
-            {Strings.profilesILiked}
+            {cachedLiked.total
+              ? `${Strings.profilesILiked} (${cachedLiked.total})`
+              : Strings.profilesILiked}
           </Text>
         </TouchableOpacity>
 
@@ -239,7 +296,9 @@ const ShortlistedScreen = () => {
               activeTab === 'likedMe' && styles.tabTextActive,
             ]}
           >
-            {Strings.likedMe}
+            {cachedLikedMe.total
+              ? `${Strings.likedMe} (${cachedLikedMe.total})`
+              : Strings.likedMe}
           </Text>
         </TouchableOpacity>
       </View>

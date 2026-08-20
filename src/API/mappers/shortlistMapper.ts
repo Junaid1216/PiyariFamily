@@ -1,5 +1,7 @@
 import { ImageSourcePropType } from 'react-native';
 import { Images } from '../../Assets';
+import { toRemoteImageSource } from '../mediaUrl';
+import { pickImageUrl } from './profileMapper';
 
 export type ShortlistTab = 'i_liked' | 'liked_me';
 
@@ -18,6 +20,7 @@ export type ShortlistApiItem = {
   id?: number | string;
   user_id?: number | string;
   name?: string;
+  full_name?: string;
   age?: number | string | null;
   city?: string | null;
   country?: string | null;
@@ -29,14 +32,20 @@ export type ShortlistApiItem = {
   education?: string | null;
   occupation?: string | null;
   profession?: string | null;
+  job_title?: string | null;
   employment_type?: string | null;
   profile_photo?: string | null;
   image?: string | null;
+  photo?: string | null;
+  avatar?: string | null;
+  photos?: Array<Record<string, unknown> | string> | null;
   gender?: string | null;
   is_verified?: boolean | number | null;
   user?: ShortlistApiItem;
   profile?: ShortlistApiItem;
   liked_user?: ShortlistApiItem;
+  from_user?: ShortlistApiItem;
+  shortlisted_user?: ShortlistApiItem;
 };
 
 export type ShortlistResponse = {
@@ -45,6 +54,10 @@ export type ShortlistResponse = {
   tab_label?: string;
   total?: number;
   profiles?: ShortlistApiItem[];
+  data?: ShortlistApiItem[] | ShortlistResponse;
+  users?: ShortlistApiItem[];
+  results?: ShortlistApiItem[];
+  shortlisted?: ShortlistApiItem[];
   message?: string;
 };
 
@@ -67,7 +80,8 @@ const pickString = (...values: Array<string | null | undefined>) => {
 };
 
 const normalizeItem = (item: ShortlistApiItem): ShortlistApiItem => {
-  const nested = item.user ?? item.profile ?? item.liked_user;
+  const nested =
+    item.user ?? item.profile ?? item.liked_user ?? item.from_user ?? item.shortlisted_user;
 
   if (nested && typeof nested === 'object') {
     return { ...item, ...nested };
@@ -76,14 +90,21 @@ const normalizeItem = (item: ShortlistApiItem): ShortlistApiItem => {
   return item;
 };
 
-const resolveProfileImage = (item: ShortlistApiItem): ImageSourcePropType => {
-  const photo = pickString(item.profile_photo, item.image);
-
-  if (photo) {
-    return { uri: photo };
+const resolveProfileImage = (
+  ...items: ShortlistApiItem[]
+): ImageSourcePropType => {
+  for (const item of items) {
+    const photo = pickImageUrl(item);
+    if (photo) {
+      return toRemoteImageSource(photo);
+    }
   }
 
-  if (item.gender?.toLowerCase() === 'male') {
+  const gender = items
+    .map(item => item.gender?.toLowerCase())
+    .find(value => value === 'male' || value === 'female');
+
+  if (gender === 'male') {
     return Images.maleProfile;
   }
 
@@ -135,7 +156,7 @@ export const mapShortlistItem = (
 
   return {
     id: resolveId(profile, index),
-    name: pickString(profile.name) || 'Profile',
+    name: pickString(profile.name, profile.full_name) || 'Profile',
     age: resolveAge(profile.age),
     location: resolveLocation(profile) || '-',
     education:
@@ -146,12 +167,62 @@ export const mapShortlistItem = (
         profile.education,
       ) || '-',
     profession:
-      pickString(profile.occupation, profile.profession, profile.employment_type) ||
+      pickString(profile.occupation, profile.profession, profile.job_title, profile.employment_type) ||
       '-',
-    image: resolveProfileImage(profile),
+    image: resolveProfileImage(item, profile),
     isVerified: Boolean(profile.is_verified),
   };
 };
 
+export const extractShortlistProfiles = (
+  response?: ShortlistResponse | null,
+): ShortlistApiItem[] => {
+  if (!response || typeof response !== 'object') {
+    return [];
+  }
+
+  if (Array.isArray(response)) {
+    return response;
+  }
+
+  if (Array.isArray(response.profiles)) {
+    return response.profiles;
+  }
+
+  if (Array.isArray(response.users) && response.users.length) {
+    return response.users;
+  }
+
+  if (Array.isArray(response.results) && response.results.length) {
+    return response.results;
+  }
+
+  if (Array.isArray(response.shortlisted) && response.shortlisted.length) {
+    return response.shortlisted;
+  }
+
+  if (Array.isArray(response.data)) {
+    return response.data;
+  }
+
+  if (response.data && typeof response.data === 'object') {
+    return extractShortlistProfiles(response.data);
+  }
+
+  return [];
+};
+
 export const mapShortlistProfiles = (profiles?: ShortlistApiItem[] | null) =>
   (profiles ?? []).map(mapShortlistItem);
+
+export const pickShortlistTotal = (
+  response?: ShortlistResponse | null,
+  fallback = 0,
+) => {
+  const total = response?.total;
+  if (typeof total === 'number' && Number.isFinite(total)) {
+    return total;
+  }
+
+  return fallback;
+};

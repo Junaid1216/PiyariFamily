@@ -5,13 +5,23 @@ import HomeScreen from '../Screens/Home/HomeScreen';
 import MatchSuccessScreen from '../Screens/Home/MatchSuccessScreen';
 import ProfileDetailScreen from '../Screens/Home/ProfileDetailScreen';
 
+export type ProfileDetailParams = {
+  profileId: string;
+  name?: string;
+  age?: number;
+  location?: string;
+  image?: ImageSourcePropType;
+  isVerified?: boolean;
+};
+
 export type HomeStackParamList = {
   HomeMain: undefined;
-  ProfileDetail: { profileId: string };
+  ProfileDetail: ProfileDetailParams;
   MatchSuccess: {
     name: string;
     fullName: string;
     matchImage: ImageSourcePropType;
+    matchId?: string;
     mutualMatch?: boolean;
   };
 };

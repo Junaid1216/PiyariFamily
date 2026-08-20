@@ -22,14 +22,55 @@ import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
 import { authService, ENDPOINTS, getApiErrorMessage } from '../../API';
+import {
+  navigateAfterLogin,
+  resolvePostLoginRoute,
+} from '../../Functions/authNavigation';
 import { hp, wp } from '../../Functions/responsive';
 import { store, useAppSelector, selectUser } from '../../Redux';
 
 type Props = {
   navigation: {
-    navigate: (screen: string) => void;
+    navigate: (
+      screen: string,
+      params?: {
+        email: string;
+        autoSend?: boolean;
+        password?: string;
+      },
+    ) => void;
     replace: (screen: string) => void;
+    reset: (state: { index: number; routes: Array<{ name: string }> }) => void;
   };
+};
+
+const isInvalidCredentials = (error: unknown) => {
+  const data = (error as any)?.response?.data;
+  const message = `${data?.message ?? ''}`.toLowerCase();
+  const status = (error as any)?.response?.status;
+  return status === 401 || message.includes('invalid credential');
+};
+
+const isPendingEmailAccount = async (emailAddress: string) => {
+  try {
+    const response = await authService.resendEmailOtp({ email: emailAddress });
+    const message = `${response.message ?? ''}`.toLowerCase();
+
+    if (message.includes('already verified')) {
+      return false;
+    }
+
+    return (
+      response?.status == 200 ||
+      response?.success == 200 ||
+      response?.success === true ||
+      message.includes('otp')
+    );
+  } catch (error) {
+    const status = (error as any)?.response?.status;
+    const message = `${(error as any)?.response?.data?.message ?? ''}`.toLowerCase();
+    return status === 429 || message.includes('please wait');
+  }
 };
 
 const LoginScreen = ({ navigation }: Props) => {
@@ -53,17 +94,66 @@ const LoginScreen = ({ navigation }: Props) => {
         password,
       });
 
-      if (response?.status == 200) {
+      const token =
+        response.token ||
+        response.access_token ||
+        store.getState().auth.accessToken;
+
+      if (response?.status == 200 && token) {
         console.log('Login Success:', response);
         console.log('Redux LoginScreen:', store.getState());
         Toast.show(response.message || 'Logged in successfully', Toast.LONG);
-        navigation.replace('SelectCountry');
-      } else {
-        console.log('Login Failed:', response);
-        Toast.show(response.message || 'Login failed. Please try again.');
+        const nextRoute = await resolvePostLoginRoute();
+        navigateAfterLogin(navigation, nextRoute);
+        return;
       }
+
+      if (response?.requires_verification) {
+        console.log('Login Needs Verification:', response);
+        Toast.show(
+          response.message || 'Please verify your email first.',
+          Toast.LONG,
+        );
+        navigation.navigate('VerifyEmail', {
+          email: response.email || email.trim(),
+          autoSend: true,
+          password,
+        });
+        return;
+      }
+
+      console.log('Login Failed:', response);
+      Toast.show(response.message || 'Login failed. Please try again.');
     } catch (error) {
-      console.log('Login Error:', (error as any)?.response?.data || error);
+      const errorData = (error as any)?.response?.data;
+      console.log('Login Error:', errorData || error);
+
+      if (errorData?.requires_verification) {
+        Toast.show(
+          errorData.message || 'Please verify your email first.',
+          Toast.LONG,
+        );
+        navigation.navigate('VerifyEmail', {
+          email: errorData.email || email.trim(),
+          autoSend: true,
+          password,
+        });
+        return;
+      }
+
+      if (isInvalidCredentials(error)) {
+        const pending = await isPendingEmailAccount(email.trim());
+        if (pending) {
+          Toast.show('Please verify the OTP sent to your email.', Toast.LONG);
+          navigation.navigate('VerifyEmail', {
+            email: email.trim(),
+            autoSend: false,
+            password,
+          });
+          return;
+        }
+      }
+
       Toast.show(getApiErrorMessage(error));
     } finally {
       setLoading(false);

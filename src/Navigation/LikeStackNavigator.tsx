@@ -9,11 +9,19 @@ import ShortlistedScreen from '../Screens/Like/ShortlistedScreen';
 export type LikeStackParamList = {
   Shortlisted: undefined;
   FilterMatches: undefined;
-  ProfileDetail: { profileId: string };
+  ProfileDetail: {
+    profileId: string;
+    name?: string;
+    age?: number;
+    location?: string;
+    image?: ImageSourcePropType;
+    isVerified?: boolean;
+  };
   MatchSuccess: {
     name: string;
     fullName: string;
     matchImage: ImageSourcePropType;
+    matchId?: string;
     mutualMatch?: boolean;
   };
 };

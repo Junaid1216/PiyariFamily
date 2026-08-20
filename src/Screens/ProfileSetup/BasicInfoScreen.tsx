@@ -117,12 +117,18 @@ const formatBirthdayForApi = (value: string): string | null => {
 };
 
 const formatBirthdayToInput = (value: string): string => {
-  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!match) {
-    return '';
+  const cleaned = value.trim();
+  const iso = cleaned.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) {
+    return `${iso[3]} / ${iso[2]} / ${iso[1]}`;
   }
 
-  return `${match[3]} / ${match[2]} / ${match[1]}`;
+  const slash = cleaned.replace(/\s/g, '').match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (slash) {
+    return `${slash[1]} / ${slash[2]} / ${slash[3]}`;
+  }
+
+  return '';
 };
 
 const BasicInfoScreen = ({ navigation }: Props) => {
@@ -251,22 +257,26 @@ const BasicInfoScreen = ({ navigation }: Props) => {
 
     setSaving(true);
 
+    const marital = MARITAL_STATUS_TO_API[maritalStatus];
+
     try {
       console.log('Profile Basic Info Request:', ENDPOINTS.PROFILE_BASIC_INFO);
       const res = await Api.updateProfileBasicInfo({
         name: fullName.trim(),
         birthday,
-        marital_status: MARITAL_STATUS_TO_API[maritalStatus],
         gender,
+        marital_status: marital,
+        'marital status': marital,
       });
 
-      if (res?.status == 200) {
+      if (res?.status == 200 || res?.success === true || res?.success == 200) {
         console.log('Profile Basic Info Success:', res);
         saveProfileCache({
+          ...(res.user ?? {}),
           name: fullName.trim(),
           birthday,
-          marital_status: MARITAL_STATUS_TO_API[maritalStatus],
           gender,
+          marital_status: marital,
         });
         Toast.show(res?.message ?? 'Basic info saved', Toast.LONG);
         navigation.navigate('Education');
@@ -415,36 +425,43 @@ const BasicInfoScreen = ({ navigation }: Props) => {
           </TouchableOpacity>
           {maritalDropdownOpen ? (
             <View style={styles.dropdownMenu}>
-              {MARITAL_STATUS_OPTIONS.map(option => {
-                const isSelected = maritalStatus === option;
+              <ScrollView
+                nestedScrollEnabled
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                style={styles.dropdownScroll}
+              >
+                {MARITAL_STATUS_OPTIONS.map(option => {
+                  const isSelected = maritalStatus === option;
 
-                return (
-                  <TouchableOpacity
-                    key={option}
-                    style={[
-                      styles.dropdownOption,
-                      isSelected && styles.dropdownOptionSelected,
-                    ]}
-                    activeOpacity={0.85}
-                    onPress={() => {
-                      setMaritalStatus(option);
-                      setMaritalDropdownOpen(false);
-                    }}
-                  >
-                    <Text
+                  return (
+                    <TouchableOpacity
+                      key={option}
                       style={[
-                        styles.dropdownOptionText,
-                        isSelected && styles.dropdownOptionTextSelected,
+                        styles.dropdownOption,
+                        isSelected && styles.dropdownOptionSelected,
                       ]}
+                      activeOpacity={0.85}
+                      onPress={() => {
+                        setMaritalStatus(option);
+                        setMaritalDropdownOpen(false);
+                      }}
                     >
-                      {option}
-                    </Text>
-                    {isSelected ? (
-                      <Icon name="check" size={fs(18)} color={Colors.gold} />
-                    ) : null}
-                  </TouchableOpacity>
-                );
-              })}
+                      <Text
+                        style={[
+                          styles.dropdownOptionText,
+                          isSelected && styles.dropdownOptionTextSelected,
+                        ]}
+                      >
+                        {option}
+                      </Text>
+                      {isSelected ? (
+                        <Icon name="check" size={fs(18)} color={Colors.gold} />
+                      ) : null}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
             </View>
           ) : null}
         </ScrollView>
@@ -513,8 +530,10 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: FontSizes.body,
     color: Colors.label,
-    marginBottom: hp('1%'),
+    marginBottom: AuthStyles.fieldLabelGap,
     fontFamily: Fonts.medium,
+    includeFontPadding: false,
+    lineHeight: FontSizes.body + 2,
   },
   genderContainer: {
     flexDirection: 'row',
@@ -586,7 +605,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1.2,
-    borderColor: Colors.border,
+    borderColor: Colors.dividerPink,
     borderRadius: AuthStyles.inputRadius,
     backgroundColor: Colors.inputBg,
     paddingHorizontal: wp('3.7%'),
@@ -607,11 +626,14 @@ const styles = StyleSheet.create({
   },
   dropdownMenu: {
     borderWidth: 1.2,
-    borderColor: Colors.border,
+    borderColor: Colors.dividerPink,
     borderRadius: AuthStyles.inputRadius,
     backgroundColor: Colors.white,
     overflow: 'hidden',
     marginBottom: hp('1%'),
+  },
+  dropdownScroll: {
+    maxHeight: hp('28%'),
   },
   dropdownOption: {
     flexDirection: 'row',
@@ -620,7 +642,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: wp('4%'),
     paddingVertical: hp('1.4%'),
     borderBottomWidth: 1,
-    borderBottomColor: Colors.divider,
+    borderBottomColor: Colors.dividerPink,
   },
   dropdownOptionSelected: {
     backgroundColor: Colors.inputBg,

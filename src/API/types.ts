@@ -9,11 +9,21 @@ export type User = {
 export type AuthResponse = {
   success?: boolean | number;
   message: string;
-  user: User;
+  user?: User;
   token?: string;
   access_token?: string;
   account_status?: 'active' | 'inactive';
   is_deactivated?: boolean;
+  requires_verification?: boolean;
+  email?: string;
+  data?: {
+    name?: string;
+    email?: string;
+    phone?: string;
+    token?: string;
+    access_token?: string;
+  };
+  resend_after_seconds?: number;
 };
 
 export type ApiResult<T> = {
