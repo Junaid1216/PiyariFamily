@@ -51,7 +51,7 @@ const MessagesScreen = () => {
       />
 
       <ScrollView
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={true}
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >

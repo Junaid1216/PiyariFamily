@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -7,7 +7,6 @@ import {
   Text,
   View,
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
 import {
   SafeAreaView,
   useSafeAreaInsets,
@@ -19,6 +18,7 @@ import AuthInput from '../../Components/AuthInput';
 import BackButton from '../../Components/BackButton';
 import PrimaryButton from '../../Components/PrimaryButton';
 import SetupDropdown from '../../Components/SetupDropdown';
+import { DropdownOverlayHost } from '../../Components/DropdownPortal';
 import SetupProgressBar from '../../Components/SetupProgressBar';
 import {
   Api,
@@ -72,9 +72,7 @@ const EducationScreen = ({ navigation }: Props) => {
   );
   const [saving, setSaving] = useState(false);
 
-  useFocusEffect(
-    useCallback(() => {
-      console.log('Redux Education:', store.getState());
+  useEffect(() => {
 
       const applyEducation = (profile: {
         qualification?: string | null;
@@ -112,7 +110,6 @@ const EducationScreen = ({ navigation }: Props) => {
 
       const loadEducation = async () => {
         try {
-          console.log('Profile Education Prefill Request:', ENDPOINTS.PROFILE);
           const res = await Api.getProfile();
 
           if (cancelled) {
@@ -120,17 +117,11 @@ const EducationScreen = ({ navigation }: Props) => {
           }
 
           if (res?.status == 200) {
-            console.log('Profile Education Prefill Success:', res?.data);
             applyEducation(resolveProfileData(res?.data));
           } else {
-            console.log('Profile Education Prefill Failed:', res?.data);
           }
         } catch (error) {
           const axiosError = error as AxiosError<ApiErrorResponse>;
-          console.log(
-            'Profile Education Prefill Error:',
-            axiosError?.response?.data || error,
-          );
         }
       };
 
@@ -139,8 +130,7 @@ const EducationScreen = ({ navigation }: Props) => {
       return () => {
         cancelled = true;
       };
-    }, []),
-  );
+  }, []);
 
   const handleContinue = async () => {
     if (!qualification) {
@@ -168,7 +158,6 @@ const EducationScreen = ({ navigation }: Props) => {
     setSaving(true);
 
     try {
-      console.log('Profile Education Request:', ENDPOINTS.PROFILE_EDUCATION);
       const res = await Api.updateProfileEducation({
         highest_education: qualificationValue,
         university: university.trim(),
@@ -178,7 +167,6 @@ const EducationScreen = ({ navigation }: Props) => {
       });
 
       if (res?.status == 200 || res?.success === true || res?.success == 200) {
-        console.log('Profile Education Success:', res);
         saveProfileCache({
           ...(res.user ?? {}),
           qualification: qualificationValue,
@@ -191,12 +179,10 @@ const EducationScreen = ({ navigation }: Props) => {
         Toast.show(res?.message ?? 'Education saved', Toast.LONG);
         navigation.navigate('Career');
       } else {
-        console.log('Profile Education Failed:', res);
         Toast.show(res?.message ?? 'Failed to save education', Toast.LONG);
       }
     } catch (error) {
       const axiosError = error as AxiosError<ApiErrorResponse>;
-      console.log('Profile Education Error:', axiosError?.response?.data || error);
       Toast.show(getApiErrorMessage(axiosError), Toast.LONG);
     } finally {
       setSaving(false);
@@ -210,9 +196,11 @@ const EducationScreen = ({ navigation }: Props) => {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView
-          showsVerticalScrollIndicator={false}
+          showsVerticalScrollIndicator={true}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled
+          removeClippedSubviews={false}
         >
           <BackButton variant="pink" onPress={() => navigation.goBack()} />
 
@@ -284,6 +272,7 @@ const EducationScreen = ({ navigation }: Props) => {
             showArrow
           />
         </View>
+        <DropdownOverlayHost />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

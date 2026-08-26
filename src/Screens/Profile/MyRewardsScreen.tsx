@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -14,19 +14,18 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-simple-toast';
-import { AxiosError } from 'axios';
 import ScreenHeader from '../../Components/ScreenHeader';
 import {
   Api,
-  ENDPOINTS,
+  applyReferralRedeem,
   getApiErrorMessage,
+  isApiSuccess,
   mapReferralHistory,
-  mapReferralStats,
-  type ApiErrorResponse,
+  mergeReferralData,
   type ReferralHistoryItem,
+  type ReferralRedeemOption,
   type ReferralStats,
 } from '../../API';
-import { REDEEM_OPTIONS, REFERRAL_LINK } from '../../Constant/Referrals';
 import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
@@ -47,11 +46,16 @@ type NavigationProp = NativeStackNavigationProp<
 
 const DEFAULT_STATS: ReferralStats = {
   referralCode: '',
-  referralLink: REFERRAL_LINK,
+  referralLink: '',
   registered: 0,
   pointsEarned: 0,
+  pointValuePkr: 0,
+  totalValuePkr: 0,
   conversionRate: '',
   rewardsTable: [],
+  shareMessage: '',
+  redeemOptions: [],
+  redeemed: 0,
 };
 
 const MyRewardsScreen = () => {
@@ -59,33 +63,81 @@ const MyRewardsScreen = () => {
   const dispatch = useAppDispatch();
   const cachedStats = useAppSelector(selectReferralStats);
   const stats = cachedStats ?? DEFAULT_STATS;
+  const cachedStatsRef = useRef(cachedStats);
+  cachedStatsRef.current = cachedStats;
   const [referralHistory, setReferralHistory] = useState<ReferralHistoryItem[]>(
     [],
   );
   const [historyLoading, setHistoryLoading] = useState(true);
+  const [redeemingType, setRedeemingType] = useState<string | null>(null);
 
   const fetchReferralStats = useCallback(async () => {
     try {
-      console.log('Referral Stats Request:', ENDPOINTS.REFERRALS_STATS);
-      const res = await Api.getReferralStats();
+      const [linkResult, rewardsResult, statsResult] = await Promise.allSettled(
+        [
+          Api.getReferralLink(),
+          Api.getReferralRewards(),
+          Api.getReferralStats(),
+        ],
+      );
+      const linkRes =
+        linkResult.status === 'fulfilled' ? linkResult.value : null;
+      const rewardsRes =
+        rewardsResult.status === 'fulfilled' ? rewardsResult.value : null;
+      const statsRes =
+        statsResult.status === 'fulfilled' ? statsResult.value : null;
+      const linkOk = isApiSuccess(linkRes?.status, linkRes?.data?.success);
+      const rewardsOk = isApiSuccess(
+        rewardsRes?.status,
+        rewardsRes?.data?.success,
+      );
+      const statsOk = isApiSuccess(statsRes?.status, statsRes?.data?.success);
 
-      if (res?.status == 200) {
-        console.log('Referral Stats Success:', res?.data);
-        dispatch(setReferralStats(mapReferralStats(res?.data)));
-      } else {
-        console.log('Referral Stats Failed:', res?.data);
-        dispatch(setReferralStats(DEFAULT_STATS));
+      if (linkOk || rewardsOk || statsOk) {
+        dispatch(
+          setReferralStats(
+            mergeReferralData(
+              linkOk ? linkRes?.data : null,
+              rewardsOk ? rewardsRes?.data : null,
+              statsOk ? statsRes?.data : null,
+              cachedStatsRef.current,
+            ),
+          ),
+        );
+      }
+
+      if (rewardsResult.status === 'rejected') {
         Toast.show(
-          res?.data?.message ?? 'Failed to load referral stats',
+          getApiErrorMessage(
+            rewardsResult.reason,
+            'Failed to load referral rewards',
+          ),
+          Toast.LONG,
+        );
+      } else if (!rewardsOk) {
+        Toast.show(
+          rewardsRes?.data?.message ?? 'Failed to load referral rewards',
+          Toast.LONG,
+        );
+      }
+
+      if (statsResult.status === 'rejected') {
+        Toast.show(
+          getApiErrorMessage(
+            statsResult.reason,
+            'Failed to load referral stats',
+          ),
+          Toast.LONG,
+        );
+      } else if (!statsOk) {
+        Toast.show(
+          statsRes?.data?.message ?? 'Failed to load referral stats',
           Toast.LONG,
         );
       }
     } catch (error) {
-      const axiosError = error as AxiosError<ApiErrorResponse>;
-      console.log('Referral Stats Error:', axiosError?.response?.data || error);
-      dispatch(setReferralStats(DEFAULT_STATS));
       Toast.show(
-        getApiErrorMessage(error, 'Failed to load referral stats'),
+        getApiErrorMessage(error, 'Failed to load referral rewards'),
         Toast.LONG,
       );
     }
@@ -95,24 +147,17 @@ const MyRewardsScreen = () => {
     setHistoryLoading(true);
 
     try {
-      console.log('Referral History Request:', ENDPOINTS.REFERRALS_HISTORY);
       const res = await Api.getReferralHistory();
 
-      if (res?.status == 200) {
-        console.log('Referral History Success:', res?.data);
+      if (isApiSuccess(res?.status, res?.data?.success)) {
         setReferralHistory(mapReferralHistory(res?.data));
       } else {
-        console.log('Referral History Failed:', res?.data);
-        setReferralHistory([]);
         Toast.show(
           res?.data?.message ?? 'Failed to load referral history',
           Toast.LONG,
         );
       }
     } catch (error) {
-      const axiosError = error as AxiosError<ApiErrorResponse>;
-      console.log('Referral History Error:', axiosError?.response?.data || error);
-      setReferralHistory([]);
       Toast.show(
         getApiErrorMessage(error, 'Failed to load referral history'),
         Toast.LONG,
@@ -129,6 +174,39 @@ const MyRewardsScreen = () => {
     }, [fetchReferralStats, fetchReferralHistory]),
   );
 
+  const handleRedeem = useCallback(
+    async (option: ReferralRedeemOption) => {
+      if (!option.type || redeemingType) {
+        return;
+      }
+
+      setRedeemingType(option.type);
+
+      try {
+        const res = await Api.redeemReferralReward(option.type);
+
+        if (isApiSuccess(res?.status, res?.data?.success)) {
+          dispatch(setReferralStats(applyReferralRedeem(stats, res?.data)));
+          Toast.show(res?.data?.message ?? Strings.rewardRedeemed);
+          fetchReferralStats();
+        } else {
+          Toast.show(
+            res?.data?.message ?? 'Failed to redeem reward',
+            Toast.LONG,
+          );
+        }
+      } catch (error) {
+        Toast.show(
+          getApiErrorMessage(error, 'Failed to redeem reward'),
+          Toast.LONG,
+        );
+      } finally {
+        setRedeemingType(null);
+      }
+    },
+    [dispatch, fetchReferralStats, redeemingType, stats],
+  );
+
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
       <LinearGradient
@@ -143,7 +221,7 @@ const MyRewardsScreen = () => {
       />
 
       <ScrollView
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={true}
         contentContainerStyle={styles.scrollContent}
       >
         <LinearGradient
@@ -153,6 +231,12 @@ const MyRewardsScreen = () => {
           <Icon name="crown" size={fs(26)} color={Colors.gold} />
           <Text style={styles.heroLabel}>{Strings.totalPoints}</Text>
           <Text style={styles.heroPoints}>{stats.pointsEarned} pts</Text>
+          <Text style={styles.heroPkr}>
+            1 pt = PKR {stats.pointValuePkr}
+            {stats.totalValuePkr
+              ? `  ·  Total PKR ${stats.totalValuePkr}`
+              : ''}
+          </Text>
         </LinearGradient>
 
         <Text style={styles.sectionLabel}>{Strings.rewardsBreakdown}</Text>
@@ -169,13 +253,15 @@ const MyRewardsScreen = () => {
           </View>
           <View style={styles.breakdownCard}>
             <Icon name="gift-outline" size={fs(18)} color={Colors.primary} />
-            <Text style={styles.breakdownValue}>0</Text>
+            <Text style={styles.breakdownValue}>{stats.redeemed}</Text>
             <Text style={styles.breakdownLabel}>{Strings.redeemed}</Text>
           </View>
         </View>
 
-        <Text style={styles.sectionLabel}>{Strings.howToRedeem}</Text>
-        {REDEEM_OPTIONS.map(option => (
+        {stats.redeemOptions.length > 0 ? (
+          <>
+            <Text style={styles.sectionLabel}>{Strings.howToRedeem}</Text>
+            {stats.redeemOptions.map(option => (
           <View key={option.id} style={styles.redeemCard}>
             <View style={styles.redeemIconWrap}>
               <Icon name={option.icon} size={fs(18)} color={Colors.primary} />
@@ -187,13 +273,22 @@ const MyRewardsScreen = () => {
             <TouchableOpacity
               style={styles.redeemBtn}
               activeOpacity={0.88}
-              onPress={() => Toast.show(Strings.rewardRedeemed)}
+              disabled={Boolean(redeemingType)}
+              onPress={() => handleRedeem(option)}
             >
-              <Text style={styles.redeemBtnText}>{Strings.redeem}</Text>
-              <Icon name="arrow-right" size={fs(14)} color={Colors.gold} />
+              {redeemingType === option.type ? (
+                <ActivityIndicator size="small" color={Colors.gold} />
+              ) : (
+                <>
+                  <Text style={styles.redeemBtnText}>{Strings.redeem}</Text>
+                  <Icon name="arrow-right" size={fs(14)} color={Colors.gold} />
+                </>
+              )}
             </TouchableOpacity>
           </View>
-        ))}
+            ))}
+          </>
+        ) : null}
 
         <View style={styles.historyHeader}>
           <Text style={styles.sectionLabelInline}>
@@ -211,25 +306,27 @@ const MyRewardsScreen = () => {
               <Image source={item.image} style={styles.historyAvatar} />
               <View style={styles.historyTextWrap}>
                 <Text style={styles.historyName}>{item.name}</Text>
-                <Text style={styles.historySubtext}>
-                  {Strings.registeredViaLink}
-                </Text>
+                {item.subtitle ? (
+                  <Text style={styles.historySubtext}>{item.subtitle}</Text>
+                ) : null}
               </View>
               <View style={styles.historyRight}>
                 {item.isRegistered ? (
                   <View style={styles.registeredBadge}>
                     <Icon name="check" size={fs(10)} color="#22C55E" />
                     <Text style={styles.registeredBadgeText}>
-                      {Strings.registeredBadge}
+                      {item.statusLabel || Strings.registeredBadge}
                     </Text>
                   </View>
+                ) : item.statusLabel ? (
+                  <Text style={styles.historySubtext}>{item.statusLabel}</Text>
                 ) : null}
                 <Text style={styles.historyPoints}>{item.points}</Text>
               </View>
             </View>
           ))
         ) : (
-          <Text style={styles.emptyText}>No referral history found</Text>
+          <Text style={styles.emptyText}>{Strings.referralHistoryEmpty}</Text>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -286,6 +383,12 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.bold,
     color: Colors.white,
     letterSpacing: -0.5,
+  },
+  heroPkr: {
+    fontSize: fs(12),
+    fontFamily: Fonts.medium,
+    color: 'rgba(255,255,255,0.9)',
+    marginTop: hp('0.4%'),
   },
   sectionLabel: {
     fontSize: fs(10),

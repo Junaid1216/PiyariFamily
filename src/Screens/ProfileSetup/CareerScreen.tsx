@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -14,12 +14,12 @@ import {
 } from 'react-native-safe-area-context';
 import Toast from 'react-native-simple-toast';
 import { AxiosError } from 'axios';
-import { useFocusEffect } from '@react-navigation/native';
 import { Images } from '../../Assets';
 import AuthInput from '../../Components/AuthInput';
 import BackButton from '../../Components/BackButton';
 import PrimaryButton from '../../Components/PrimaryButton';
 import SetupDropdown from '../../Components/SetupDropdown';
+import { DropdownOverlayHost } from '../../Components/DropdownPortal';
 import SetupProgressBar from '../../Components/SetupProgressBar';
 import {
   Api,
@@ -105,9 +105,7 @@ const CareerScreen = ({ navigation }: Props) => {
   >(null);
   const [saving, setSaving] = useState(false);
 
-  useFocusEffect(
-    useCallback(() => {
-      console.log('Redux Career:', store.getState());
+  useEffect(() => {
 
       const applyCareer = (profile: {
         employment_type?: string | null;
@@ -164,7 +162,6 @@ const CareerScreen = ({ navigation }: Props) => {
 
       const loadCareer = async () => {
         try {
-          console.log('Profile Career Prefill Request:', ENDPOINTS.PROFILE);
           const res = await Api.getProfile();
 
           if (cancelled) {
@@ -172,17 +169,11 @@ const CareerScreen = ({ navigation }: Props) => {
           }
 
           if (res?.status == 200) {
-            console.log('Profile Career Prefill Success:', res?.data);
             applyCareer(resolveProfileData(res?.data));
           } else {
-            console.log('Profile Career Prefill Failed:', res?.data);
           }
         } catch (error) {
           const axiosError = error as AxiosError<ApiErrorResponse>;
-          console.log(
-            'Profile Career Prefill Error:',
-            axiosError?.response?.data || error,
-          );
         }
       };
 
@@ -191,8 +182,7 @@ const CareerScreen = ({ navigation }: Props) => {
       return () => {
         cancelled = true;
       };
-    }, []),
-  );
+  }, []);
 
   const handleContinue = async () => {
     if (!jobTitle.trim()) {
@@ -217,7 +207,6 @@ const CareerScreen = ({ navigation }: Props) => {
     setSaving(true);
 
     try {
-      console.log('Profile Career Request:', ENDPOINTS.PROFILE_CAREER);
       const res = await Api.updateProfileCareer({
         job_title: jobTitle.trim(),
         employment_type: EMPLOYMENT_TYPE_TO_API[employmentType],
@@ -229,7 +218,6 @@ const CareerScreen = ({ navigation }: Props) => {
       });
 
       if (res?.status == 200 || res?.success === true || res?.success == 200) {
-        console.log('Profile Career Success:', res);
         saveProfileCache({
           ...(res.user ?? {}),
           job_title: jobTitle.trim(),
@@ -244,12 +232,10 @@ const CareerScreen = ({ navigation }: Props) => {
         Toast.show(res?.message ?? 'Career details saved', Toast.LONG);
         navigation.navigate('PhysicalDetails');
       } else {
-        console.log('Profile Career Failed:', res);
         Toast.show(res?.message ?? 'Failed to save career details', Toast.LONG);
       }
     } catch (error) {
       const axiosError = error as AxiosError<ApiErrorResponse>;
-      console.log('Profile Career Error:', axiosError?.response?.data || error);
       Toast.show(getApiErrorMessage(axiosError), Toast.LONG);
     } finally {
       setSaving(false);
@@ -263,9 +249,11 @@ const CareerScreen = ({ navigation }: Props) => {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView
-          showsVerticalScrollIndicator={false}
+          showsVerticalScrollIndicator={true}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled
+          removeClippedSubviews={false}
         >
           <BackButton variant="pink" onPress={() => navigation.goBack()} />
 
@@ -372,6 +360,7 @@ const CareerScreen = ({ navigation }: Props) => {
             showArrow
           />
         </View>
+        <DropdownOverlayHost />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -451,6 +440,8 @@ const styles = StyleSheet.create({
     marginBottom: hp('1.2%'),
   },
   footer: {
+    zIndex: 1,
+    elevation: 2,
     paddingHorizontal: AuthStyles.horizontalPadding,
     paddingTop: hp('1.5%'),
     borderTopWidth: 1,

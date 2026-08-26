@@ -16,15 +16,13 @@ import {
 } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-simple-toast';
-import { AxiosError } from 'axios';
 import PrimaryButton from '../../Components/PrimaryButton';
 import ScreenHeader from '../../Components/ScreenHeader';
 import {
   Api,
-  ENDPOINTS,
   getApiErrorMessage,
+  isApiSuccess,
   mapSubscriptions,
-  type ApiErrorResponse,
   type SubscriptionPlansData,
 } from '../../API';
 import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
@@ -53,24 +51,17 @@ const ChooseYourPlanScreen = () => {
     setLoading(true);
 
     try {
-      console.log('Subscriptions Request:', ENDPOINTS.SUBSCRIPTIONS);
       const res = await Api.getSubscriptions();
 
-      if (res?.status == 200) {
-        console.log('Subscriptions Success:', res?.data);
+      if (isApiSuccess(res?.status, res?.data?.success)) {
         setPlans(mapSubscriptions(res?.data));
       } else {
-        console.log('Subscriptions Failed:', res?.data);
-        setPlans(mapSubscriptions());
         Toast.show(
           res?.data?.message ?? 'Failed to load subscription plans',
           Toast.LONG,
         );
       }
     } catch (error) {
-      const axiosError = error as AxiosError<ApiErrorResponse>;
-      console.log('Subscriptions Error:', axiosError?.response?.data || error);
-      setPlans(mapSubscriptions());
       Toast.show(
         getApiErrorMessage(error, 'Failed to load subscription plans'),
         Toast.LONG,
@@ -88,6 +79,10 @@ const ChooseYourPlanScreen = () => {
 
   const openPayment = (plan: 'VIP' | 'VVIP') => {
     const selected = plan === 'VIP' ? plans.vipPlan : plans.vvipPlan;
+    if (!selected.apiId && !selected.priceLabel) {
+      return;
+    }
+
     navigation.navigate('CompletePayment', {
       plan,
       price: selected.price,
@@ -118,6 +113,7 @@ const ChooseYourPlanScreen = () => {
   const renderPlanCardHeader = (
     icon: string,
     title: string,
+    duration: string,
     lightIcon = false,
   ) => (
     <View style={styles.planTopRow}>
@@ -130,7 +126,7 @@ const ChooseYourPlanScreen = () => {
       </View>
       <View style={styles.planTitleWrap}>
         <Text style={styles.planTitle}>{title}</Text>
-        <Text style={styles.planDuration}>{Strings.oneMonth}</Text>
+        <Text style={styles.planDuration}>{duration}</Text>
       </View>
     </View>
   );
@@ -152,7 +148,7 @@ const ChooseYourPlanScreen = () => {
       />
 
       <ScrollView
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={true}
         contentContainerStyle={styles.scrollContent}
       >
         {loading ? (
@@ -174,49 +170,63 @@ const ChooseYourPlanScreen = () => {
               />
             </View>
             <Text style={styles.freeTitle}>
-              {Strings.freePlan.toUpperCase()}
+              {(plans.freePlan.badge || plans.freePlan.title || Strings.freePlan).toUpperCase()}
             </Text>
           </View>
-          {plans.freeFeatures.map(item => renderPlanFeature(item))}
+          {plans.freePlan.features.map(item => renderPlanFeature(item))}
         </View>
 
-        <LinearGradient
-          colors={plans.vipPlan.gradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0, y: 1 }}
-          style={styles.premiumCard}
-        >
-          {renderPlanCardHeader('star', plans.vipPlan.title, true)}
-          <Text style={styles.planPrice}>{plans.vipPlan.priceLabel}</Text>
-          {plans.vipPlan.features.map(item => renderPlanFeature(item, true))}
-          <TouchableOpacity
-            style={styles.selectBtn}
-            activeOpacity={0.85}
-            onPress={() => openPayment('VIP')}
+        {plans.vipPlan.apiId ? (
+          <LinearGradient
+            colors={plans.vipPlan.gradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={styles.premiumCard}
           >
-            <Text style={styles.selectBtnText}>{Strings.selectPlan}</Text>
-            <Icon name="arrow-right" size={fs(16)} color={Colors.goldLight} />
-          </TouchableOpacity>
-        </LinearGradient>
+            {renderPlanCardHeader(
+              'star',
+              plans.vipPlan.title,
+              plans.vipPlan.durationLabel,
+              true,
+            )}
+            <Text style={styles.planPrice}>{plans.vipPlan.priceLabel}</Text>
+            {plans.vipPlan.features.map(item => renderPlanFeature(item, true))}
+            <TouchableOpacity
+              style={styles.selectBtn}
+              activeOpacity={0.85}
+              onPress={() => openPayment('VIP')}
+            >
+              <Text style={styles.selectBtnText}>{Strings.selectPlan}</Text>
+              <Icon name="arrow-right" size={fs(16)} color={Colors.goldLight} />
+            </TouchableOpacity>
+          </LinearGradient>
+        ) : null}
 
-        <LinearGradient
-          colors={plans.vvipPlan.gradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0, y: 1 }}
-          style={styles.premiumCard}
-        >
-          {renderPlanCardHeader('crown', plans.vvipPlan.title, true)}
-          <Text style={styles.planPrice}>{plans.vvipPlan.priceLabel}</Text>
-          {plans.vvipPlan.features.map(item => renderPlanFeature(item, true))}
-          <TouchableOpacity
-            style={styles.selectBtn}
-            activeOpacity={0.85}
-            onPress={() => openPayment('VVIP')}
+        {plans.vvipPlan.apiId ? (
+          <LinearGradient
+            colors={plans.vvipPlan.gradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={styles.premiumCard}
           >
-            <Text style={styles.selectBtnText}>{Strings.selectPlan}</Text>
-            <Icon name="arrow-right" size={fs(16)} color={Colors.white} />
-          </TouchableOpacity>
-        </LinearGradient>
+            {renderPlanCardHeader(
+              'crown',
+              plans.vvipPlan.title,
+              plans.vvipPlan.durationLabel,
+              true,
+            )}
+            <Text style={styles.planPrice}>{plans.vvipPlan.priceLabel}</Text>
+            {plans.vvipPlan.features.map(item => renderPlanFeature(item, true))}
+            <TouchableOpacity
+              style={styles.selectBtn}
+              activeOpacity={0.85}
+              onPress={() => openPayment('VVIP')}
+            >
+              <Text style={styles.selectBtnText}>{Strings.selectPlan}</Text>
+              <Icon name="arrow-right" size={fs(16)} color={Colors.white} />
+            </TouchableOpacity>
+          </LinearGradient>
+        ) : null}
 
         <View style={styles.perksGrid}>
           {PREMIUM_PERKS.map(perk => (

@@ -55,6 +55,33 @@ const withHydratedImage = async <T extends MatchWithImage>(item: T): Promise<T> 
   return item;
 };
 
+const runWithLimit = async <T,>(
+  items: T[],
+  worker: (item: T) => Promise<T>,
+  limit = 3,
+) => {
+  if (!items.length) {
+    return items;
+  }
+
+  const results = new Array<T>(items.length);
+  let cursor = 0;
+
+  const run = async () => {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      results[index] = await worker(items[index]);
+    }
+  };
+
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, () => run()),
+  );
+
+  return results;
+};
+
 export const hydrateMatchImages = async <T extends MatchWithImage>(
   items: T[],
-) => Promise.all(items.map(withHydratedImage));
+) => runWithLimit(items, withHydratedImage, 3);

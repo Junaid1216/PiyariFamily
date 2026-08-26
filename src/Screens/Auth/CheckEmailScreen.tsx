@@ -15,7 +15,9 @@ import AuthIconBadge from '../../Components/AuthIconBadge';
 import BackButton from '../../Components/BackButton';
 import OtpCodeInput from '../../Components/OtpCodeInput';
 import PrimaryButton from '../../Components/PrimaryButton';
-import ResendCodeSection from '../../Components/ResendCodeSection';
+import ResendCodeSection, {
+  RESEND_COOLDOWN_SECONDS,
+} from '../../Components/ResendCodeSection';
 import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
@@ -39,7 +41,8 @@ const CheckEmailScreen = ({ navigation }: Props) => {
 
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
-  const [resendCooldown, setResendCooldown] = useState(45);
+  const [resendCooldown, setResendCooldown] = useState(RESEND_COOLDOWN_SECONDS);
+  const [resendCycle, setResendCycle] = useState(0);
 
   const handleVerify = async () => {
     if (code.length !== 6) {
@@ -74,7 +77,8 @@ const CheckEmailScreen = ({ navigation }: Props) => {
 
       if (response?.status == 200) {
         Toast.show(response.message || 'Reset code resent');
-        setResendCooldown(response.resend_after_seconds ?? 45);
+        setResendCooldown(RESEND_COOLDOWN_SECONDS);
+        setResendCycle(cycle => cycle + 1);
         return;
       }
 
@@ -92,7 +96,7 @@ const CheckEmailScreen = ({ navigation }: Props) => {
             style={styles.scrollView}
             contentContainerStyle={styles.scroll}
             keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
+            showsVerticalScrollIndicator={true}
             enableOnAndroid
             bounces={false}
           >
@@ -106,6 +110,7 @@ const CheckEmailScreen = ({ navigation }: Props) => {
             <OtpCodeInput value={code} onChangeText={setCode} />
 
             <ResendCodeSection
+              key={resendCycle}
               cooldownSeconds={resendCooldown}
               onResend={handleResend}
             />

@@ -5,9 +5,6 @@ import { Images } from '../../Assets';
 import { AuthStyles } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import { hp } from '../../Functions/responsive';
-import {
-  store,
-} from '../../Redux';
 
 type Props = {
   navigation: {
@@ -17,7 +14,6 @@ type Props = {
 
 const SplashScreen = ({ navigation }: Props) => {
   useEffect(() => {
-    console.log('Redux SplashScreen:', store.getState());
 
     const timer = setTimeout(() => {
       navigation.replace('Onboarding');

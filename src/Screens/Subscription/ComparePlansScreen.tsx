@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import {
+  ActivityIndicator,
   ScrollView,
   StyleSheet,
   Text,
@@ -7,19 +8,26 @@ import {
   View,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
   SafeAreaView,
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import Toast from 'react-native-simple-toast';
 import ScreenHeader from '../../Components/ScreenHeader';
 import PrimaryButton from '../../Components/PrimaryButton';
+import {
+  Api,
+  getApiErrorMessage,
+  isApiSuccess,
+  mapSubscriptions,
+  type SubscriptionPlansData,
+} from '../../API';
 import { AuthStyles } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
-import { COMPARE_FEATURES, PLAN_OPTIONS } from '../../Constant/Subscription';
 import { Strings } from '../../Constant/Strings';
 import { ProfileStackParamList } from '../../Navigation/ProfileStackNavigator';
 import { getFooterBottomPadding } from '../../Functions/safeArea';
@@ -46,6 +54,38 @@ const ComparePlansScreen = () => {
   const navigation = useNavigation<NavigationProp>();
   const insets = useSafeAreaInsets();
   useHideTabBar();
+  const [plans, setPlans] = useState<SubscriptionPlansData>(mapSubscriptions());
+  const [loading, setLoading] = useState(true);
+
+  const fetchSubscriptions = useCallback(async () => {
+    setLoading(true);
+
+    try {
+      const res = await Api.getSubscriptions();
+
+      if (isApiSuccess(res?.status, res?.data?.success)) {
+        setPlans(mapSubscriptions(res?.data));
+      } else {
+        Toast.show(
+          res?.data?.message ?? 'Failed to load subscription plans',
+          Toast.LONG,
+        );
+      }
+    } catch (error) {
+      Toast.show(
+        getApiErrorMessage(error, 'Failed to load subscription plans'),
+        Toast.LONG,
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchSubscriptions();
+    }, [fetchSubscriptions]),
+  );
 
   const renderCell = (value: boolean | string, tier: ColumnTier) => {
     const color = COLUMN_COLORS[tier];
@@ -72,13 +112,13 @@ const ComparePlansScreen = () => {
   const renderPlanTabs = () => (
     <View style={styles.planTabsRow}>
       <View style={styles.tabFree}>
-        <Text style={styles.tabFreeText}>Free</Text>
+        <Text style={styles.tabFreeText}>{plans.freePlan.badge || plans.freePlan.title || 'Free'}</Text>
       </View>
       <View style={styles.tabVip}>
-        <Text style={styles.tabVipText}>VIP</Text>
+        <Text style={styles.tabVipText}>{plans.vipPlan.badge || plans.vipPlan.title || 'VIP'}</Text>
       </View>
       <View style={styles.tabVvip}>
-        <Text style={styles.tabVvipText}>VVIP</Text>
+        <Text style={styles.tabVvipText}>{plans.vvipPlan.badge || plans.vvipPlan.title || 'VVIP'}</Text>
       </View>
     </View>
   );
@@ -116,19 +156,25 @@ const ComparePlansScreen = () => {
         />
 
         <ScrollView
-          showsVerticalScrollIndicator={false}
+          showsVerticalScrollIndicator={true}
           contentContainerStyle={[
             styles.scrollContent,
             { paddingBottom: getFooterBottomPadding(insets.bottom) },
           ]}
         >
+          {loading ? (
+            <View style={styles.loaderWrap}>
+              <ActivityIndicator size="large" color={Colors.primary} />
+            </View>
+          ) : (
+            <>
           <View style={styles.tableHeaderRow}>
             <View style={styles.featureColSpacer} />
             {renderPlanTabs()}
           </View>
 
           <View style={styles.compareCard}>
-            {COMPARE_FEATURES.map((row, index) => (
+            {plans.compareRows.map((row, index) => (
               <View
                 key={row.label}
                 style={[
@@ -145,13 +191,17 @@ const ComparePlansScreen = () => {
           <View style={styles.actionButtons}>
             <PrimaryButton
               title={Strings.upgradeToPremium}
-              onPress={() =>
+              onPress={() => {
+                if (!plans.vipPlan.apiId && !plans.vipPlan.priceLabel) {
+                  return;
+                }
+
                 navigation.navigate('CompletePayment', {
                   plan: 'VIP',
-                  price: PLAN_OPTIONS.VIP.price,
-                  priceLabel: PLAN_OPTIONS.VIP.priceLabel,
-                })
-              }
+                  price: plans.vipPlan.price,
+                  priceLabel: plans.vipPlan.priceLabel,
+                });
+              }}
               showArrow
             />
             <TouchableOpacity
@@ -163,6 +213,8 @@ const ComparePlansScreen = () => {
               <Icon name="arrow-right" size={fs(18)} color={Colors.gold} />
             </TouchableOpacity>
           </View>
+            </>
+          )}
         </ScrollView>
       </View>
     </SafeAreaView>
@@ -197,6 +249,11 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: AuthStyles.horizontalPadding,
+  },
+  loaderWrap: {
+    minHeight: hp('40%'),
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   tableHeaderRow: {
     flexDirection: 'row',

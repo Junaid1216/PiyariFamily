@@ -17,7 +17,6 @@ import {
 } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-simple-toast';
-import { AxiosError } from 'axios';
 import { Images } from '../../Assets';
 import ScreenHeader from '../../Components/ScreenHeader';
 import FilterChip from '../../Components/FilterChip';
@@ -25,16 +24,15 @@ import FilterRangeSlider from '../../Components/FilterRangeSlider';
 import PrimaryButton from '../../Components/PrimaryButton';
 import {
   Api,
-  ENDPOINTS,
   buildMatchFilterParams,
   FILTER_ANY,
   getApiErrorMessage,
+  isApiSuccess,
   mapFilterSetup,
   mapMatchList,
   pickMatchListTotal,
   hydrateMatchImages,
   withAnyOption,
-  type ApiErrorResponse,
   type FilterSetupData,
 } from '../../API';
 import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
@@ -43,8 +41,15 @@ import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
 import { SearchStackParamList } from '../../Navigation/SearchStackNavigator';
 import { getFooterBottomPadding } from '../../Functions/safeArea';
+import { navigateToSearchFilterResults } from '../../Functions/matchNavigation';
 import { fs, hp, wp } from '../../Functions/responsive';
-import { store } from '../../Redux';
+import {
+  selectFilterForm,
+  setFilterForm,
+  setFilterResults,
+  useAppDispatch,
+  useAppSelector,
+} from '../../Redux';
 
 type FilterNavigationProp = NativeStackNavigationProp<
   SearchStackParamList,
@@ -95,6 +100,8 @@ const applyDefaults = (setup: FilterSetupData) => {
 const FilterMatchesScreen = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<FilterNavigationProp>();
+  const dispatch = useAppDispatch();
+  const savedForm = useAppSelector(selectFilterForm);
 
   const [filterSetup, setFilterSetup] = useState<FilterSetupData>(EMPTY_SETUP);
   const [location, setLocation] = useState('');
@@ -116,29 +123,33 @@ const FilterMatchesScreen = () => {
     setMetaLoading(true);
 
     try {
-      console.log('Match Filter Meta Request:', ENDPOINTS.MATCHES_FILTER);
       const res = await Api.getMatchFilter();
 
-      if (res?.status == 200) {
-        console.log('Match Filter Meta Success:', res?.data);
+      if (isApiSuccess(res?.status, res?.data?.success)) {
         const setup = mapFilterSetup(res?.data);
         const defaults = applyDefaults(setup);
-        const profileCity =
-          store.getState().profile.profile?.city?.trim() ?? '';
-        const locationDefault = defaults.location || profileCity;
+        const restored = savedForm
+          ? {
+              ...defaults,
+              ...savedForm,
+              activeQuickFilters: {
+                ...defaults.activeQuickFilters,
+                ...savedForm.activeQuickFilters,
+              },
+            }
+          : defaults;
         setFilterSetup(setup);
-        setLocation(locationDefault);
-        setCitySearch(defaults.citySearch);
-        setEducation(defaults.education);
-        setProfession(defaults.profession);
-        setReligion(defaults.religion);
-        setMarital(defaults.marital);
-        setAgeMin(defaults.ageMin);
-        setAgeMax(defaults.ageMax);
-        setIncomeRange(defaults.incomeRange);
-        setActiveQuickFilters(defaults.activeQuickFilters);
+        setLocation(restored.location);
+        setCitySearch(restored.citySearch);
+        setEducation(restored.education);
+        setProfession(restored.profession);
+        setReligion(restored.religion);
+        setMarital(restored.marital);
+        setAgeMin(restored.ageMin);
+        setAgeMax(restored.ageMax);
+        setIncomeRange(restored.incomeRange);
+        setActiveQuickFilters(restored.activeQuickFilters);
       } else {
-        console.log('Match Filter Meta Failed:', res?.data);
         setFilterSetup(EMPTY_SETUP);
         Toast.show(
           res?.data?.message ?? 'Failed to load filter options',
@@ -146,8 +157,6 @@ const FilterMatchesScreen = () => {
         );
       }
     } catch (error) {
-      const axiosError = error as AxiosError<ApiErrorResponse>;
-      console.log('Match Filter Meta Error:', axiosError?.response?.data || error);
       setFilterSetup(EMPTY_SETUP);
       Toast.show(
         getApiErrorMessage(error, 'Failed to load filter options'),
@@ -156,13 +165,26 @@ const FilterMatchesScreen = () => {
     } finally {
       setMetaLoading(false);
     }
-  }, []);
+  }, [savedForm]);
 
   useFocusEffect(
     useCallback(() => {
       fetchFilterMeta();
     }, [fetchFilterMeta]),
   );
+
+  const currentForm = () => ({
+    location,
+    citySearch,
+    education,
+    profession,
+    religion,
+    marital,
+    ageMin,
+    ageMax,
+    incomeRange,
+    activeQuickFilters,
+  });
 
   const handleReset = () => {
     const defaults = applyDefaults(filterSetup);
@@ -176,23 +198,35 @@ const FilterMatchesScreen = () => {
     setAgeMax(defaults.ageMax);
     setIncomeRange(defaults.incomeRange);
     setActiveQuickFilters(defaults.activeQuickFilters);
+    dispatch(setFilterForm(defaults));
   };
 
   const handleClearAll = () => {
-    setLocation('');
-    setEducation(FILTER_ANY);
-    setProfession(FILTER_ANY);
-    setReligion(FILTER_ANY);
-    setMarital('');
-    setCitySearch('');
-    setAgeMin(18);
-    setAgeMax(60);
-    setIncomeRange(FILTER_ANY);
-    setActiveQuickFilters(
-      Object.fromEntries(
+    const cleared = {
+      location: '',
+      education: FILTER_ANY,
+      profession: FILTER_ANY,
+      religion: FILTER_ANY,
+      marital: '',
+      citySearch: '',
+      ageMin: 18,
+      ageMax: 60,
+      incomeRange: FILTER_ANY,
+      activeQuickFilters: Object.fromEntries(
         filterSetup.quickFilters.map(filter => [filter.id, false]),
       ),
-    );
+    };
+    setLocation(cleared.location);
+    setEducation(cleared.education);
+    setProfession(cleared.profession);
+    setReligion(cleared.religion);
+    setMarital(cleared.marital);
+    setCitySearch(cleared.citySearch);
+    setAgeMin(cleared.ageMin);
+    setAgeMax(cleared.ageMax);
+    setIncomeRange(cleared.incomeRange);
+    setActiveQuickFilters(cleared.activeQuickFilters);
+    dispatch(setFilterForm(cleared));
   };
 
   const toggleQuickFilter = (id: string) => {
@@ -223,28 +257,26 @@ const FilterMatchesScreen = () => {
         activeQuickFilters,
       });
 
-      console.log('Match Filter Request:', ENDPOINTS.MATCHES_FILTER, params);
       const res = await Api.getMatchFilter(params);
 
-      if (res?.status == 200) {
-        console.log('Match Filter Success:', res?.data);
+      if (isApiSuccess(res?.status, res?.data?.success)) {
         Toast.show(res?.data?.message ?? 'Filters applied', Toast.LONG);
         const matches = await hydrateMatchImages(mapMatchList(res?.data));
-        navigation.navigate('SearchMain', {
-          filterMatches: matches,
-          filterTotal: pickMatchListTotal(res?.data, matches.length),
-          fromFilter: true,
-        });
+        dispatch(setFilterForm(currentForm()));
+        dispatch(
+          setFilterResults({
+            results: matches,
+            total: pickMatchListTotal(res?.data, matches.length),
+          }),
+        );
+        navigateToSearchFilterResults(navigation);
       } else {
-        console.log('Match Filter Failed:', res?.data);
         Toast.show(
           res?.data?.message ?? 'Failed to apply filters',
           Toast.LONG,
         );
       }
     } catch (error) {
-      const axiosError = error as AxiosError<ApiErrorResponse>;
-      console.log('Match Filter Error:', axiosError?.response?.data || error);
       Toast.show(
         getApiErrorMessage(error, 'Failed to apply filters'),
         Toast.LONG,
@@ -259,6 +291,7 @@ const FilterMatchesScreen = () => {
     citySearch,
     education,
     incomeRange,
+    dispatch,
     loading,
     location,
     marital,
@@ -294,7 +327,7 @@ const FilterMatchesScreen = () => {
         </View>
       ) : (
         <ScrollView
-          showsVerticalScrollIndicator={false}
+          showsVerticalScrollIndicator={true}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
         >

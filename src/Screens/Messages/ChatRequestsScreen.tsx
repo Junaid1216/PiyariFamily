@@ -46,7 +46,7 @@ const ChatRequestsScreen = () => {
       />
 
       <ScrollView
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={true}
         contentContainerStyle={styles.scrollContent}
       >
         <View style={styles.noticeBox}>

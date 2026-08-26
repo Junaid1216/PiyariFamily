@@ -10,19 +10,27 @@ import { getTabBarBottomPadding, resolveInsets } from '../Functions/safeArea';
 import { getTabBarStyle } from '../Functions/tabBarVisibility';
 import { fs, hp, wp } from '../Functions/responsive';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import HomeStackNavigator from './HomeStackNavigator';
-import LikeStackNavigator from './LikeStackNavigator';
-import SearchStackNavigator from './SearchStackNavigator';
-import MessagesStackNavigator from './MessagesStackNavigator';
+import HomeStackNavigator, {
+  HomeStackParamList,
+} from './HomeStackNavigator';
+import LikeStackNavigator, {
+  LikeStackParamList,
+} from './LikeStackNavigator';
+import SearchStackNavigator, {
+  SearchStackParamList,
+} from './SearchStackNavigator';
+import MessagesStackNavigator, {
+  MessagesStackParamList,
+} from './MessagesStackNavigator';
 import ProfileStackNavigator, {
   ProfileStackParamList,
 } from './ProfileStackNavigator';
 
 export type MainTabParamList = {
-  Home: undefined;
-  Search: undefined;
-  Messages: undefined;
-  Like: undefined;
+  Home: NavigatorScreenParams<HomeStackParamList> | undefined;
+  Search: NavigatorScreenParams<SearchStackParamList> | undefined;
+  Messages: NavigatorScreenParams<MessagesStackParamList> | undefined;
+  Like: NavigatorScreenParams<LikeStackParamList> | undefined;
   Profile: NavigatorScreenParams<ProfileStackParamList>;
 };
 

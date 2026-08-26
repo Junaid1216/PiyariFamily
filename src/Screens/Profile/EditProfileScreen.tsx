@@ -1,9 +1,11 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
   KeyboardAvoidingView,
+  Modal,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -25,6 +27,9 @@ import { Images } from '../../Assets';
 import ScreenHeader from '../../Components/ScreenHeader';
 import PrimaryButton from '../../Components/PrimaryButton';
 import SetupDropdown from '../../Components/SetupDropdown';
+import DropdownOptionsOverlay, {
+  DropdownOverlayHost,
+} from '../../Components/DropdownOptionsOverlay';
 import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import {
   COMMUNITY_OPTIONS,
@@ -43,17 +48,25 @@ import {
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
-import { Api, ENDPOINTS, getApiErrorMessage, mapFormToProfilePayload, mapProfileToForm, resolveProfileData, saveProfileCache, type ApiErrorResponse } from '../../API';
-import { normalizeUploadFile, type UploadFile } from '../../API/formData';
-import type { EditProfileFormData } from '../../API';
+import {
+  Api,
+  extractProfileGalleryPhotos,
+  getApiErrorMessage,
+  isApiSuccess,
+  mapFormToProfilePayload,
+  mapProfileToForm,
+  saveProfileCache,
+  type ApiErrorResponse,
+  type EditProfileFormData,
+  type ProfileGalleryPhoto,
+} from '../../API';
+import { normalizeUploadFile, isLocalUploadUri, type UploadFile } from '../../API/formData';
 import { ProfileStackParamList } from '../../Navigation/ProfileStackNavigator';
 import { getFooterBottomPadding } from '../../Functions/safeArea';
 import { fs, hp, wp } from '../../Functions/responsive';
 import {
   selectProfilePhoto,
-  setProfile,
   store,
-  useAppDispatch,
   useAppSelector,
 } from '../../Redux';
 
@@ -86,17 +99,18 @@ const EMPTY_FORM: EditProfileFormData = {
   profilePhoto: null,
 };
 
+const remainingToApiPhotos = (photos: ProfileGalleryPhoto[]) =>
+  photos.map((item, position) => ({
+    index: item.index ?? position,
+    path: item.path,
+    url: item.url,
+    is_main: item.isMain,
+  }));
+
 const EditProfileScreen = () => {
   const navigation = useNavigation<NavigationProp>();
   const insets = useSafeAreaInsets();
-  const dispatch = useAppDispatch();
   const cachedPhoto = useAppSelector(selectProfilePhoto);
-
-  useFocusEffect(
-    useCallback(() => {
-      console.log('Redux EditProfile:', store.getState());
-    }, []),
-  );
 
   const [form, setForm] = useState<EditProfileFormData>(EMPTY_FORM);
   const [openDropdown, setOpenDropdown] = useState<
@@ -112,6 +126,36 @@ const EditProfileScreen = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [newPhoto, setNewPhoto] = useState<UploadFile | null>(null);
+  const [galleryPhotos, setGalleryPhotos] = useState<ProfileGalleryPhoto[]>([]);
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+  const [deletingPhoto, setDeletingPhoto] = useState(false);
+  const [showAllAdditional, setShowAllAdditional] = useState(false);
+  const languagesAnchorRef = useRef<View>(null);
+  const newPhotoRef = useRef<UploadFile | null>(null);
+  const pendingGalleryFilesRef = useRef<UploadFile[]>([]);
+  const galleryDirtyRef = useRef(false);
+  const removedPhotoIndexesRef = useRef<number[]>([]);
+  newPhotoRef.current = newPhoto;
+
+  useFocusEffect(
+    useCallback(() => {
+      const latestProfile = store.getState().profile.profile;
+      if (!latestProfile) {
+        return;
+      }
+
+      if (!galleryDirtyRef.current) {
+        setGalleryPhotos(extractProfileGalleryPhotos(latestProfile));
+      }
+      if (!loading && !newPhotoRef.current) {
+        setForm(prev => ({
+          ...prev,
+          profilePhoto:
+            mapProfileToForm(latestProfile).profilePhoto ?? prev.profilePhoto,
+        }));
+      }
+    }, [loading]),
+  );
 
   const updateForm = <K extends keyof EditProfileFormData>(
     key: K,
@@ -120,38 +164,59 @@ const EditProfileScreen = () => {
     setForm(prev => ({ ...prev, [key]: value }));
   };
 
-  const fetchProfile = useCallback(async () => {
-    setLoading(true);
+  const applyProfile = (profile: Parameters<typeof mapProfileToForm>[0]) => {
+    const mapped = mapProfileToForm(profile);
+    setForm(prev =>
+      newPhotoRef.current
+        ? { ...mapped, profilePhoto: prev.profilePhoto }
+        : mapped,
+    );
+    if (!galleryDirtyRef.current) {
+      setGalleryPhotos(extractProfileGalleryPhotos(profile));
+    }
+  };
 
-    const cachedProfile = cachedPhoto;
+  const fetchProfile = useCallback(async () => {
+    const cachedProfile = store.getState().profile.profile;
     if (cachedProfile) {
+      applyProfile(cachedProfile);
+    } else if (cachedPhoto) {
       setForm(prev => ({
         ...prev,
-        profilePhoto: cachedProfile,
+        profilePhoto: cachedPhoto,
       }));
+      setGalleryPhotos([
+        {
+          id: null,
+          index: 0,
+          url: cachedPhoto,
+          path: null,
+          isMain: true,
+        },
+      ]);
     }
 
+    setLoading(!cachedProfile);
+
     try {
-      console.log('Profile Request:', ENDPOINTS.PROFILE);
       const res = await Api.getProfile();
 
       if (res?.status == 200) {
-        console.log('Profile Success:', res?.data);
-        const rawProfile = resolveProfileData(res?.data);
-        dispatch(setProfile(rawProfile));
-        setForm(mapProfileToForm(rawProfile));
+        applyProfile(saveProfileCache(res?.data));
       } else {
-        console.log('Profile Failed:', res?.data);
-        Toast.show(res?.data?.message || 'Failed to load profile', Toast.LONG);
+        if (!cachedProfile) {
+          Toast.show(res?.data?.message || 'Failed to load profile', Toast.LONG);
+        }
       }
     } catch (error) {
       const axiosError = error as AxiosError<ApiErrorResponse>;
-      console.log('Profile Error:', axiosError?.response?.data || error);
-      Toast.show(getApiErrorMessage(axiosError, 'Failed to load profile'), Toast.LONG);
+      if (!cachedProfile) {
+        Toast.show(getApiErrorMessage(axiosError, 'Failed to load profile'), Toast.LONG);
+      }
     } finally {
       setLoading(false);
     }
-  }, [cachedPhoto, dispatch]);
+  }, [cachedPhoto]);
 
   useEffect(() => {
     fetchProfile();
@@ -222,8 +287,218 @@ const EditProfileScreen = () => {
         setNewPhoto(
           normalizeUploadFile(asset.uri, asset.fileName ?? 'avatar.png', asset.type),
         );
+        setForm(prev => ({
+          ...prev,
+          profilePhoto: asset.uri ?? prev.profilePhoto,
+        }));
+        setGalleryPhotos(prev => {
+          const next = [...prev];
+          const localPhoto: ProfileGalleryPhoto = {
+            id: null,
+            index: null,
+            url: asset.uri as string,
+            path: null,
+            isMain: true,
+          };
+          if (next.length) {
+            next[0] = localPhoto;
+            return next;
+          }
+          return [localPhoto];
+        });
       },
     );
+  };
+
+  const handlePickGalleryPhoto = () => {
+    launchImageLibrary(
+      {
+        mediaType: 'photo',
+        selectionLimit: 1,
+        maxWidth: PROFILE_PHOTO_PICKER_MAX_SIZE,
+        maxHeight: PROFILE_PHOTO_PICKER_MAX_SIZE,
+        quality: PROFILE_PHOTO_PICKER_QUALITY,
+      },
+      response => {
+        if (response.didCancel || response.errorCode) {
+          return;
+        }
+
+        const asset = response.assets?.[0];
+        if (!asset?.uri) {
+          return;
+        }
+
+        if (
+          asset.type &&
+          !['image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(
+            asset.type.toLowerCase(),
+          )
+        ) {
+          Toast.show('Please select JPEG, PNG, or WEBP image', Toast.LONG);
+          return;
+        }
+
+        if (asset.fileSize && asset.fileSize > PROFILE_PHOTO_MAX_BYTES) {
+          Toast.show(Strings.photoTooLarge, Toast.LONG);
+          return;
+        }
+
+        const file = normalizeUploadFile(
+          asset.uri,
+          asset.fileName ?? `gallery-${Date.now()}.jpg`,
+          asset.type,
+        );
+
+        galleryDirtyRef.current = true;
+        pendingGalleryFilesRef.current = [
+          ...pendingGalleryFilesRef.current.filter(item => item.uri !== file.uri),
+          file,
+        ];
+        setShowAllAdditional(true);
+        setGalleryPhotos(prev => {
+          if (prev.some(item => item.url === file.uri)) {
+            return prev;
+          }
+
+          return [
+            ...prev,
+            {
+              id: null,
+              index: null,
+              url: file.uri,
+              path: null,
+              isMain: false,
+            },
+          ];
+        });
+      },
+    );
+  };
+
+  const persistGalleryToProfile = async (
+    photos: ProfileGalleryPhoto[],
+    removedIndexes: number[],
+  ) => {
+    const remainingPhotos = photos.map((item, position) => ({
+      index: item.index ?? position,
+      path: item.path,
+      url: item.url,
+      is_main: item.isMain,
+    }));
+    const remainingIndexes = remainingPhotos
+      .map(item => item.index)
+      .filter((index): index is number => index != null)
+      .map(String);
+    const remainingFiles: UploadFile[] = [];
+
+    if (
+      newPhoto &&
+      isLocalUploadUri(newPhoto.uri) &&
+      photos.some(item => item.url === newPhoto.uri)
+    ) {
+      remainingFiles.push(newPhoto);
+    }
+
+    pendingGalleryFilesRef.current.forEach(file => {
+      if (
+        photos.some(item => item.url === file.uri) &&
+        !remainingFiles.some(item => item.uri === file.uri)
+      ) {
+        remainingFiles.push(file);
+      }
+    });
+
+    photos.forEach(item => {
+      if (
+        isLocalUploadUri(item.url) &&
+        !remainingFiles.some(file => file.uri === item.url)
+      ) {
+        remainingFiles.push(normalizeUploadFile(item.url));
+      }
+    });
+
+    if (!remainingFiles.length) {
+      const keep = photos.find(item => item.isMain) ?? photos[0];
+      if (keep?.url) {
+        remainingFiles.push({ uri: keep.url });
+      } else if (form.profilePhoto) {
+        remainingFiles.push({ uri: form.profilePhoto });
+      }
+    }
+
+    const payload = {
+      ...mapFormToProfilePayload(form),
+      keep_photos: JSON.stringify(remainingPhotos),
+      replace_photos: 1,
+      ...(remainingIndexes.length ? { photo_indexes: remainingIndexes } : {}),
+      ...(removedIndexes.length
+        ? { removed_indexes: removedIndexes.map(String) }
+        : {}),
+    };
+
+    return Api.updateProfile(
+      payload,
+      remainingFiles.length ? remainingFiles : null,
+    );
+  };
+
+  const cacheRemainingPhotos = (
+    source: unknown,
+    photos: ProfileGalleryPhoto[],
+    removedIndexes: number[] = [],
+  ) => {
+    const remainingApiPhotos = remainingToApiPhotos(photos);
+    const base =
+      source && typeof source === 'object'
+        ? { ...(source as Record<string, unknown>) }
+        : {};
+    const nestedUser =
+      base.user && typeof base.user === 'object'
+        ? { ...(base.user as Record<string, unknown>), photos: remainingApiPhotos }
+        : undefined;
+
+    return saveProfileCache({
+      ...base,
+      ...(nestedUser ? { user: nestedUser } : {}),
+      photos: remainingApiPhotos,
+      removed_photo_indexes: removedIndexes,
+    });
+  };
+
+  const handleDeleteGalleryPhoto = () => {
+    if (viewerIndex == null || deletingPhoto) {
+      return;
+    }
+
+    const photo = visibleGalleryPhotos[viewerIndex];
+    if (!photo) {
+      return;
+    }
+
+    const remaining = galleryPhotos.filter(item =>
+      photo.index != null && item.index != null
+        ? item.index !== photo.index
+        : item.isMain || item.url !== photo.url,
+    );
+    const removedIndexes =
+      photo.index != null
+        ? [...removedPhotoIndexesRef.current, photo.index]
+        : removedPhotoIndexesRef.current;
+
+    galleryDirtyRef.current = true;
+    removedPhotoIndexesRef.current = removedIndexes;
+    pendingGalleryFilesRef.current = pendingGalleryFilesRef.current.filter(
+      file => remaining.some(item => item.url === file.uri),
+    );
+    setGalleryPhotos(remaining);
+    setViewerIndex(null);
+    cacheRemainingPhotos(
+      store.getState().profile.profile,
+      remaining,
+      removedIndexes,
+    );
+    Toast.show(Strings.photoDeleted, Toast.LONG);
   };
 
   const handleSave = async () => {
@@ -235,30 +510,43 @@ const EditProfileScreen = () => {
       setSaving(true);
 
       try {
-        console.log('Update Profile Request:', ENDPOINTS.PROFILE_UPDATE);
-        const res = await Api.updateProfile(
-          mapFormToProfilePayload(form),
-          newPhoto,
+        const res = await persistGalleryToProfile(
+          galleryPhotos,
+          removedPhotoIndexesRef.current,
         );
 
-        if (res?.status == 200) {
-          console.log('Update Profile Success:', res);
-          const photoUri = newPhoto?.uri ?? form.profilePhoto;
-          const savedProfile = saveProfileCache({
-            ...(typeof res?.data === 'object' && res?.data ? res.data : res),
-            profile_photo: photoUri,
-            image: photoUri,
-          });
-          dispatch(setProfile(savedProfile));
+        if (isApiSuccess(res?.status, res?.success) && res?.success !== false) {
+          galleryDirtyRef.current = false;
+          pendingGalleryFilesRef.current = [];
+          cacheRemainingPhotos(
+            res?.user ?? res,
+            galleryPhotos,
+            removedPhotoIndexesRef.current,
+          );
+
+          try {
+            const profileRes = await Api.getProfile();
+            if (profileRes?.status == 200) {
+              const latest = saveProfileCache(profileRes.data);
+              const fromDb = extractProfileGalleryPhotos(latest);
+              if (fromDb.length > galleryPhotos.length) {
+                cacheRemainingPhotos(
+                  latest,
+                  galleryPhotos,
+                  removedPhotoIndexesRef.current,
+                );
+              }
+            }
+          } catch (refreshError) {
+          }
+
           Toast.show(res?.message ?? Strings.profileSaved, Toast.LONG);
           navigation.goBack();
         } else {
-          console.log('Update Profile Failed:', res);
           Toast.show(res?.message ?? 'Failed to save profile', Toast.LONG);
         }
       } catch (error) {
         const axiosError = error as AxiosError<ApiErrorResponse>;
-        console.log('Update Profile Error:', axiosError?.response?.data || error);
         Toast.show(getApiErrorMessage(axiosError, 'Failed to save profile'), Toast.LONG);
       } finally {
         setSaving(false);
@@ -266,10 +554,28 @@ const EditProfileScreen = () => {
     }
   };
 
-  const renderSectionHeader = (icon: string, title: string) => (
+  const additionalPhotos = galleryPhotos.filter(photo => !photo.isMain);
+  const visibleGalleryPhotos = showAllAdditional ? additionalPhotos : [];
+  const showGalleryAddSlot =
+    showAllAdditional || additionalPhotos.length === 0;
+
+  const handleToggleAdditionalPhotos = () => {
+    if (additionalPhotos.length === 0) {
+      return;
+    }
+
+    setShowAllAdditional(current => !current);
+  };
+
+  const renderSectionHeader = (
+    icon: string,
+    title: string,
+    rightElement?: React.ReactNode,
+  ) => (
     <View style={styles.sectionHeader}>
       <Icon name={icon} size={fs(16)} color={Colors.primary} />
       <Text style={styles.sectionTitle}>{title}</Text>
+      {rightElement}
     </View>
   );
 
@@ -305,9 +611,11 @@ const EditProfileScreen = () => {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView
-          showsVerticalScrollIndicator={false}
+          showsVerticalScrollIndicator={true}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled
+          removeClippedSubviews={false}
         >
           <View style={styles.photoSection}>
             <View style={styles.photoWrap}>
@@ -329,8 +637,76 @@ const EditProfileScreen = () => {
               </TouchableOpacity>
             </View>
             <TouchableOpacity activeOpacity={0.85} onPress={handlePickPhoto}>
-              <Text style={styles.changePhotoText}>{Strings.changePhoto}</Text>
+              <Text style={styles.changePhotoText}>
+                {Strings.changePhoto}
+              </Text>
             </TouchableOpacity>
+          </View>
+
+          <View style={styles.galleryCard}>
+            <View style={styles.galleryHeader}>
+              <View style={styles.galleryHeaderLeft}>
+                <Icon
+                  name="image-multiple-outline"
+                  size={fs(16)}
+                  color={Colors.primary}
+                />
+                <Text style={styles.galleryTitle} numberOfLines={1}>
+                  {Strings.photoGallery}
+                </Text>
+              </View>
+              {additionalPhotos.length > 0 ? (
+                <TouchableOpacity
+                  style={styles.viewAllButton}
+                  activeOpacity={0.85}
+                  onPress={handleToggleAdditionalPhotos}
+                >
+                  <Icon
+                    name={
+                      showAllAdditional
+                        ? 'chevron-up'
+                        : 'chevron-down'
+                    }
+                    size={fs(18)}
+                    color={Colors.redish}
+                  />
+                  <Text style={styles.viewAllText} numberOfLines={1}>
+                    {showAllAdditional ? Strings.hideAll : Strings.viewAll}
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+
+            <Text style={styles.galleryHint}>
+              {additionalPhotos.length > 0 && !showAllAdditional
+                ? Strings.viewAllHint
+                : Strings.photoGalleryHint}
+            </Text>
+            {showGalleryAddSlot ? (
+              <View style={styles.photoGrid}>
+                {visibleGalleryPhotos.map((photo, index) => (
+                  <TouchableOpacity
+                    key={`${photo.id ?? photo.url}-${index}`}
+                    style={styles.photoSlot}
+                    activeOpacity={0.9}
+                    onPress={() => setViewerIndex(index)}
+                  >
+                    <Image
+                      source={{ uri: photo.url }}
+                      style={styles.galleryImage}
+                      resizeMode="cover"
+                    />
+                  </TouchableOpacity>
+                ))}
+                <TouchableOpacity
+                  style={[styles.photoSlot, styles.photoSlotAdd]}
+                  activeOpacity={0.85}
+                  onPress={handlePickGalleryPhoto}
+                >
+                  <Icon name="plus" size={fs(28)} color={Colors.primary} />
+                </TouchableOpacity>
+              </View>
+            ) : null}
           </View>
 
           {renderSectionHeader('account-outline', Strings.personalInfoSection)}
@@ -469,7 +845,24 @@ const EditProfileScreen = () => {
             />
           </View>
 
-          {renderFieldLabel(Strings.locationLabel)}
+          {renderFieldLabel(Strings.countryDetail)}
+          <View style={styles.inputRow}>
+            <Icon
+              name="earth"
+              size={fs(20)}
+              color={Colors.primary}
+              style={styles.inputIcon}
+            />
+            <TextInput
+              style={styles.input}
+              value={form.country}
+              onChangeText={value => updateForm('country', value)}
+              placeholder={Strings.countryPlaceholder}
+              placeholderTextColor={Colors.placeholder}
+            />
+          </View>
+
+          {renderFieldLabel(Strings.cityDetail)}
           <View style={styles.inputRow}>
             <Icon
               name="map-marker-outline"
@@ -481,6 +874,7 @@ const EditProfileScreen = () => {
               style={styles.input}
               value={form.city}
               onChangeText={value => updateForm('city', value)}
+              placeholder={Strings.cityPlaceholder}
               placeholderTextColor={Colors.placeholder}
             />
           </View>
@@ -542,68 +936,53 @@ const EditProfileScreen = () => {
           />
 
           {renderFieldLabel(Strings.otherLanguages)}
-          <TouchableOpacity
-            style={styles.dropdownRow}
-            activeOpacity={0.85}
-            onPress={() =>
-              setOpenDropdown(prev =>
-                prev === 'languages' ? null : 'languages',
-              )
-            }
+          <View
+            style={[
+              styles.dropdownAnchor,
+              openDropdown === 'languages' && styles.dropdownOpenWrap,
+            ]}
           >
-            <Image
-              source={Images.msgTextIcon}
-              style={styles.dropdownIconImage}
-              resizeMode="contain"
-            />
-            <Text style={styles.dropdownPlaceholder}>
-              {Strings.selectLanguage}
-            </Text>
-            <Icon
-              name={
-                openDropdown === 'languages' ? 'chevron-up' : 'chevron-down'
-              }
-              size={fs(22)}
-              color={Colors.iconMuted}
-            />
-          </TouchableOpacity>
-          {openDropdown === 'languages' ? (
-            <View style={styles.dropdownMenu}>
-              <ScrollView
-                nestedScrollEnabled
-                keyboardShouldPersistTaps="handled"
-                showsVerticalScrollIndicator={false}
-                style={styles.dropdownScroll}
+            <View
+              ref={languagesAnchorRef}
+              collapsable={false}
+              style={styles.dropdownAnchorInner}
+            >
+              <TouchableOpacity
+                style={styles.dropdownRow}
+                activeOpacity={0.85}
+                onPress={() =>
+                  setOpenDropdown(prev =>
+                    prev === 'languages' ? null : 'languages',
+                  )
+                }
               >
-                {OTHER_LANGUAGE_OPTIONS.map(option => {
-                  const isSelected = form.otherLanguages.includes(option);
-                  return (
-                    <TouchableOpacity
-                      key={option}
-                      style={[
-                        styles.dropdownOption,
-                        isSelected && styles.dropdownOptionSelected,
-                      ]}
-                      activeOpacity={0.85}
-                      onPress={() => toggleLanguage(option)}
-                    >
-                      <Text
-                        style={[
-                          styles.dropdownOptionText,
-                          isSelected && styles.dropdownOptionTextSelected,
-                        ]}
-                      >
-                        {option}
-                      </Text>
-                      {isSelected ? (
-                        <Icon name="check" size={fs(18)} color={Colors.gold} />
-                      ) : null}
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
+                <Image
+                  source={Images.msgTextIcon}
+                  style={styles.dropdownIconImage}
+                  resizeMode="contain"
+                />
+                <Text style={styles.dropdownPlaceholder}>
+                  {Strings.selectLanguage}
+                </Text>
+                <Icon
+                  name={
+                    openDropdown === 'languages' ? 'chevron-up' : 'chevron-down'
+                  }
+                  size={fs(22)}
+                  color={Colors.iconMuted}
+                />
+              </TouchableOpacity>
+              <DropdownOptionsOverlay
+                visible={openDropdown === 'languages'}
+                anchorRef={languagesAnchorRef}
+                options={OTHER_LANGUAGE_OPTIONS}
+                selectedValues={form.otherLanguages}
+                closeOnSelect={false}
+                onSelect={option => toggleLanguage(option as OtherLanguage)}
+                onClose={() => setOpenDropdown(null)}
+              />
             </View>
-          ) : null}
+          </View>
           <Text style={styles.hintText}>{Strings.maxLanguagesHint}</Text>
           {form.otherLanguages.length > 0 ? (
             <View style={styles.languagePillRow}>
@@ -699,8 +1078,63 @@ const EditProfileScreen = () => {
             showArrow
           />
         </View>
+        <DropdownOverlayHost />
       </KeyboardAvoidingView>
       )}
+
+      <Modal
+        visible={viewerIndex !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (!deletingPhoto) {
+            setViewerIndex(null);
+          }
+        }}
+      >
+        <View style={styles.lightbox}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => {
+              if (!deletingPhoto) {
+                setViewerIndex(null);
+              }
+            }}
+          />
+          {viewerIndex !== null && visibleGalleryPhotos[viewerIndex] ? (
+            <Image
+              source={{ uri: visibleGalleryPhotos[viewerIndex].url }}
+              style={styles.lightboxImage}
+              resizeMode="contain"
+            />
+          ) : null}
+          <TouchableOpacity
+            style={styles.lightboxClose}
+            activeOpacity={0.85}
+            disabled={deletingPhoto}
+            onPress={() => setViewerIndex(null)}
+          >
+            <Icon name="close" size={fs(20)} color={Colors.white} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.lightboxDelete}
+            activeOpacity={0.85}
+            disabled={deletingPhoto}
+            onPress={handleDeleteGalleryPhoto}
+          >
+            {deletingPhoto ? (
+              <ActivityIndicator size="small" color={Colors.white} />
+            ) : (
+              <>
+                <Icon name="delete-outline" size={fs(18)} color={Colors.white} />
+                <Text style={styles.lightboxDeleteText}>
+                  {Strings.deletePhoto}
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -734,7 +1168,7 @@ const styles = StyleSheet.create({
   },
   photoSection: {
     alignItems: 'center',
-    marginBottom: hp('2.5%'),
+    marginBottom: hp('1.6%'),
   },
   photoWrap: {
     position: 'relative',
@@ -765,6 +1199,151 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.semiBold,
     color: Colors.gold,
   },
+  hiddenPhotoCard: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.tabActiveBg,
+    borderRadius: wp('4%'),
+    borderWidth: 1,
+    borderColor: Colors.goldLight,
+    paddingVertical: hp('1.6%'),
+    paddingHorizontal: wp('4%'),
+    gap: hp('0.6%'),
+  },
+  hiddenPhotoText: {
+    fontSize: fs(12),
+    fontFamily: Fonts.medium,
+    color: Colors.primary,
+    textAlign: 'center',
+  },
+  galleryCard: {
+    backgroundColor: Colors.white,
+    borderRadius: wp('4%'),
+    borderWidth: 1,
+    borderColor: Colors.goldLight,
+    paddingHorizontal: wp('3.2%'),
+    paddingTop: hp('1.2%'),
+    paddingBottom: hp('1.4%'),
+    marginBottom: hp('1.8%'),
+  },
+  galleryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: hp('1%'),
+    gap: wp('2%'),
+  },
+  galleryHeaderLeft: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: wp('2%'),
+  },
+  galleryTitle: {
+    flexShrink: 1,
+    fontSize: fs(12),
+    fontFamily: Fonts.bold,
+    color: Colors.primary,
+    letterSpacing: 0.5,
+  },
+  galleryHint: {
+    fontSize: fs(12),
+    fontFamily: Fonts.regular,
+    color: Colors.textLight,
+    marginBottom: hp('1.2%'),
+  },
+  galleryEmptyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: wp('2%'),
+    paddingVertical: hp('0.4%'),
+  },
+  galleryEmptyText: {
+    flex: 1,
+    fontSize: fs(12),
+    fontFamily: Fonts.regular,
+    color: Colors.textLight,
+  },
+  photoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    columnGap: wp('2%'),
+    rowGap: hp('1.2%'),
+  },
+  photoSlot: {
+    width: '31%',
+    aspectRatio: 1,
+    borderRadius: wp('3%'),
+    overflow: 'hidden',
+    backgroundColor: Colors.tabActiveBg,
+    position: 'relative',
+  },
+  photoSlotAdd: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.tabActiveBg,
+    borderWidth: 1.2,
+    borderColor: Colors.goldLight,
+  },
+  galleryImage: {
+    width: '100%',
+    height: '100%',
+  },
+  mainBadge: {
+    position: 'absolute',
+    top: hp('0.5%'),
+    left: wp('1%'),
+    zIndex: 2,
+    backgroundColor: Colors.primary,
+    borderRadius: wp('1.5%'),
+    paddingHorizontal: wp('1.5%'),
+    paddingVertical: hp('0.2%'),
+  },
+  mainBadgeText: {
+    fontSize: fs(8),
+    fontFamily: Fonts.semiBold,
+    color: Colors.white,
+  },
+  lightbox: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lightboxImage: {
+    width: wp('92%'),
+    height: hp('70%'),
+  },
+  lightboxClose: {
+    position: 'absolute',
+    top: hp('7%'),
+    right: wp('6%'),
+    width: wp('10%'),
+    height: wp('10%'),
+    borderRadius: wp('5%'),
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lightboxDelete: {
+    position: 'absolute',
+    bottom: hp('8%'),
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: wp('1.5%'),
+    backgroundColor: Colors.redish,
+    borderRadius: wp('8%'),
+    paddingHorizontal: wp('5%'),
+    paddingVertical: hp('1.2%'),
+  },
+  lightboxDeleteText: {
+    fontSize: fs(13),
+    fontFamily: Fonts.semiBold,
+    color: Colors.white,
+  },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -773,10 +1352,27 @@ const styles = StyleSheet.create({
     marginTop: hp('0.5%'),
   },
   sectionTitle: {
+    flex: 1,
     fontSize: fs(12),
     fontFamily: Fonts.bold,
     color: Colors.primary,
     letterSpacing: 0.5,
+  },
+  viewAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 0,
+    gap: wp('1%'),
+    backgroundColor: '#FDE8EE',
+    borderRadius: wp('5%'),
+    paddingHorizontal: wp('2.4%'),
+    paddingVertical: hp('0.45%'),
+  },
+  viewAllText: {
+    fontSize: fs(11),
+    fontFamily: Fonts.bold,
+    color: Colors.redish,
+    includeFontPadding: false,
   },
   fieldLabel: {
     fontSize: FontSizes.body,
@@ -896,11 +1492,30 @@ const styles = StyleSheet.create({
   },
   heightRow: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
     gap: wp('2.5%'),
     marginBottom: hp('2%'),
+    zIndex: 50,
+    elevation: 50,
+    overflow: 'visible',
   },
   heightDropdown: {
     flex: 1,
+    overflow: 'visible',
+  },
+  dropdownAnchor: {
+    position: 'relative',
+    zIndex: 1,
+    marginBottom: hp('0.5%'),
+    overflow: 'visible',
+  },
+  dropdownAnchorInner: {
+    position: 'relative',
+    overflow: 'visible',
+  },
+  dropdownOpenWrap: {
+    zIndex: 200,
+    elevation: 200,
   },
   dropdownRow: {
     flexDirection: 'row',
@@ -911,7 +1526,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.inputBg,
     paddingHorizontal: wp('3.7%'),
     height: AuthStyles.inputHeight,
-    marginBottom: hp('0.5%'),
   },
   dropdownIconImage: {
     width: fs(20),
@@ -925,12 +1539,21 @@ const styles = StyleSheet.create({
     color: Colors.placeholder,
   },
   dropdownMenu: {
+    position: 'absolute',
+    top: AuthStyles.inputHeight + hp('0.4%'),
+    left: 0,
+    right: 0,
+    zIndex: 40,
+    elevation: 24,
     borderWidth: 1.2,
     borderColor: Colors.dividerPink,
     borderRadius: AuthStyles.inputRadius,
     backgroundColor: Colors.white,
     overflow: 'hidden',
-    marginBottom: hp('0.8%'),
+    shadowColor: Colors.black,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
   },
   dropdownScroll: {
     maxHeight: hp('28%'),
@@ -1007,6 +1630,8 @@ const styles = StyleSheet.create({
     lineHeight: hp('2.2%'),
   },
   footer: {
+    zIndex: 1,
+    elevation: 2,
     paddingHorizontal: AuthStyles.horizontalPadding,
     paddingTop: hp('1.5%'),
     borderTopWidth: 1,

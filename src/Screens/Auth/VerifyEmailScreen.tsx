@@ -15,7 +15,9 @@ import AuthIconBadge from '../../Components/AuthIconBadge';
 import BackButton from '../../Components/BackButton';
 import OtpCodeInput from '../../Components/OtpCodeInput';
 import PrimaryButton from '../../Components/PrimaryButton';
-import ResendCodeSection from '../../Components/ResendCodeSection';
+import ResendCodeSection, {
+  RESEND_COOLDOWN_SECONDS,
+} from '../../Components/ResendCodeSection';
 import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
@@ -27,7 +29,7 @@ import {
 } from '../../Functions/authNavigation';
 import { AuthStackParamList } from '../../Navigation/AuthNavigator';
 import { hp, wp } from '../../Functions/responsive';
-import { setAuthSession, store } from '../../Redux';
+import { setAuthSession, store, clearProfile } from '../../Redux';
 
 type Props = {
   navigation: {
@@ -58,7 +60,10 @@ const VerifyEmailScreen = ({ navigation }: Props) => {
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
-  const [resendCooldown, setResendCooldown] = useState(autoSend ? 0 : 45);
+  const [resendCooldown, setResendCooldown] = useState(
+    autoSend ? 0 : RESEND_COOLDOWN_SECONDS,
+  );
+  const [resendCycle, setResendCycle] = useState(0);
   const autoSendStarted = useRef(false);
 
   const sendOtp = async (showToast = true) => {
@@ -69,22 +74,19 @@ const VerifyEmailScreen = ({ navigation }: Props) => {
     setResending(true);
 
     try {
-      console.log('Resend Email OTP Request:', ENDPOINTS.AUTH.RESEND_EMAIL_OTP);
       const response = await authService.resendEmailOtp({ email });
 
       if (response?.status == 200 || response?.success == 200 || response?.success === true) {
-        console.log('Resend Email OTP Success:', response);
         if (showToast) {
           Toast.show(response.message || 'Verification code sent', Toast.LONG);
         }
-        setResendCooldown(response.resend_after_seconds ?? 45);
+        setResendCooldown(RESEND_COOLDOWN_SECONDS);
+        setResendCycle(cycle => cycle + 1);
         return;
       }
 
-      console.log('Resend Email OTP Failed:', response);
       Toast.show(response.message || 'Failed to send code. Please try again.');
     } catch (error) {
-      console.log('Resend Email OTP Error:', (error as any)?.response?.data || error);
       Toast.show(getApiErrorMessage(error));
     } finally {
       setResending(false);
@@ -104,6 +106,7 @@ const VerifyEmailScreen = ({ navigation }: Props) => {
 
   const goToNextScreen = async (token?: string | null) => {
     let nextToken = token || store.getState().auth.accessToken;
+    const isNewAccount = Boolean(signupPassword || signupName);
 
     if (!nextToken && signupPassword) {
       try {
@@ -117,11 +120,11 @@ const VerifyEmailScreen = ({ navigation }: Props) => {
           loginResponse.data?.token ||
           store.getState().auth.accessToken;
       } catch (loginError) {
-        console.log(
-          'Verify Email Login Fallback Error:',
-          (loginError as any)?.response?.data || loginError,
-        );
       }
+    }
+
+    if (isNewAccount) {
+      store.dispatch(clearProfile());
     }
 
     store.dispatch(
@@ -138,6 +141,12 @@ const VerifyEmailScreen = ({ navigation }: Props) => {
     );
 
     Toast.show('Email verified successfully');
+
+    if (isNewAccount) {
+      navigateAfterLogin(navigation, 'SelectCountry');
+      return;
+    }
+
     const nextRoute = await resolvePostLoginRoute();
     navigateAfterLogin(navigation, nextRoute);
   };
@@ -152,10 +161,6 @@ const VerifyEmailScreen = ({ navigation }: Props) => {
 
     setLoading(true);
     try {
-      console.log('Verify Email OTP Request:', ENDPOINTS.AUTH.VERIFY_EMAIL_OTP, {
-        email,
-        otp,
-      });
       const response = await authService.verifyEmailOtp({
         email,
         otp,
@@ -166,7 +171,6 @@ const VerifyEmailScreen = ({ navigation }: Props) => {
         response?.success === true ||
         response?.success == 200
       ) {
-        console.log('Verify Email OTP Success:', response);
         await goToNextScreen(
           response.token ||
             response.access_token ||
@@ -176,18 +180,12 @@ const VerifyEmailScreen = ({ navigation }: Props) => {
       }
 
       if (isSelectedEmailInvalid(response)) {
-        console.log('Verify Email OTP Pending Account:', response);
         await goToNextScreen();
         return;
       }
 
-      console.log('Verify Email OTP Failed:', response);
       Toast.show(response.message || 'Verification failed. Please try again.');
     } catch (error) {
-      console.log(
-        'Verify Email OTP Error:',
-        (error as any)?.response?.data || error,
-      );
 
       if (isSelectedEmailInvalid(error)) {
         await goToNextScreen();
@@ -212,7 +210,7 @@ const VerifyEmailScreen = ({ navigation }: Props) => {
             style={styles.scrollView}
             contentContainerStyle={styles.scroll}
             keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
+            showsVerticalScrollIndicator={true}
             enableOnAndroid
             bounces={false}
           >
@@ -226,6 +224,7 @@ const VerifyEmailScreen = ({ navigation }: Props) => {
             <OtpCodeInput value={code} onChangeText={setCode} />
 
             <ResendCodeSection
+              key={resendCycle}
               cooldownSeconds={resendCooldown}
               loading={resending}
               onResend={handleResend}

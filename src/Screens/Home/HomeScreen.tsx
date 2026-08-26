@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
@@ -30,8 +30,8 @@ import {
   mapHomeGreeting,
   mapHomeMatches,
   mapListToHomeMatches,
+  arrangeHomeMatchesByProximity,
   mapMatchList,
-  mapBestMatch,
   type ApiErrorResponse,
   type FeaturedMatch,
   type SuggestedMatch,
@@ -49,6 +49,7 @@ import {
   useAppSelector,
   clearHomeMatches,
   removeFeaturedMatch,
+  dismissFeaturedMatch,
   selectFeaturedMatches,
   selectHomeGreeting,
   selectHomeSubtitle,
@@ -68,6 +69,7 @@ type HomeNavigationProp = NativeStackNavigationProp<
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const HORIZONTAL_PADDING = wp('5.5%');
 const CARD_WIDTH = SCREEN_WIDTH - HORIZONTAL_PADDING * 2;
+const FEATURED_CARD_HEIGHT = Math.max(hp('48%'), CARD_WIDTH * 1.18);
 
 const INACTIVE_INFO_ITEMS = [
   {
@@ -94,11 +96,29 @@ const HomeScreen = () => {
   const subtitle = useAppSelector(selectHomeSubtitle);
   const featuredMatches = useAppSelector(selectFeaturedMatches);
   const suggestedMatches = useAppSelector(selectSuggestedMatches);
+  const { featuredMatches: displayFeatured, suggestedMatches: displaySuggested } =
+    useMemo(
+      () =>
+        arrangeHomeMatchesByProximity(
+          featuredMatches,
+          suggestedMatches,
+          profile?.city,
+          profile?.country,
+        ),
+      [
+        featuredMatches,
+        suggestedMatches,
+        profile?.city,
+        profile?.country,
+      ],
+    );
   const [loading, setLoading] = useState(true);
   const [reactivating, setReactivating] = useState(false);
   const [liking, setLiking] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const sliderRef = useRef<FlatList<FeaturedMatch>>(null);
+  const fetchingRef = useRef(false);
+  const hasLoadedRef = useRef(false);
 
   const displayGreeting =
     greeting ||
@@ -108,113 +128,138 @@ const HomeScreen = () => {
   const displaySubtitle = subtitle || Strings.homeSubtitle;
 
   const fetchHomeMatches = useCallback(async () => {
-    setLoading(true);
+    if (fetchingRef.current) {
+      return;
+    }
+
+    fetchingRef.current = true;
+    if (!hasLoadedRef.current) {
+      setLoading(true);
+    }
 
     if (isAccountInactive) {
-      console.log('Home Inactive Account: matches hidden');
       dispatch(clearHomeMatches());
+      hasLoadedRef.current = true;
+      fetchingRef.current = false;
       setLoading(false);
       return;
     }
 
+    const fallbackGreeting = user?.name
+      ? `Hello, ${user.name.split(' ')[0]}!`
+      : Strings.homeGreeting;
+
+    const applyHomePayload = (
+      featured: FeaturedMatch[],
+      suggested: SuggestedMatch[],
+      greetingText?: string,
+      subtitleText?: string,
+      totalMatches = featured.length + suggested.length,
+    ) => {
+      const arranged = arrangeHomeMatchesByProximity(
+        featured,
+        suggested,
+        profile?.city,
+        profile?.country,
+      );
+      const homePayload = {
+        greeting: greetingText || fallbackGreeting,
+        subtitle: subtitleText || Strings.homeSubtitle,
+        featuredMatches: arranged.featuredMatches,
+        suggestedMatches: arranged.suggestedMatches,
+        totalMatches,
+      };
+      dispatch(setHomeMatches(homePayload));
+      setActiveIndex(0);
+      return { arranged, homePayload };
+    };
+
     try {
-      console.log('Best Match Request:', ENDPOINTS.MATCHES_BEST);
-      Api.getBestMatch()
-        .then(bestRes => {
-          console.log('Best Match HTTP Status:', bestRes?.status);
-          if (bestRes?.status == 200) {
-            console.log('Best Match Success:', bestRes?.data);
-            console.log('Best Match Mapped:', mapBestMatch(bestRes?.data));
-          } else {
-            console.log('Best Match Failed:', bestRes?.data);
-          }
-        })
-        .catch(error => {
-          const axiosError = error as AxiosError<ApiErrorResponse>;
-          console.log(
-            'Best Match Error:',
-            axiosError?.response?.data || error,
-          );
-        });
-
-      console.log('Home Matches Request:', ENDPOINTS.MATCHES_HOME);
       const res = await Api.getHomeMatches();
+      const isSuccess =
+        res?.status == 200 ||
+        res?.status == 201 ||
+        res?.data?.success === true ||
+        res?.data?.success == 200;
 
-      if (res?.status == 200) {
-        console.log('Home Matches Success:', res?.data);
-        let mapped = mapHomeMatches(res?.data);
+      if (!isSuccess) {
+        applyHomePayload([], []);
+        return;
+      }
 
-        if (
-          !mapped.featuredMatches.length &&
-          !mapped.suggestedMatches.length
-        ) {
+      let mapped = mapHomeMatches(res?.data);
+
+      if (!mapped.featuredMatches.length && !mapped.suggestedMatches.length) {
+        try {
           const searchParams = buildMatchSearchParams({
             profileGender: profile?.gender,
           });
-          console.log(
-            'Home Matches empty, Search Fallback Request:',
-            ENDPOINTS.MATCHES_SEARCH,
-            searchParams,
-          );
           const searchRes = await Api.getMatchSearch(searchParams);
 
           if (searchRes?.status == 200) {
-            console.log('Home Search Fallback Success:', searchRes?.data);
             mapped = mapListToHomeMatches(
               mapMatchList(searchRes?.data),
               mapped.greeting,
             );
           } else {
-            console.log('Home Search Fallback Failed:', searchRes?.data);
           }
+        } catch (searchError) {
         }
-        const greetingParts = mapHomeGreeting(mapped.greeting);
-        const title =
-          greetingParts.title ||
-          (user?.name
-            ? `Hello, ${user.name.split(' ')[0]}!`
-            : Strings.homeGreeting);
+      }
 
-        const homePayload = {
-          greeting: title,
-          subtitle: greetingParts.subtitle || Strings.homeSubtitle,
-          featuredMatches: mapped.featuredMatches,
-          suggestedMatches: mapped.suggestedMatches,
-          totalMatches: mapped.totalMatches,
-        };
+      const greetingParts = mapHomeGreeting(mapped.greeting);
+      const title = greetingParts.title || fallbackGreeting;
+      const { arranged, homePayload } = applyHomePayload(
+        mapped.featuredMatches,
+        mapped.suggestedMatches,
+        title,
+        greetingParts.subtitle || Strings.homeSubtitle,
+        mapped.totalMatches,
+      );
 
-        dispatch(setHomeMatches(homePayload));
-        setActiveIndex(0);
-
-        const [featuredMatches, suggestedMatches] = await Promise.all([
-          hydrateMatchImages(mapped.featuredMatches),
-          hydrateMatchImages(mapped.suggestedMatches),
+      try {
+        const [hydratedFeatured, hydratedSuggested] = await Promise.all([
+          hydrateMatchImages(arranged.featuredMatches),
+          hydrateMatchImages(arranged.suggestedMatches),
         ]);
 
         dispatch(
           setHomeMatches({
             ...homePayload,
-            featuredMatches,
-            suggestedMatches,
+            ...arrangeHomeMatchesByProximity(
+              hydratedFeatured,
+              hydratedSuggested,
+              profile?.city,
+              profile?.country,
+            ),
           }),
         );
-      } else {
-        console.log('Home Matches Failed:', res?.data);
-        dispatch(clearHomeMatches());
-        Toast.show(
-          res?.data?.message ?? 'Failed to load matches',
-          Toast.LONG,
-        );
+      } catch (hydrateError) {
       }
     } catch (error) {
       const axiosError = error as AxiosError<ApiErrorResponse>;
-      console.log('Home Matches Error:', axiosError?.response?.data || error);
-      dispatch(clearHomeMatches());
-      Toast.show(getApiErrorMessage(error, 'Failed to load matches'), Toast.LONG);
+      const status = axiosError?.response?.status;
+      const message = `${axiosError?.response?.data?.message ?? ''}`.toLowerCase();
+
+      applyHomePayload([], []);
+
+      const isEmptyResult =
+        status === 404 ||
+        message.includes('no match') ||
+        message.includes('not found');
+
+      if (!isEmptyResult) {
+        Toast.show(
+          getApiErrorMessage(error, 'Failed to load matches'),
+          Toast.LONG,
+        );
+      }
     } finally {
+      hasLoadedRef.current = true;
+      fetchingRef.current = false;
       setLoading(false);
     }
-  }, [dispatch, isAccountInactive, profile?.gender, user?.name]);
+  }, [dispatch, isAccountInactive, profile?.city, profile?.country, profile?.gender, user?.name]);
 
   const handleReactivate = async () => {
     if (reactivating) {
@@ -223,34 +268,17 @@ const HomeScreen = () => {
       setReactivating(true);
 
       try {
-        console.log('Activate Account Request:', ENDPOINTS.ACCOUNT_DEACTIVATE, {
-          action: 'activate',
-        });
 
         const res = await Api.updateAccountStatus('activate');
 
-        console.log(
-          'Activate Account Response:',
-          JSON.stringify(res, null, 2),
-        );
-
         if (res?.isSuccess || res?.status == 200 || res?.success == 200) {
-          console.log(
-            'Activate Account Success:',
-            JSON.stringify(res, null, 2),
-          );
           dispatch(setAccountStatus(res?.accountStatus ?? 'active'));
           Toast.show(res?.message || 'Account activated', Toast.LONG);
           fetchHomeMatches();
         } else {
-          console.log(
-            'Activate Account Failed:',
-            JSON.stringify(res, null, 2),
-          );
           Toast.show(res?.message || 'Failed to activate account', Toast.LONG);
         }
       } catch (error: any) {
-        console.log('Activate Account API Error:', error?.response?.data);
         Toast.show(
           error?.response?.data?.message || 'Failed to activate account',
           Toast.LONG,
@@ -263,36 +291,62 @@ const HomeScreen = () => {
 
   useFocusEffect(
     useCallback(() => {
-      console.log('Redux HomeScreen:', store.getState());
-      fetchHomeMatches();
+      const home = store.getState().home;
+      if (
+        !hasLoadedRef.current &&
+        !home.featuredMatches.length &&
+        !home.suggestedMatches.length
+      ) {
+        fetchHomeMatches();
+      }
     }, [fetchHomeMatches]),
   );
 
+  useEffect(() => {
+    if (!displayFeatured.length) {
+      setActiveIndex(0);
+      return;
+    }
+
+    if (activeIndex >= displayFeatured.length) {
+      setActiveIndex(0);
+    }
+  }, [activeIndex, displayFeatured.length]);
+
   const goToIndex = useCallback(
     (index: number) => {
-      if (!featuredMatches.length) {
+      if (!displayFeatured.length) {
         return;
       }
 
       const nextIndex =
-        ((index % featuredMatches.length) + featuredMatches.length) %
-        featuredMatches.length;
+        ((index % displayFeatured.length) + displayFeatured.length) %
+        displayFeatured.length;
 
-      sliderRef.current?.scrollToIndex({
-        index: nextIndex,
-        animated: true,
-      });
       setActiveIndex(nextIndex);
+
+      try {
+        sliderRef.current?.scrollToIndex({
+          index: nextIndex,
+          animated: true,
+        });
+      } catch (error) {
+      }
     },
-    [featuredMatches.length],
+    [displayFeatured.length],
   );
 
   const handleDislike = () => {
-    goToIndex(activeIndex + 1);
+    const current = displayFeatured[activeIndex];
+    if (!current) {
+      return;
+    }
+
+    dispatch(dismissFeaturedMatch(current.id));
   };
 
   const handleLike = async () => {
-    const current = featuredMatches[activeIndex];
+    const current = displayFeatured[activeIndex];
 
     if (!current || liking) {
       return;
@@ -300,15 +354,10 @@ const HomeScreen = () => {
       setLiking(true);
 
       try {
-        console.log(
-          'Shortlist Interest Request:',
-          `${ENDPOINTS.SHORTLIST}/${current.id}/interest`,
-        );
 
         const res = await Api.sendShortlistInterest(current.id);
 
         if (res?.status == 200) {
-          console.log('Shortlist Interest Success:', res);
           dispatch(removeFeaturedMatch(current.id));
           navigation.navigate('MatchSuccess', {
             name: current.name.split(' ')[0],
@@ -318,16 +367,11 @@ const HomeScreen = () => {
             mutualMatch: Boolean(res.mutual_match),
           });
         } else {
-          console.log('Shortlist Interest Failed:', res);
           Toast.show(res?.message ?? 'Failed to send interest', Toast.LONG);
           goToIndex(activeIndex + 1);
         }
       } catch (error) {
         const axiosError = error as AxiosError<ApiErrorResponse>;
-        console.log(
-          'Shortlist Interest Error:',
-          axiosError?.response?.data || error,
-        );
         Toast.show(
           getApiErrorMessage(error, 'Failed to send interest'),
           Toast.LONG,
@@ -342,8 +386,37 @@ const HomeScreen = () => {
   const onFeaturedScrollEnd = (
     event: NativeSyntheticEvent<NativeScrollEvent>,
   ) => {
+    if (!displayFeatured.length) {
+      return;
+    }
+
+    const rawIndex = Math.round(
+      event.nativeEvent.contentOffset.x / CARD_WIDTH,
+    );
+    const nextIndex =
+      ((rawIndex % displayFeatured.length) + displayFeatured.length) %
+      displayFeatured.length;
+    setActiveIndex(nextIndex);
+  };
+
+  const onFeaturedScrollEndDrag = (
+    event: NativeSyntheticEvent<NativeScrollEvent>,
+  ) => {
+    if (displayFeatured.length < 2) {
+      return;
+    }
+
+    const velocityX = event.nativeEvent.velocity?.x ?? 0;
     const index = Math.round(event.nativeEvent.contentOffset.x / CARD_WIDTH);
-    setActiveIndex(index);
+
+    if (index >= displayFeatured.length - 1 && velocityX < -0.25) {
+      goToIndex(0);
+      return;
+    }
+
+    if (index <= 0 && velocityX > 0.25) {
+      goToIndex(displayFeatured.length - 1);
+    }
   };
 
   const openProfileDetail = useCallback(
@@ -371,6 +444,10 @@ const HomeScreen = () => {
         source={item.image}
         style={styles.featuredImage}
         resizeMode="cover"
+      />
+      <LinearGradient
+        colors={['transparent', 'rgba(0,0,0,0.15)', 'rgba(0,0,0,0.72)']}
+        style={styles.featuredGradient}
       />
 
       <View style={styles.featuredBadges}>
@@ -479,7 +556,7 @@ const HomeScreen = () => {
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
       <ScrollView
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={true}
         contentContainerStyle={styles.scrollContent}
       >
         <View style={styles.header}>
@@ -537,26 +614,36 @@ const HomeScreen = () => {
           <Icon name="chevron-right" size={fs(22)} color={Colors.primary} />
         </TouchableOpacity>
 
-        {featuredMatches.length > 0 ? (
+        {displayFeatured.length > 0 ? (
           <>
         <FlatList
           ref={sliderRef}
-          data={featuredMatches}
+          data={displayFeatured}
           renderItem={renderFeaturedCard}
           keyExtractor={item => item.id}
+          extraData={activeIndex}
           horizontal
           pagingEnabled
           bounces={false}
           nestedScrollEnabled
+          initialNumToRender={1}
+          maxToRenderPerBatch={2}
+          windowSize={3}
+          removeClippedSubviews
           showsHorizontalScrollIndicator={false}
           onMomentumScrollEnd={onFeaturedScrollEnd}
+          onScrollEndDrag={onFeaturedScrollEndDrag}
           onScrollToIndexFailed={info => {
+            const safeIndex = Math.max(
+              0,
+              Math.min(info.index, displayFeatured.length - 1),
+            );
             setTimeout(() => {
-              sliderRef.current?.scrollToIndex({
-                index: info.index,
-                animated: true,
+              sliderRef.current?.scrollToOffset({
+                offset: safeIndex * CARD_WIDTH,
+                animated: false,
               });
-            }, 100);
+            }, 80);
           }}
           getItemLayout={(_, index) => ({
             length: CARD_WIDTH,
@@ -564,6 +651,7 @@ const HomeScreen = () => {
             index,
           })}
           style={styles.featuredSlider}
+          contentContainerStyle={{ height: FEATURED_CARD_HEIGHT }}
         />
 
         <View style={styles.actionRow}>
@@ -585,7 +673,7 @@ const HomeScreen = () => {
         </View>
 
         <View style={styles.pagination}>
-          {featuredMatches.map((_, index) => (
+          {displayFeatured.map((_, index) => (
             <View
               key={index}
               style={[
@@ -612,8 +700,8 @@ const HomeScreen = () => {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.suggestedList}
         >
-          {suggestedMatches.length > 0 ? (
-          suggestedMatches.map(match => (
+          {displaySuggested.length > 0 ? (
+          displaySuggested.map(match => (
             <TouchableOpacity
               key={match.id}
               style={styles.suggestedCard}
@@ -946,10 +1034,10 @@ const styles = StyleSheet.create({
   },
   featuredSlider: {
     width: CARD_WIDTH,
-    height: hp('40%'),
+    height: FEATURED_CARD_HEIGHT,
   },
   featuredCard: {
-    height: hp('40%'),
+    height: FEATURED_CARD_HEIGHT,
     borderRadius: wp('7%'),
     overflow: 'hidden',
     backgroundColor: Colors.gradientStart,

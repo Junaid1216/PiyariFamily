@@ -15,6 +15,7 @@ import profileReducer from './slices/profileSlice';
 import homeReducer from './slices/homeSlice';
 import shortlistReducer from './slices/shortlistSlice';
 import referralReducer from './slices/referralSlice';
+import filterReducer from './slices/filterSlice';
 
 const reactotronEnhancer =
   __DEV__ && require('../config/ReactotronConfig').default.createEnhancer
@@ -33,6 +34,7 @@ const rootReducer = combineReducers({
   home: homeReducer,
   shortlist: shortlistReducer,
   referral: referralReducer,
+  filter: filterReducer,
 });
 
 const persistedReducer = persistReducer(persistConfig, rootReducer);

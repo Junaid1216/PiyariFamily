@@ -4,6 +4,7 @@ import { clearProfile } from './slices/profileSlice';
 import { clearHomeMatches } from './slices/homeSlice';
 import { clearShortlist } from './slices/shortlistSlice';
 import { clearReferral } from './slices/referralSlice';
+import { clearFilter } from './slices/filterSlice';
 
 export const clearSession = () => {
   store.dispatch(clearAuth());
@@ -11,4 +12,5 @@ export const clearSession = () => {
   store.dispatch(clearHomeMatches());
   store.dispatch(clearShortlist());
   store.dispatch(clearReferral());
+  store.dispatch(clearFilter());
 };

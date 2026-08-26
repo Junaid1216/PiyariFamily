@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Image,
   ScrollView,
@@ -15,7 +15,6 @@ import {
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-simple-toast';
 import { AxiosError } from 'axios';
-import { useFocusEffect } from '@react-navigation/native';
 import BackButton from '../../Components/BackButton';
 import PrimaryButton from '../../Components/PrimaryButton';
 import SetupProgressBar from '../../Components/SetupProgressBar';
@@ -58,13 +57,10 @@ const AddPhotosScreen = ({ navigation }: Props) => {
     useState<(string | null)[]>(createEmptyPhotos);
   const [saving, setSaving] = useState(false);
 
-  useFocusEffect(
-    useCallback(() => {
+  useEffect(() => {
       const profile = store.getState().profile.profile;
-      console.log('Redux AddPhotos:', store.getState());
       setRemotePhotos(extractProfilePhotoSlots(profile));
-    }, []),
-  );
+  }, []);
 
   const getSlotUri = (index: number) =>
     localPhotos[index]?.uri ?? remotePhotos[index] ?? null;
@@ -156,23 +152,51 @@ const AddPhotosScreen = ({ navigation }: Props) => {
     setSaving(true);
 
     try {
-      console.log('Profile Photos Request:', ENDPOINTS.PROFILE_PHOTOS);
       const res = await Api.uploadProfilePhotos(selectedPhotos);
       const uploaded =
         res?.status == 200 || res?.success === true || res?.success == 200;
 
       if (uploaded) {
-        console.log('Profile Photos Success:', res);
+        const uploadedSlotUrls = Array.from(
+          { length: PROFILE_PHOTO_SLOTS },
+          (_, index) =>
+            localPhotos[index]?.uri ?? remotePhotos[index] ?? null,
+        ).filter((url): url is string => Boolean(url));
+
         let cached = saveProfileCache(res?.data ?? res);
 
         try {
           const profileRes = await Api.getProfile();
           if (profileRes?.status == 200) {
-            console.log('Profile Photos Refresh Success:', profileRes?.data);
             cached = saveProfileCache(profileRes.data);
           }
         } catch (refreshError) {
-          console.log('Profile Photos Refresh Error:', refreshError);
+        }
+
+        const cachedSlots = extractProfilePhotoSlots(cached);
+        if (!cachedSlots.some(Boolean) && uploadedSlotUrls.length > 0) {
+          cached = saveProfileCache({
+            ...cached,
+            profile_photo: uploadedSlotUrls[0],
+            image: uploadedSlotUrls[0],
+            photos: uploadedSlotUrls.map((url, index) => ({
+              url,
+              is_main: index === 0,
+            })),
+          });
+        } else if (
+          uploadedSlotUrls.length > 0 &&
+          (!Array.isArray(cached.photos) || cached.photos.length === 0)
+        ) {
+          cached = saveProfileCache({
+            ...cached,
+            photos: uploadedSlotUrls.map((url, index) => ({
+              url,
+              is_main: index === 0,
+            })),
+            profile_photo: cached.profile_photo ?? uploadedSlotUrls[0],
+            image: cached.image ?? uploadedSlotUrls[0],
+          });
         }
 
         setRemotePhotos(extractProfilePhotoSlots(cached));
@@ -180,12 +204,10 @@ const AddPhotosScreen = ({ navigation }: Props) => {
         Toast.show(res?.message ?? 'Photos uploaded', Toast.LONG);
         navigation.navigate('ProfileReady');
       } else {
-        console.log('Profile Photos Failed:', res);
         Toast.show(res?.message ?? 'Failed to upload photos', Toast.LONG);
       }
     } catch (error) {
       const axiosError = error as AxiosError<ApiErrorResponse>;
-      console.log('Profile Photos Error:', axiosError?.response?.data || error);
       Toast.show(getApiErrorMessage(axiosError), Toast.LONG);
     } finally {
       setSaving(false);
@@ -195,7 +217,7 @@ const AddPhotosScreen = ({ navigation }: Props) => {
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
       <ScrollView
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={true}
         contentContainerStyle={styles.scrollContent}
       >
         <BackButton variant="pink" onPress={() => navigation.goBack()} />

@@ -1,8 +1,10 @@
 import { AxiosRequestConfig } from 'axios';
 import { apiClient } from './apiClient';
 import { ENDPOINTS } from './endpoints';
-import { toPhotoUploadFormData, toProfileUpdateFormData, type FormValue, type UploadFile } from './formData';
-import type { ProfileApiData } from './mappers/profileMapper';
+import { toProfileUpdateFormData, type FormValue, type UploadFile } from './formData';
+import { profileStorage } from './profileStorage';
+import { userStorage } from './userStorage';
+import type { ProfileApiData, PhotoVisibilityResponse } from './mappers/profileMapper';
 import type {
   BestMatchResponse,
   HomeMatchesResponse,
@@ -11,7 +13,23 @@ import type {
   MatchProfileResponse,
   MatchSearchParams,
 } from './mappers/matchMapper';
-import type { ReferralHistoryResponse, ReferralStatsResponse } from './mappers/referralMapper';
+import type {
+  PhotoAccessRequestsResponse,
+  PhotoAccessRespondResponse,
+} from './mappers/photoAccessMapper';
+import type {
+  ReferralHistoryResponse,
+  ReferralLinkResponse,
+  ReferralRedeemResponse,
+  ReferralRewardsResponse,
+  ReferralStatsResponse,
+} from './mappers/referralMapper';
+import type {
+  NotificationReadResponse,
+  NotificationsClearAllResponse,
+  NotificationsReadAllResponse,
+  NotificationsResponse,
+} from './mappers/notificationMapper';
 import type { CountriesResponse } from './mappers/countryMapper';
 import type { SubscriptionsResponse } from './mappers/subscriptionMapper';
 import type { ShortlistInterestResponse, ShortlistResponse, ShortlistTab } from './mappers/shortlistMapper';
@@ -152,15 +170,88 @@ export const Api = {
   },
 
   uploadProfilePhotos: async (photos: UploadFile[]) => {
-    const formData = toPhotoUploadFormData(photos);
+    const profile = profileStorage.get();
+    const user = userStorage.getUser();
+    const payload: Record<string, FormValue> = {};
+    const name = profile?.name || user?.name;
+    const gender = profile?.gender;
 
-    const { status, data } = await apiClient.postFormData<UpdateProfileResponse>(
+    if (name) {
+      payload.name = name;
+    }
+
+    if (gender) {
+      payload.gender = gender;
+    }
+
+    return Api.updateProfile(payload, photos);
+  },
+
+  deleteProfilePhoto: async (photo: {
+    index?: number | null;
+    path?: string | null;
+    url?: string | null;
+    remaining?: Array<{
+      index: number | null;
+      path: string | null;
+      url: string;
+      isMain: boolean;
+    }>;
+  }) => {
+    if (photo.index == null && !photo.path && !photo.url) {
+      throw new Error('Photo index is required');
+    }
+
+    const remaining = (photo.remaining ?? []).map(item => ({
+      index: item.index,
+      path: item.path,
+      url: item.url,
+      is_main: item.isMain,
+    }));
+
+    const payload: Record<string, FormValue> = {
+      action: 'delete',
+      keep_photos: JSON.stringify(remaining),
+    };
+
+    if (photo.index != null && Number.isFinite(photo.index)) {
+      payload.index = photo.index;
+    }
+
+    if (photo.path) {
+      payload.path = photo.path;
+    }
+
+    const remainingIndexes = remaining
+      .map(item => item.index)
+      .filter((index): index is number => index != null)
+      .map(String);
+
+    if (remainingIndexes.length) {
+      payload.indexes = remainingIndexes;
+    }
+
+    const { status, data } = await apiClient.postForm<UpdateProfileResponse>(
       ENDPOINTS.PROFILE_PHOTOS,
-      formData,
+      payload,
     );
 
     return { status, ...data };
   },
+
+  updatePhotoVisibility: (
+    payload: {
+      profile_photo_visible: boolean;
+      additional_photos_visible: boolean;
+    },
+  ) =>
+    apiClient.postForm<PhotoVisibilityResponse>(
+      ENDPOINTS.PROFILE_PHOTO_VISIBILITY,
+      {
+        profile_photo_visible: payload.profile_photo_visible ? 1 : 0,
+        additional_photos_visible: payload.additional_photos_visible ? 1 : 0,
+      },
+    ),
 
   sendVerifyPhone: async (payload: Record<string, FormValue>) => {
     const { status, data } = await apiClient.postForm<VerifyPhoneResponse>(
@@ -182,9 +273,9 @@ export const Api = {
 
   updateProfile: async (
     payload: Record<string, FormValue>,
-    photo?: UploadFile | null,
+    photo?: UploadFile | UploadFile[] | null,
   ) => {
-    const formData = toProfileUpdateFormData(payload, photo);
+    const formData = await toProfileUpdateFormData(payload, photo);
 
     const { status, data } = await apiClient.postFormData<UpdateProfileResponse>(
       ENDPOINTS.PROFILE_UPDATE,
@@ -212,6 +303,56 @@ export const Api = {
 
   getReferralHistory: () =>
     apiClient.get<ReferralHistoryResponse>(ENDPOINTS.REFERRALS_HISTORY),
+
+  getReferralLink: () =>
+    apiClient.get<ReferralLinkResponse>(ENDPOINTS.REFERRALS_LINK),
+
+  getReferralRewards: () =>
+    apiClient.get<ReferralRewardsResponse>(ENDPOINTS.REFERRALS_REWARDS),
+
+  redeemReferralReward: (rewardType: string) =>
+    apiClient.postForm<ReferralRedeemResponse>(ENDPOINTS.REFERRALS_REDEEM, {
+      reward_type: rewardType,
+    }),
+
+  getPhotoAccessRequests: () =>
+    apiClient.get<PhotoAccessRequestsResponse>(ENDPOINTS.PHOTO_ACCESS_REQUESTS),
+
+  respondToPhotoAccessRequest: (
+    requestId: string,
+    action: 'approve' | 'reject',
+  ) =>
+    apiClient.postForm<PhotoAccessRespondResponse>(
+      `${ENDPOINTS.PHOTO_ACCESS_REQUESTS}/${requestId}/respond`,
+      { action },
+    ),
+
+  getNotifications: () =>
+    apiClient.get<NotificationsResponse>(ENDPOINTS.NOTIFICATIONS),
+
+  markNotificationRead: async (notificationId: string) => {
+    const { status, data } = await apiClient.postEmpty<NotificationReadResponse>(
+      `${ENDPOINTS.NOTIFICATIONS}/${notificationId}/read`,
+    );
+
+    return { status, ...data };
+  },
+
+  markAllNotificationsRead: async () => {
+    const { status, data } = await apiClient.postEmpty<NotificationsReadAllResponse>(
+      ENDPOINTS.NOTIFICATIONS_READ_ALL,
+    );
+
+    return { status, ...data };
+  },
+
+  clearAllNotifications: async () => {
+    const { status, data } = await apiClient.delete<NotificationsClearAllResponse>(
+      ENDPOINTS.NOTIFICATIONS_CLEAR_ALL,
+    );
+
+    return { status, ...data };
+  },
 
   getHomeMatches: () =>
     apiClient.get<HomeMatchesResponse>(ENDPOINTS.MATCHES_HOME),

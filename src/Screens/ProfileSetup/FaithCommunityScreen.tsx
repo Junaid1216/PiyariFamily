@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Image,
   KeyboardAvoidingView,
@@ -17,11 +17,13 @@ import {
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-simple-toast';
 import { AxiosError } from 'axios';
-import { useFocusEffect } from '@react-navigation/native';
 import { Images } from '../../Assets';
 import BackButton from '../../Components/BackButton';
 import PrimaryButton from '../../Components/PrimaryButton';
 import SetupDropdown from '../../Components/SetupDropdown';
+import DropdownOptionsOverlay, {
+  DropdownOverlayHost,
+} from '../../Components/DropdownOptionsOverlay';
 import SetupProgressBar from '../../Components/SetupProgressBar';
 import {
   Api,
@@ -79,10 +81,9 @@ const FaithCommunityScreen = ({ navigation }: Props) => {
     'religion' | 'motherTongue' | 'languages' | null
   >(null);
   const [saving, setSaving] = useState(false);
+  const languagesAnchorRef = useRef<View>(null);
 
-  useFocusEffect(
-    useCallback(() => {
-      console.log('Redux FaithCommunity:', store.getState());
+  useEffect(() => {
 
       const cachedProfile = store.getState().profile.profile;
       if (!cachedProfile) {
@@ -123,8 +124,7 @@ const FaithCommunityScreen = ({ navigation }: Props) => {
           setOtherLanguages(languages);
         }
       }
-    }, []),
-  );
+  }, []);
 
   const handleContinue = async () => {
     if (!religion) {
@@ -149,11 +149,9 @@ const FaithCommunityScreen = ({ navigation }: Props) => {
     setSaving(true);
 
     try {
-      console.log('Profile Faith Request:', ENDPOINTS.PROFILE_FAITH);
       const res = await Api.updateProfileFaith(payload);
 
       if (res?.status == 200) {
-        console.log('Profile Faith Success:', res);
         saveProfileCache({
           religion: RELIGION_TO_API[religion],
           mother_tongue: motherTongue,
@@ -164,12 +162,10 @@ const FaithCommunityScreen = ({ navigation }: Props) => {
         Toast.show(res?.message ?? 'Faith details saved', Toast.LONG);
         navigation.navigate('AddPhotos');
       } else {
-        console.log('Profile Faith Failed:', res);
         Toast.show(res?.message ?? 'Failed to save faith details', Toast.LONG);
       }
     } catch (error) {
       const axiosError = error as AxiosError<ApiErrorResponse>;
-      console.log('Profile Faith Error:', axiosError?.response?.data || error);
       Toast.show(getApiErrorMessage(axiosError), Toast.LONG);
     } finally {
       setSaving(false);
@@ -200,9 +196,11 @@ const FaithCommunityScreen = ({ navigation }: Props) => {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView
-          showsVerticalScrollIndicator={false}
+          showsVerticalScrollIndicator={true}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled
+          removeClippedSubviews={false}
         >
           <BackButton variant="pink" onPress={() => navigation.goBack()} />
 
@@ -291,76 +289,60 @@ const FaithCommunityScreen = ({ navigation }: Props) => {
           />
 
           <Text style={styles.fieldLabel}>{Strings.otherLanguages}</Text>
-          <TouchableOpacity
-            style={styles.dropdownRow}
-            activeOpacity={0.85}
-            onPress={() =>
-              setOpenDropdown(prev =>
-                prev === 'languages' ? null : 'languages',
-              )
-            }
+          <View
+            style={[
+              styles.dropdownAnchor,
+              openDropdown === 'languages' && styles.dropdownOpenWrap,
+            ]}
           >
-            <Image
-              source={Images.msgTextIcon}
-              style={styles.inputIconImage}
-              resizeMode="contain"
-            />
-            <Text
-              style={[
-                styles.dropdownPlaceholderText,
-                otherLanguages.length > 0 && styles.dropdownValueText,
-              ]}
+            <View
+              ref={languagesAnchorRef}
+              collapsable={false}
+              style={styles.dropdownAnchorInner}
             >
-              {otherLanguages.length > 0
-                ? otherLanguages.join(', ')
-                : Strings.selectLanguagesPlaceholder}
-            </Text>
-            <Icon
-              name={
-                openDropdown === 'languages' ? 'chevron-up' : 'chevron-down'
-              }
-              size={fs(22)}
-              color={Colors.iconMuted}
-            />
-          </TouchableOpacity>
-          {openDropdown === 'languages' ? (
-            <View style={styles.dropdownMenu}>
-              <ScrollView
-                nestedScrollEnabled
-                keyboardShouldPersistTaps="handled"
-                showsVerticalScrollIndicator={false}
-                style={styles.dropdownScroll}
+              <TouchableOpacity
+                style={styles.dropdownRow}
+                activeOpacity={0.85}
+                onPress={() =>
+                  setOpenDropdown(prev =>
+                    prev === 'languages' ? null : 'languages',
+                  )
+                }
               >
-                {OTHER_LANGUAGE_OPTIONS.map(option => {
-                  const isSelected = otherLanguages.includes(option);
-
-                  return (
-                    <TouchableOpacity
-                      key={option}
-                      style={[
-                        styles.dropdownOption,
-                        isSelected && styles.dropdownOptionSelected,
-                      ]}
-                      activeOpacity={0.85}
-                      onPress={() => toggleLanguage(option)}
-                    >
-                      <Text
-                        style={[
-                          styles.dropdownOptionText,
-                          isSelected && styles.dropdownOptionTextSelected,
-                        ]}
-                      >
-                        {option}
-                      </Text>
-                      {isSelected ? (
-                        <Icon name="check" size={fs(18)} color={Colors.gold} />
-                      ) : null}
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
+                <Image
+                  source={Images.msgTextIcon}
+                  style={styles.inputIconImage}
+                  resizeMode="contain"
+                />
+                <Text
+                  style={[
+                    styles.dropdownPlaceholderText,
+                    otherLanguages.length > 0 && styles.dropdownValueText,
+                  ]}
+                >
+                  {otherLanguages.length > 0
+                    ? otherLanguages.join(', ')
+                    : Strings.selectLanguagesPlaceholder}
+                </Text>
+                <Icon
+                  name={
+                    openDropdown === 'languages' ? 'chevron-up' : 'chevron-down'
+                  }
+                  size={fs(22)}
+                  color={Colors.iconMuted}
+                />
+              </TouchableOpacity>
+              <DropdownOptionsOverlay
+                visible={openDropdown === 'languages'}
+                anchorRef={languagesAnchorRef}
+                options={OTHER_LANGUAGE_OPTIONS}
+                selectedValues={otherLanguages}
+                closeOnSelect={false}
+                onSelect={option => toggleLanguage(option as OtherLanguage)}
+                onClose={() => setOpenDropdown(null)}
+              />
             </View>
-          ) : null}
+          </View>
           <Text style={styles.hintText}>{Strings.maxLanguagesHint}</Text>
           {otherLanguages.length > 0 ? (
             <View style={styles.languagePillRow}>
@@ -404,6 +386,7 @@ const FaithCommunityScreen = ({ navigation }: Props) => {
             showArrow
           />
         </View>
+        <DropdownOverlayHost />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -484,6 +467,20 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.semiBold,
     color: Colors.gold,
   },
+  dropdownAnchor: {
+    position: 'relative',
+    zIndex: 1,
+    marginBottom: hp('0.5%'),
+    overflow: 'visible',
+  },
+  dropdownAnchorInner: {
+    position: 'relative',
+    overflow: 'visible',
+  },
+  dropdownOpenWrap: {
+    zIndex: 200,
+    elevation: 200,
+  },
   dropdownRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -493,7 +490,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.inputBg,
     paddingHorizontal: wp('3.7%'),
     height: AuthStyles.inputHeight,
-    marginBottom: hp('0.5%'),
   },
   dropdownPlaceholderText: {
     flex: 1,
@@ -505,12 +501,21 @@ const styles = StyleSheet.create({
     color: Colors.text,
   },
   dropdownMenu: {
+    position: 'absolute',
+    top: AuthStyles.inputHeight + hp('0.4%'),
+    left: 0,
+    right: 0,
+    zIndex: 40,
+    elevation: 24,
     borderWidth: 1.2,
     borderColor: Colors.dividerPink,
     borderRadius: AuthStyles.inputRadius,
     backgroundColor: Colors.white,
     overflow: 'hidden',
-    marginBottom: hp('0.8%'),
+    shadowColor: Colors.black,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
   },
   dropdownScroll: {
     maxHeight: hp('28%'),
@@ -585,6 +590,8 @@ const styles = StyleSheet.create({
     lineHeight: hp('2.2%'),
   },
   footer: {
+    zIndex: 1,
+    elevation: 2,
     paddingHorizontal: AuthStyles.horizontalPadding,
     paddingTop: hp('1.5%'),
     borderTopWidth: 1,

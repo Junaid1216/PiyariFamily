@@ -1,7 +1,8 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -16,18 +17,15 @@ import {
 } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-simple-toast';
-import { AxiosError } from 'axios';
 import ScreenHeader from '../../Components/ScreenHeader';
 import PrimaryButton from '../../Components/PrimaryButton';
 import {
   Api,
-  ENDPOINTS,
   getApiErrorMessage,
-  mapReferralStats,
-  type ApiErrorResponse,
+  isApiSuccess,
+  mergeReferralData,
   type ReferralStats,
 } from '../../API';
-import { REFERRAL_LINK, REFERRAL_REWARDS_TABLE } from '../../Constant/Referrals';
 import { AuthStyles } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
@@ -51,11 +49,16 @@ const PINK_CARD = '#FFF5F7';
 
 const DEFAULT_STATS: ReferralStats = {
   referralCode: '',
-  referralLink: REFERRAL_LINK,
+  referralLink: '',
   registered: 0,
   pointsEarned: 0,
+  pointValuePkr: 0,
+  totalValuePkr: 0,
   conversionRate: '',
-  rewardsTable: REFERRAL_REWARDS_TABLE,
+  rewardsTable: [],
+  shareMessage: '',
+  redeemOptions: [],
+  redeemed: 0,
 };
 
 const ReferralProgramScreen = () => {
@@ -64,30 +67,65 @@ const ReferralProgramScreen = () => {
   const dispatch = useAppDispatch();
   const cachedStats = useAppSelector(selectReferralStats);
   const stats = cachedStats ?? DEFAULT_STATS;
+  const cachedStatsRef = useRef(cachedStats);
+  cachedStatsRef.current = cachedStats;
   const [loading, setLoading] = useState(!cachedStats);
 
   const fetchReferralStats = useCallback(async () => {
     setLoading(true);
 
     try {
-      console.log('Referral Stats Request:', ENDPOINTS.REFERRALS_STATS);
-      const res = await Api.getReferralStats();
+      const [linkResult, statsResult] = await Promise.allSettled([
+        Api.getReferralLink(),
+        Api.getReferralStats(),
+      ]);
+      const linkRes =
+        linkResult.status === 'fulfilled' ? linkResult.value : null;
+      const statsRes =
+        statsResult.status === 'fulfilled' ? statsResult.value : null;
+      const linkOk = isApiSuccess(linkRes?.status, linkRes?.data?.success);
+      const statsOk = isApiSuccess(statsRes?.status, statsRes?.data?.success);
 
-      if (res?.status == 200) {
-        console.log('Referral Stats Success:', res?.data);
-        dispatch(setReferralStats(mapReferralStats(res?.data)));
-      } else {
-        console.log('Referral Stats Failed:', res?.data);
-        dispatch(setReferralStats(DEFAULT_STATS));
+      if (linkOk || statsOk) {
+        dispatch(
+          setReferralStats(
+            mergeReferralData(
+              linkOk ? linkRes?.data : null,
+              null,
+              statsOk ? statsRes?.data : null,
+              cachedStatsRef.current,
+            ),
+          ),
+        );
+      }
+
+      if (linkResult.status === 'rejected') {
         Toast.show(
-          res?.data?.message ?? 'Failed to load referral stats',
+          getApiErrorMessage(linkResult.reason, 'Failed to load referral link'),
+          Toast.LONG,
+        );
+      } else if (!linkOk) {
+        Toast.show(
+          linkRes?.data?.message ?? 'Failed to load referral link',
+          Toast.LONG,
+        );
+      }
+
+      if (statsResult.status === 'rejected') {
+        Toast.show(
+          getApiErrorMessage(
+            statsResult.reason,
+            'Failed to load referral stats',
+          ),
+          Toast.LONG,
+        );
+      } else if (!statsOk) {
+        Toast.show(
+          statsRes?.data?.message ?? 'Failed to load referral stats',
           Toast.LONG,
         );
       }
     } catch (error) {
-      const axiosError = error as AxiosError<ApiErrorResponse>;
-      console.log('Referral Stats Error:', axiosError?.response?.data || error);
-      dispatch(setReferralStats(DEFAULT_STATS));
       Toast.show(
         getApiErrorMessage(error, 'Failed to load referral stats'),
         Toast.LONG,
@@ -103,8 +141,31 @@ const ReferralProgramScreen = () => {
     }, [fetchReferralStats]),
   );
 
-  const handleCopy = () => {
-    Toast.show(Strings.linkCopied);
+  const shareMessage = [stats.shareMessage, stats.referralLink]
+    .filter(Boolean)
+    .join('\n');
+
+  const handleCopy = async () => {
+    if (!stats.referralLink) {
+      return;
+    }
+
+    try {
+      await Share.share({ message: stats.referralLink });
+      Toast.show(Strings.linkCopied);
+    } catch (error) {
+    }
+  };
+
+  const handleWhatsApp = async () => {
+    if (!shareMessage) {
+      return;
+    }
+
+    try {
+      await Share.share({ message: shareMessage });
+    } catch (error) {
+    }
   };
 
   return (
@@ -129,7 +190,7 @@ const ReferralProgramScreen = () => {
         ) : (
         <ScrollView
           style={styles.scroll}
-          showsVerticalScrollIndicator={false}
+          showsVerticalScrollIndicator={true}
           contentContainerStyle={styles.scrollContent}
         >
           <LinearGradient
@@ -184,7 +245,11 @@ const ReferralProgramScreen = () => {
               <Text style={styles.copyBtnText}>{Strings.copyLink}</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.whatsappBtn} activeOpacity={0.88}>
+            <TouchableOpacity
+              style={styles.whatsappBtn}
+              activeOpacity={0.88}
+              onPress={handleWhatsApp}
+            >
               <Icon name="whatsapp" size={fs(15)} color={Colors.primary} />
               <Text style={styles.whatsappBtnText}>{Strings.whatsapp}</Text>
             </TouchableOpacity>
@@ -232,11 +297,21 @@ const ReferralProgramScreen = () => {
               </Text>
               <Text style={styles.statLabel}>{Strings.pointsEarnedStat}</Text>
             </View>
+
+            <View style={styles.statCard}>
+              <View style={styles.statIconBox}>
+                <Icon name="cash" size={fs(20)} color={Colors.gold} />
+              </View>
+              <Text style={styles.statValue}>PKR {stats.pointValuePkr}</Text>
+              <Text style={styles.statLabel}>{Strings.pointValuePkr}</Text>
+            </View>
           </View>
 
           <View style={styles.noteBox}>
             <Icon name="shield-check" size={fs(16)} color={Colors.primary} />
-            <Text style={styles.noteText}>{Strings.referralPointsNote}</Text>
+            <Text style={styles.noteText}>
+              {stats.shareMessage || Strings.referralPointsNote}
+            </Text>
           </View>
         </ScrollView>
         )}
@@ -501,11 +576,12 @@ const styles = StyleSheet.create({
     borderColor: '#F0E8EA',
   },
   statValue: {
-    fontSize: fs(22),
+    fontSize: fs(16),
     fontFamily: Fonts.bold,
     color: Colors.gold,
     marginBottom: hp('0.15%'),
     letterSpacing: -0.3,
+    textAlign: 'center',
   },
   statLabel: {
     fontSize: fs(10),

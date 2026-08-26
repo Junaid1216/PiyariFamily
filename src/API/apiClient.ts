@@ -52,12 +52,73 @@ axiosInstance.interceptors.request.use(config => {
   return config;
 });
 
-axiosInstance.interceptors.response.use(
-  response => response,
-  (error: AxiosError<ApiErrorResponse>) => {
-    const skipTokenClear = Boolean((error.config as { skipTokenClear?: boolean } | undefined)?.skipTokenClear);
+const logReduxOnApiError = () => {
+  try {
+    const reduxStore = require('../Redux/store').store as {
+      getState: () => {
+        auth?: {
+          user?: unknown;
+          accessToken?: string | null;
+        };
+        profile?: {
+          profile?: unknown;
+          accountStatus?: unknown;
+        };
+        home?: {
+          greeting?: unknown;
+          featuredMatches?: Array<{ id?: string }>;
+          suggestedMatches?: Array<{ id?: string }>;
+        };
+      };
+    };
+    const state = reduxStore.getState();
 
-    if (error.response?.status === 401 && !skipTokenClear) {
+    console.log('Redux:', {
+      auth: {
+        user: state.auth?.user ?? null,
+        isAuthenticated: Boolean(state.auth?.accessToken),
+      },
+      profile: state.profile?.profile ?? null,
+      accountStatus: state.profile?.accountStatus ?? null,
+      home: {
+        greeting: state.home?.greeting ?? null,
+        featuredIds: (state.home?.featuredMatches ?? []).map(item => item.id),
+        suggestedIds: (state.home?.suggestedMatches ?? []).map(item => item.id),
+      },
+    });
+  } catch {
+    console.log('Redux: unavailable');
+  }
+};
+
+axiosInstance.interceptors.response.use(
+  response => {
+    console.log('API Success:', {
+      method: response.config.method?.toUpperCase(),
+      url: response.config.url,
+      status: response.status,
+      data: response.data,
+    });
+    return response;
+  },
+  (error: AxiosError<ApiErrorResponse>) => {
+    console.log('API Error:', {
+      method: error.config?.method?.toUpperCase(),
+      url: error.config?.url,
+      status: error.response?.status,
+      data: error.response?.data ?? error.message,
+    });
+    logReduxOnApiError();
+
+    const skipTokenClear = Boolean(
+      (error.config as { skipTokenClear?: boolean } | undefined)?.skipTokenClear,
+    );
+
+    if (
+      error.response?.status === 401 &&
+      !skipTokenClear &&
+      !isPublicAuthRequest(error.config?.url)
+    ) {
       tokenStorage.clear();
     }
 
@@ -94,7 +155,31 @@ export const apiClient = {
       })),
 
   postFormData: <T>(url: string, formData: FormData): Promise<ApiResult<T>> =>
-    axiosInstance.post<T>(url, formData).then(response => ({
+    axiosInstance
+      .post<T>(url, formData, {
+        method: 'post',
+        headers: {
+          Accept: 'application/json',
+        },
+        transformRequest: [
+          (data, headers) => {
+            if (headers && typeof headers.setContentType === 'function') {
+              headers.setContentType(false);
+            } else if (headers && typeof headers.delete === 'function') {
+              headers.delete('Content-Type');
+              headers.delete('content-type');
+            }
+            return data;
+          },
+        ],
+      })
+      .then(response => ({
+        status: response.status,
+        data: response.data,
+      })),
+
+  delete: <T>(url: string, config?: AxiosRequestConfig): Promise<ApiResult<T>> =>
+    axiosInstance.delete<T>(url, config).then(response => ({
       status: response.status,
       data: response.data,
     })),

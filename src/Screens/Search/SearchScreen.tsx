@@ -19,17 +19,17 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-simple-toast';
-import { AxiosError } from 'axios';
 import { Images } from '../../Assets';
 import {
   Api,
-  ENDPOINTS,
   buildMatchSearchParams,
   getApiErrorMessage,
   getImageCacheKey,
   hydrateMatchImages,
+  isApiSuccess,
+  mapFilterSetup,
   mapMatchList,
-  type ApiErrorResponse,
+  type FilterQuickOption,
   type SuggestedMatch,
 } from '../../API';
 import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
@@ -38,7 +38,14 @@ import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
 import { SearchStackParamList } from '../../Navigation/SearchStackNavigator';
 import { fs, hp, wp } from '../../Functions/responsive';
-import { useAppSelector, selectProfile } from '../../Redux';
+import {
+  clearFilterResults,
+  selectFilterApplied,
+  selectFilterResults,
+  selectProfile,
+  useAppDispatch,
+  useAppSelector,
+} from '../../Redux';
 
 type NavigationProp = NativeStackNavigationProp<
   SearchStackParamList,
@@ -47,47 +54,49 @@ type NavigationProp = NativeStackNavigationProp<
 
 type SearchRouteProp = RouteProp<SearchStackParamList, 'SearchMain'>;
 
-type QuickFilter = 'nearMe' | 'verified' | 'newProfiles';
-
-const QUICK_FILTERS: {
-  id: QuickFilter;
-  label: string;
-  icon: string;
-}[] = [
-  { id: 'nearMe', label: Strings.nearMe, icon: 'map-marker-outline' },
-  {
-    id: 'verified',
-    label: Strings.verifiedProfiles,
-    icon: 'shield-check-outline',
-  },
-  { id: 'newProfiles', label: Strings.newProfiles, icon: 'creation' },
-];
-
-const RECENT_SEARCHES = [
-  'Software Engineer, Multan',
-  'MBA, Lahore',
-  'Doctor, Karachi',
-];
-
 const SEARCH_DEBOUNCE_MS = 600;
 const MIN_SEARCH_LENGTH = 2;
+
+const iconForQuickFilter = (id: string) => {
+  const key = id.toLowerCase();
+
+  if (key.includes('near')) {
+    return 'map-marker-outline';
+  }
+
+  if (key.includes('verif')) {
+    return 'shield-check-outline';
+  }
+
+  if (key.includes('new')) {
+    return 'creation';
+  }
+
+  return 'filter-variant';
+};
 
 const SearchScreen = () => {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<SearchRouteProp>();
   const profile = useAppSelector(selectProfile);
+  const dispatch = useAppDispatch();
+  const filterResults = useAppSelector(selectFilterResults);
+  const filterApplied = useAppSelector(selectFilterApplied);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeQuickFilter, setActiveQuickFilter] =
-    useState<QuickFilter | null>(null);
-  const [recentSearches, setRecentSearches] = useState(RECENT_SEARCHES);
+  const [activeQuickFilter, setActiveQuickFilter] = useState<string | null>(
+    null,
+  );
+  const [quickFilters, setQuickFilters] = useState<FilterQuickOption[]>([]);
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [suggestedMatches, setSuggestedMatches] = useState<SuggestedMatch[]>(
     [],
   );
   const [loading, setLoading] = useState(true);
-  const skipNextSearchRef = useRef(false);
+  const skipNextSearchRef = useRef(filterApplied);
   const skipFilterSearchRef = useRef(true);
   const activeQuickFilterRef = useRef(activeQuickFilter);
   const searchQueryRef = useRef(searchQuery);
+  const loadedQuickFiltersRef = useRef(false);
 
   activeQuickFilterRef.current = activeQuickFilter;
   searchQueryRef.current = searchQuery;
@@ -102,18 +111,41 @@ const SearchScreen = () => {
         searchQuery: query,
         quickFilter: activeQuickFilterRef.current,
         profileGender,
-        ageMin: trimmedQuery || activeQuickFilterRef.current ? 18 : undefined,
       });
-      console.log('Match Search Request:', ENDPOINTS.MATCHES_SEARCH, params);
       const res = await Api.getMatchSearch(params);
 
-      if (res?.status == 200) {
-        console.log('Match Search Success:', res?.data);
+      if (isApiSuccess(res?.status, res?.data?.success)) {
         const mapped = mapMatchList(res?.data);
-        setSuggestedMatches(mapped);
+        let chips = mapFilterSetup(res?.data).quickFilters;
+
+        if (!chips.length && !loadedQuickFiltersRef.current) {
+          const meta = await Api.getMatchFilter();
+          if (isApiSuccess(meta?.status, meta?.data?.success)) {
+            chips = mapFilterSetup(meta?.data).quickFilters;
+          }
+        }
+
+        if (chips.length) {
+          setQuickFilters(chips);
+          loadedQuickFiltersRef.current = true;
+        }
+
         setSuggestedMatches(await hydrateMatchImages(mapped));
+        if (
+          trimmedQuery.length >= MIN_SEARCH_LENGTH ||
+          activeQuickFilterRef.current
+        ) {
+          dispatch(clearFilterResults());
+        }
+        if (trimmedQuery.length >= MIN_SEARCH_LENGTH) {
+          setRecentSearches(current =>
+            [trimmedQuery, ...current.filter(item => item !== trimmedQuery)].slice(
+              0,
+              8,
+            ),
+          );
+        }
       } else {
-        console.log('Match Search Failed:', res?.data);
         setSuggestedMatches([]);
         Toast.show(
           res?.data?.message ?? 'Failed to load search results',
@@ -121,8 +153,6 @@ const SearchScreen = () => {
         );
       }
     } catch (error) {
-      const axiosError = error as AxiosError<ApiErrorResponse>;
-      console.log('Match Search Error:', axiosError?.response?.data || error);
       setSuggestedMatches([]);
       Toast.show(
         getApiErrorMessage(error, 'Failed to load search results'),
@@ -131,25 +161,31 @@ const SearchScreen = () => {
     } finally {
       setLoading(false);
     }
-  }, [profile?.gender]);
+  }, [dispatch, profile?.gender]);
 
   useFocusEffect(
     useCallback(() => {
-      if (!route.params?.fromFilter) {
+      if (!route.params?.fromFilter && !filterApplied) {
         return;
       }
 
-      const filterMatches = route.params.filterMatches ?? [];
-      setSuggestedMatches(filterMatches);
+      setSuggestedMatches(filterResults);
       setLoading(false);
       skipNextSearchRef.current = true;
       skipFilterSearchRef.current = true;
-      navigation.setParams({
-        fromFilter: undefined,
-        filterMatches: undefined,
-        filterTotal: undefined,
-      });
-    }, [navigation, route.params?.filterMatches, route.params?.fromFilter]),
+      if (route.params?.fromFilter) {
+        navigation.setParams({
+          fromFilter: undefined,
+          filterMatches: undefined,
+          filterTotal: undefined,
+        });
+      }
+    }, [
+      filterApplied,
+      filterResults,
+      navigation,
+      route.params?.fromFilter,
+    ]),
   );
 
   useEffect(() => {
@@ -198,7 +234,7 @@ const SearchScreen = () => {
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
       <ScrollView
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={true}
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
@@ -224,67 +260,75 @@ const SearchScreen = () => {
           />
         </View>
 
-        <Text style={styles.sectionLabel}>{Strings.quickFilters}</Text>
-        <View style={styles.quickFilterRow}>
-          {QUICK_FILTERS.map(filter => {
-            const selected = activeQuickFilter === filter.id;
+        {quickFilters.length > 0 ? (
+          <>
+            <Text style={styles.sectionLabel}>{Strings.quickFilters}</Text>
+            <View style={styles.quickFilterRow}>
+              {quickFilters.map(filter => {
+                const selected = activeQuickFilter === filter.id;
 
-            return (
+                return (
+                  <TouchableOpacity
+                    key={filter.id}
+                    style={[
+                      styles.quickFilterChip,
+                      selected && styles.quickFilterChipSelected,
+                    ]}
+                    activeOpacity={0.85}
+                    onPress={() =>
+                      setActiveQuickFilter(prev =>
+                        prev === filter.id ? null : filter.id,
+                      )
+                    }
+                  >
+                    <Icon
+                      name={iconForQuickFilter(filter.id)}
+                      size={fs(14)}
+                      color={selected ? Colors.white : Colors.primary}
+                    />
+                    <Text
+                      style={[
+                        styles.quickFilterText,
+                        selected && styles.quickFilterTextSelected,
+                      ]}
+                    >
+                      {filter.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </>
+        ) : null}
+
+        {recentSearches.length > 0 ? (
+          <>
+            <Text style={styles.recentLabel}>{Strings.recentSearches}</Text>
+            {recentSearches.map(item => (
               <TouchableOpacity
-                key={filter.id}
-                style={[
-                  styles.quickFilterChip,
-                  selected && styles.quickFilterChipSelected,
-                ]}
+                key={item}
+                style={styles.recentRow}
                 activeOpacity={0.85}
-                onPress={() =>
-                  setActiveQuickFilter(prev =>
-                    prev === filter.id ? null : filter.id,
-                  )
-                }
+                onPress={() => setSearchQuery(item)}
               >
                 <Icon
-                  name={filter.icon}
-                  size={fs(14)}
-                  color={selected ? Colors.white : Colors.primary}
+                  name="clock-outline"
+                  size={fs(18)}
+                  color={Colors.textLight}
+                  style={styles.recentIcon}
                 />
-                <Text
-                  style={[
-                    styles.quickFilterText,
-                    selected && styles.quickFilterTextSelected,
-                  ]}
+                <Text style={styles.recentText}>{item}</Text>
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onPress={() => removeRecentSearch(item)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  {filter.label}
-                </Text>
+                  <Icon name="close" size={fs(16)} color={Colors.textLight} />
+                </TouchableOpacity>
               </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        <Text style={styles.recentLabel}>{Strings.recentSearches}</Text>
-        {recentSearches.map(item => (
-          <TouchableOpacity
-            key={item}
-            style={styles.recentRow}
-            activeOpacity={0.85}
-            onPress={() => setSearchQuery(item)}
-          >
-            <Icon
-              name="clock-outline"
-              size={fs(18)}
-              color={Colors.textLight}
-              style={styles.recentIcon}
-            />
-            <Text style={styles.recentText}>{item}</Text>
-            <TouchableOpacity
-              activeOpacity={0.85}
-              onPress={() => removeRecentSearch(item)}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Icon name="close" size={fs(16)} color={Colors.textLight} />
-            </TouchableOpacity>
-          </TouchableOpacity>
-        ))}
+            ))}
+          </>
+        ) : null}
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>{Strings.suggestedMatches}</Text>

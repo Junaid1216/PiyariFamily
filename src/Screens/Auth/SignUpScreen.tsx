@@ -21,7 +21,7 @@ import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
 import { authService, ENDPOINTS, getApiErrorMessage } from '../../API';
-import { hp, wp } from '../../Functions/responsive';
+import { fs, hp, wp } from '../../Functions/responsive';
 
 type Props = {
   navigation: {
@@ -151,7 +151,6 @@ const SignUpScreen = ({ navigation }: Props) => {
     setLoading(true);
 
     try {
-      console.log('Sign Up Request:', ENDPOINTS.AUTH.REGISTER);
       const response = await authService.register({
         name: fullName.trim(),
         email: email.trim(),
@@ -161,7 +160,6 @@ const SignUpScreen = ({ navigation }: Props) => {
       });
 
       if (response?.status == 200 || response?.success == 200 || response?.success === true) {
-        console.log('Sign Up Success:', response);
         Toast.show(response.message || 'Account created successfully', Toast.LONG);
         const registeredEmail =
           response.data?.email ||
@@ -176,10 +174,8 @@ const SignUpScreen = ({ navigation }: Props) => {
         return;
       }
 
-      console.log('Sign Up Failed:', response);
       Toast.show(response.message || 'Registration failed. Please try again.');
     } catch (error) {
-      console.log('Sign Up Error:', (error as any)?.response?.data || error);
 
       if (isEmailAlreadyRegistered(error)) {
         const loggedIn = await loginWithSignupCredentials();
@@ -209,7 +205,7 @@ const SignUpScreen = ({ navigation }: Props) => {
               { paddingBottom: Math.max(insets.bottom + hp('2%'), hp('4%')) },
             ]}
             keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
+            showsVerticalScrollIndicator={true}
             enableOnAndroid
             bounces={false}
           >

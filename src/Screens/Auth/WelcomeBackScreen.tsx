@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -20,7 +20,6 @@ import {
   clearProfile,
   clearReferral,
   clearShortlist,
-  store,
   useAppDispatch,
 } from '../../Redux';
 
@@ -31,10 +30,6 @@ type NavigationProp = NativeStackNavigationProp<
 
 const WelcomeBackScreen = () => {
   const navigation = useNavigation<NavigationProp>();
-
-  useEffect(() => {
-    console.log('Redux WelcomeBack:', store.getState());
-  }, []);
 
   const handleLogin = () => {
     navigation.reset({

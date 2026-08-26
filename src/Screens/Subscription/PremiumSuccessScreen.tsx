@@ -64,10 +64,9 @@ const PremiumSuccessScreen = () => {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<RouteProps>();
   const insets = useSafeAreaInsets();
-  const { plan, priceLabel } = route.params;
+  const { plan, priceLabel, nextBilling } = route.params;
   useHideTabBar();
 
-  const nextBilling = '15 Jan 2026';
   const planLabel = plan === 'VIP' ? Strings.vipPlan : Strings.vvipPlan;
 
   const renderPerkIcon = (perk: SuccessPerk) => {
@@ -100,7 +99,7 @@ const PremiumSuccessScreen = () => {
 
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         <ScrollView
-          showsVerticalScrollIndicator={false}
+          showsVerticalScrollIndicator={true}
           contentContainerStyle={styles.scrollContent}
         >
           <View style={styles.heroWrap}>
@@ -149,9 +148,11 @@ const PremiumSuccessScreen = () => {
                 {planLabel} · {priceLabel}
                 {Strings.perMonth}
               </Text>
-              <Text style={styles.billingText}>
-                {Strings.nextBillingDate.replace('{date}', nextBilling)}
-              </Text>
+              {nextBilling ? (
+                <Text style={styles.billingText}>
+                  {Strings.nextBillingDate.replace('{date}', nextBilling)}
+                </Text>
+              ) : null}
             </View>
           </View>
 

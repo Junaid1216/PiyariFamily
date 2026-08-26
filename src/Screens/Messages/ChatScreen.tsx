@@ -134,7 +134,7 @@ const ChatScreen = () => {
         keyboardVerticalOffset={hp('1%')}
       >
         <ScrollView
-          showsVerticalScrollIndicator={false}
+          showsVerticalScrollIndicator={true}
           contentContainerStyle={styles.chatContent}
         >
           <View style={styles.dateSeparator}>

@@ -4,6 +4,7 @@ export type User = {
   email: string;
   phone: string;
   is_verified?: boolean;
+  token?: string;
 };
 
 export type AuthResponse = {
@@ -12,6 +13,7 @@ export type AuthResponse = {
   user?: User;
   token?: string;
   access_token?: string;
+  accessToken?: string;
   account_status?: 'active' | 'inactive';
   is_deactivated?: boolean;
   requires_verification?: boolean;
@@ -20,8 +22,10 @@ export type AuthResponse = {
     name?: string;
     email?: string;
     phone?: string;
+    user?: User;
     token?: string;
     access_token?: string;
+    accessToken?: string;
   };
   resend_after_seconds?: number;
 };
@@ -33,6 +37,14 @@ export type ApiResult<T> = {
 
 export const isSuccessStatus = (status: number) =>
   status === 200 || status === 201;
+
+export const isApiSuccess = (
+  httpStatus?: number,
+  success?: boolean | number | null,
+) =>
+  isSuccessStatus(httpStatus ?? 0) ||
+  success === true ||
+  success == 200;
 
 export type MessageResponse = {
   success: boolean;

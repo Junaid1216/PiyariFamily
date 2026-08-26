@@ -92,7 +92,7 @@ const SetNewPasswordScreen = () => {
             style={styles.scrollView}
             contentContainerStyle={styles.scroll}
             keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
+            showsVerticalScrollIndicator={true}
             enableOnAndroid
             bounces={false}
           >

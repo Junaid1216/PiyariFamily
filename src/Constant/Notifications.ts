@@ -63,3 +63,7 @@ export const APP_NOTIFICATIONS: AppNotification[] = [
     time: '3d',
   },
 ];
+
+export type { ViewProfileRequest, ViewProfileRequestStatus } from '../API/mappers/photoAccessMapper';
+export { pickPendingPhotoAccessCount as getPendingViewProfileRequestCount } from '../API/mappers/photoAccessMapper';
+

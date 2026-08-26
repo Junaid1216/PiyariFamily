@@ -4,6 +4,7 @@ export type UploadFile = {
   uri: string;
   type?: string;
   name?: string;
+  blob?: Blob;
 };
 
 const ALLOWED_IMAGE_TYPES = new Set([
@@ -24,6 +25,40 @@ const extensionFromMime = (mimeType: string) => {
     default:
       return 'jpg';
   }
+};
+
+const normalizeFileUri = (uri: string) => {
+  if (
+    uri.startsWith('http://') ||
+    uri.startsWith('https://') ||
+    uri.startsWith('blob:') ||
+    uri.startsWith('content://') ||
+    uri.startsWith('ph://') ||
+    uri.startsWith('assets-library://') ||
+    uri.startsWith('file://')
+  ) {
+    return uri;
+  }
+
+  if (uri.startsWith('/')) {
+    return `file://${uri}`;
+  }
+
+  return uri;
+};
+
+export const isLocalUploadUri = (uri?: string | null) => {
+  if (!uri) {
+    return false;
+  }
+
+  return (
+    uri.startsWith('file://') ||
+    uri.startsWith('content://') ||
+    uri.startsWith('ph://') ||
+    uri.startsWith('assets-library://') ||
+    (uri.startsWith('/') && !uri.startsWith('//'))
+  );
 };
 
 export const normalizeUploadFile = (
@@ -49,10 +84,129 @@ export const normalizeUploadFile = (
     : `${safeName}.${extensionFromMime(normalizedType)}`;
 
   return {
-    uri,
+    uri: normalizeFileUri(uri),
     type: normalizedType,
     name: normalizedName,
   };
+};
+
+const fileNameFromUrl = (uri: string) => {
+  const name = uri.split('/').pop()?.split('?')[0]?.trim();
+  return name || `photo-${Date.now()}.jpg`;
+};
+
+const mimeFromUrl = (uri: string) => {
+  const extension = fileNameFromUrl(uri).split('.').pop()?.toLowerCase();
+
+  if (extension === 'png') {
+    return 'image/png';
+  }
+
+  if (extension === 'webp') {
+    return 'image/webp';
+  }
+
+  return 'image/jpeg';
+};
+
+export const toPhotosUploadFile = (uri: string, fileName?: string | null, mimeType?: string | null) =>
+  normalizeUploadFile(
+    uri,
+    fileName || fileNameFromUrl(uri),
+    mimeType || mimeFromUrl(uri),
+  );
+
+const toNativeFilePart = (photo: UploadFile) => {
+  const file = normalizeUploadFile(photo.uri, photo.name, photo.type);
+
+  return {
+    uri: file.uri,
+    type: file.type,
+    name: file.name,
+  };
+};
+
+const appendPhotosFile = (formData: FormData, photo: UploadFile) => {
+  formData.append(
+    'photos',
+    toNativeFilePart(photo) as unknown as Blob,
+  );
+};
+
+export const createPhotosPart = async (uri: string): Promise<UploadFile> => {
+  const base = toPhotosUploadFile(uri);
+
+  if (isLocalUploadUri(uri)) {
+    return base;
+  }
+
+  try {
+    const response = await fetch(uri);
+    if (!response.ok) {
+      return base;
+    }
+
+    const blob = await response.blob();
+    const blobData = (blob as { _data?: { path?: string; blobId?: string } })
+      ._data;
+    const type = blob.type || base.type;
+
+    if (blobData?.path) {
+      const path = blobData.path.startsWith('file://')
+        ? blobData.path
+        : `file://${blobData.path}`;
+      return toPhotosUploadFile(path, base.name, type);
+    }
+
+    const objectUrl =
+      typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function'
+        ? URL.createObjectURL(blob)
+        : uri;
+
+    return {
+      uri: objectUrl,
+      name: base.name,
+      type,
+      blob,
+    };
+  } catch {
+    return base;
+  }
+};
+
+const resolvePhotosParts = async (
+  photo?: UploadFile | UploadFile[] | null,
+  allowRemote = false,
+) => {
+  const files = (Array.isArray(photo) ? photo : photo ? [photo] : []).filter(
+    file =>
+      Boolean(
+        file?.blob ||
+          isLocalUploadUri(file?.uri) ||
+          (allowRemote && file?.uri),
+      ),
+  );
+
+  if (!files.length) {
+    return [];
+  }
+
+  const parts: UploadFile[] = [];
+
+  for (const file of files) {
+    if (file.blob || isLocalUploadUri(file.uri)) {
+      parts.push(
+        file.blob
+          ? file
+          : toPhotosUploadFile(file.uri, file.name, file.type),
+      );
+      continue;
+    }
+
+    parts.push(await createPhotosPart(file.uri));
+  }
+
+  return parts;
 };
 
 export const toFormData = (data: Record<string, FormValue>) => {
@@ -72,66 +226,45 @@ export const toFormData = (data: Record<string, FormValue>) => {
   return formData;
 };
 
-export const toProfileUpdateFormData = (
+export const toProfileUpdateFormData = async (
   data: Record<string, FormValue>,
-  photo?: UploadFile | null,
+  photo?: UploadFile | UploadFile[] | null,
 ) => {
   const formData = new FormData();
+  const photoKeys = new Set(['photos', 'photo', 'image', 'profile_photo']);
 
   Object.entries(data).forEach(([key, value]) => {
     if (value === undefined || value === null || value === '') {
       return;
     }
 
+    if (photoKeys.has(key)) {
+      return;
+    }
+
+    if (Array.isArray(value)) {
+      value.forEach(item => {
+        formData.append(`${key}[]`, String(item));
+      });
+      return;
+    }
+
     formData.append(key, String(value));
   });
 
-  if (photo?.uri) {
-    const file = normalizeUploadFile(photo.uri, photo.name, photo.type);
-
-    formData.append('photo', {
-      uri: file.uri,
-      type: file.type,
-      name: file.name,
-    } as unknown as Blob);
-  }
+  const parts = await resolvePhotosParts(photo, true);
+  parts.forEach(part => appendPhotosFile(formData, part));
 
   return formData;
 };
 
-export const toPhotoUploadFormData = (photos: UploadFile[]) => {
-  const formData = new FormData();
-
-  photos.forEach((photo, index) => {
-    const file = normalizeUploadFile(photo.uri, photo.name, photo.type);
-    const payload = {
-      uri: file.uri,
-      type: file.type,
-      name: file.name,
-    } as unknown as Blob;
-
-    formData.append('photos[]', payload);
-    formData.append(`photos[${index}]`, payload);
-  });
-
-  const mainPhoto = photos[0];
-
-  if (mainPhoto) {
-    const file = normalizeUploadFile(
-      mainPhoto.uri,
-      mainPhoto.name,
-      mainPhoto.type,
-    );
-    const payload = {
-      uri: file.uri,
-      type: file.type,
-      name: file.name,
-    } as unknown as Blob;
-
-    formData.append('photo', payload);
-    formData.append('image', payload);
-    formData.append('profile_photo', payload);
-  }
+export const toProfilePhotoActionFormData = async (
+  data: Record<string, FormValue>,
+  photos?: UploadFile | UploadFile[] | null,
+) => {
+  const formData = toFormData(data);
+  const parts = await resolvePhotosParts(photos);
+  parts.forEach(part => appendPhotosFile(formData, part));
 
   return formData;
 };

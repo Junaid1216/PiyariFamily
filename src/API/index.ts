@@ -10,9 +10,12 @@ export type {
   CountriesResponse,
   CountryApiItem,
 } from './mappers/countryMapper';
-export { mapSubscriptions } from './mappers/subscriptionMapper';
+export { mapSubscriptions, mapPlanFeatures } from './mappers/subscriptionMapper';
 export type {
   SubscriptionApiPlan,
+  SubscriptionCompareRow,
+  SubscriptionCurrentPlan,
+  SubscriptionFreePlanData,
   SubscriptionPlanData,
   SubscriptionPlansData,
   SubscriptionsResponse,
@@ -22,6 +25,7 @@ export {
   mapHomeGreeting,
   mapHomeMatches,
   mapListToHomeMatches,
+  arrangeHomeMatchesByProximity,
   mapBestMatch,
   mapMatchList,
   mapMatchProfileDetail,
@@ -30,6 +34,7 @@ export {
 export {
   buildMatchFilterParams,
   mapFilterSetup,
+  mapQuickFilters,
   withAnyOption,
   FILTER_ANY,
 } from './mappers/filterMapper';
@@ -57,15 +62,48 @@ export type {
   MatchSearchParams,
   SuggestedMatch,
 } from './mappers/matchMapper';
-export { mapReferralHistory, mapReferralStats } from './mappers/referralMapper';
+export { mapReferralHistory, mapReferralStats, mapReferralLink, mapReferralRewards, mergeReferralData, applyReferralRedeem } from './mappers/referralMapper';
 export type {
   ReferralHistoryApiItem,
   ReferralHistoryItem,
   ReferralHistoryResponse,
+  ReferralLinkResponse,
+  ReferralRedeemOption,
+  ReferralRedeemResponse,
   ReferralRewardRow,
+  ReferralRewardsResponse,
   ReferralStats,
   ReferralStatsResponse,
 } from './mappers/referralMapper';
+export {
+  applyNotificationRead,
+  extractReadNotification,
+  isViewProfileRequestNotification,
+  mapNotifications,
+  mapNotificationItem,
+  pickUnreadCount,
+} from './mappers/notificationMapper';
+export type {
+  AppNotification,
+  NotificationApiItem,
+  NotificationPagination,
+  NotificationReadResponse,
+  NotificationsClearAllResponse,
+  NotificationsReadAllResponse,
+  NotificationsResponse,
+} from './mappers/notificationMapper';
+export {
+  applyPhotoAccessStatus,
+  mapPhotoAccessRequests,
+  pickPendingPhotoAccessCount,
+} from './mappers/photoAccessMapper';
+export type {
+  PhotoAccessAction,
+  PhotoAccessRequestsResponse,
+  PhotoAccessRespondResponse,
+  ViewProfileRequest,
+  ViewProfileRequestStatus,
+} from './mappers/photoAccessMapper';
 export {
   extractShortlistProfiles,
   mapShortlistItem,
@@ -79,8 +117,8 @@ export type {
   ShortlistTab,
   ShortlistedProfile,
 } from './mappers/shortlistMapper';
-export { mapProfileToForm, mapFormToProfilePayload, mapProfileToSettings, normalizeProfileData, resolveProfileData, saveProfileCache, extractPhotoUrl, extractProfilePhotoSlots, pickImageUrl } from './mappers/profileMapper';
-export type { EditProfileFormData, ProfileApiData, SettingsProfileData } from './mappers/profileMapper';
+export { mapProfileToForm, mapFormToProfilePayload, mapProfileToSettings, normalizeProfileData, resolveProfileData, saveProfileCache, extractPhotoUrl, extractProfileGalleryPhotos, extractProfilePhotoSlots, pickImageUrl, parseVisibilityFlag } from './mappers/profileMapper';
+export type { EditProfileFormData, ProfileApiData, ProfileGalleryPhoto, SettingsProfileData, PhotoVisibilityResponse } from './mappers/profileMapper';
 export { profileStorage } from './profileStorage';
 export { accountStorage } from './accountStorage';
 export type { AccountStatus } from './accountStorage';
@@ -89,7 +127,7 @@ export { tokenStorage } from './tokenStorage';
 export { userStorage } from './userStorage';
 export * from './types';
 export { isSuccessStatus } from './types';
-export { authService } from './services/authService';
+export { authService, pickAuthToken } from './services/authService';
 export type {
   ChangePasswordPayload,
   EmailPayload,

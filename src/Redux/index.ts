@@ -28,6 +28,7 @@ export {
   setHomeMatches,
   clearHomeMatches,
   removeFeaturedMatch,
+  dismissFeaturedMatch,
   selectHomeGreeting,
   selectHomeSubtitle,
   selectFeaturedMatches,
@@ -48,3 +49,14 @@ export {
   selectReferralStats,
 } from './slices/referralSlice';
 export type { ReferralState } from './slices/referralSlice';
+export {
+  setFilterForm,
+  setFilterResults,
+  clearFilterResults,
+  clearFilter,
+  selectFilterForm,
+  selectFilterResults,
+  selectFilterTotal,
+  selectFilterApplied,
+} from './slices/filterSlice';
+export type { FilterFormState, FilterState } from './slices/filterSlice';

@@ -50,11 +50,9 @@ const VerifyProfileScreen = () => {
     setPrefilling(true);
 
     try {
-      console.log('Verify Phone Prefill Request:', ENDPOINTS.PROFILE);
       const res = await Api.getProfile();
 
       if (res?.status == 200) {
-        console.log('Verify Phone Prefill Success:', res?.data);
         const profile = resolveProfileData(res?.data);
         const savedPhone =
           profile.phone ??
@@ -70,11 +68,9 @@ const VerifyProfileScreen = () => {
           navigation.replace('ProfileVerified', { phone: savedPhone });
         }
       } else {
-        console.log('Verify Phone Prefill Failed:', res?.data);
       }
     } catch (error) {
       const axiosError = error as AxiosError<ApiErrorResponse>;
-      console.log('Verify Phone Prefill Error:', axiosError?.response?.data || error);
     } finally {
       setPrefilling(false);
     }
@@ -99,20 +95,16 @@ const VerifyProfileScreen = () => {
     setLoading(true);
 
     try {
-      console.log('Verify Phone Send Request:', ENDPOINTS.VERIFY_PHONE_SEND);
       const res = await Api.sendVerifyPhone({ phone: trimmed });
 
       if (res?.status == 200) {
-        console.log('Verify Phone Send Success:', res);
         Toast.show(res?.message ?? 'Verification code sent', Toast.LONG);
         navigation.navigate('VerifyProfileCode', { phone: trimmed });
       } else {
-        console.log('Verify Phone Send Failed:', res);
         Toast.show(res?.message ?? 'Failed to send verification code', Toast.LONG);
       }
     } catch (error) {
       const axiosError = error as AxiosError<ApiErrorResponse>;
-      console.log('Verify Phone Send Error:', axiosError?.response?.data || error);
       Toast.show(getApiErrorMessage(axiosError), Toast.LONG);
     } finally {
       setLoading(false);
@@ -127,7 +119,7 @@ const VerifyProfileScreen = () => {
             style={styles.scrollView}
             contentContainerStyle={styles.scroll}
             keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
+            showsVerticalScrollIndicator={true}
             enableOnAndroid
             bounces={false}
           >

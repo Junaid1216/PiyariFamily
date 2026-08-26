@@ -113,7 +113,6 @@ const ChangePasswordScreen = () => {
       setLoading(true);
 
       try {
-        console.log('Change Password Request:', ENDPOINTS.AUTH.CHANGE_PASSWORD);
 
         const res = await authService.changePassword({
           current_password: currentPassword,
@@ -121,15 +120,12 @@ const ChangePasswordScreen = () => {
         });
 
         if (res?.status == 200) {
-          console.log('Change Password Success:', res);
           Toast.show(res?.message || Strings.passwordUpdated, Toast.LONG);
           navigation.goBack();
         } else {
-          console.log('Change Password Failed:', res);
           Toast.show(res?.message || 'Failed to update password', Toast.LONG);
         }
       } catch (error: any) {
-        console.log('Change Password Error:', error?.response?.data || error);
         Toast.show(
           error?.response?.data?.message || 'Failed to update password',
           Toast.LONG,
@@ -162,7 +158,7 @@ const ChangePasswordScreen = () => {
               { paddingBottom: getFooterBottomPadding(insets.bottom) },
             ]}
             keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
+            showsVerticalScrollIndicator={true}
             enableOnAndroid
             extraScrollHeight={hp('2%')}
             bounces={false}

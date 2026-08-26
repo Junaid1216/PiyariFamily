@@ -58,6 +58,11 @@ export type ShortlistResponse = {
   users?: ShortlistApiItem[];
   results?: ShortlistApiItem[];
   shortlisted?: ShortlistApiItem[];
+  liked_me?: ShortlistApiItem[];
+  likedMe?: ShortlistApiItem[];
+  i_liked?: ShortlistApiItem[];
+  iLiked?: ShortlistApiItem[];
+  liked?: ShortlistApiItem[];
   message?: string;
 };
 
@@ -174,8 +179,13 @@ export const mapShortlistItem = (
   };
 };
 
+const firstProfileArray = (
+  ...lists: Array<ShortlistApiItem[] | undefined>
+) => lists.find(list => Array.isArray(list)) ?? null;
+
 export const extractShortlistProfiles = (
   response?: ShortlistResponse | null,
+  tab?: ShortlistTab,
 ): ShortlistApiItem[] => {
   if (!response || typeof response !== 'object') {
     return [];
@@ -183,6 +193,27 @@ export const extractShortlistProfiles = (
 
   if (Array.isArray(response)) {
     return response;
+  }
+
+  if (tab === 'liked_me') {
+    const likedMe = firstProfileArray(
+      response.liked_me,
+      response.likedMe,
+    );
+    if (likedMe) {
+      return likedMe;
+    }
+  }
+
+  if (tab === 'i_liked') {
+    const liked = firstProfileArray(
+      response.i_liked,
+      response.iLiked,
+      response.liked,
+    );
+    if (liked) {
+      return liked;
+    }
   }
 
   if (Array.isArray(response.profiles)) {
@@ -206,7 +237,7 @@ export const extractShortlistProfiles = (
   }
 
   if (response.data && typeof response.data === 'object') {
-    return extractShortlistProfiles(response.data);
+    return extractShortlistProfiles(response.data, tab);
   }
 
   return [];
@@ -222,6 +253,13 @@ export const pickShortlistTotal = (
   const total = response?.total;
   if (typeof total === 'number' && Number.isFinite(total)) {
     return total;
+  }
+
+  if (response?.data && typeof response.data === 'object' && !Array.isArray(response.data)) {
+    const nestedTotal = response.data.total;
+    if (typeof nestedTotal === 'number' && Number.isFinite(nestedTotal)) {
+      return nestedTotal;
+    }
   }
 
   return fallback;

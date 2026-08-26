@@ -21,15 +21,7 @@ export const isProfileSetupComplete = (profile?: ProfileApiData | null) => {
     return true;
   }
 
-  if (hasText(profile.country)) {
-    return true;
-  }
-
-  return (
-    hasText(profile.gender) ||
-    hasText(profile.birthday) ||
-    (typeof profile.age === 'number' && profile.age > 0)
-  );
+  return hasText(profile.country);
 };
 
 export const getPostLoginRoute = (
@@ -47,20 +39,10 @@ export const resolvePostLoginRoute = async (): Promise<PostLoginRoute> => {
         profile = saveProfileCache(res.data);
       }
     } catch (error) {
-      console.log(
-        'Post Login Profile Error:',
-        (error as { response?: { data?: unknown } })?.response?.data || error,
-      );
     }
   }
 
   const route = getPostLoginRoute(profile);
-  console.log('Post Login Route:', route, {
-    country: profile?.country,
-    country_id: profile?.country_id,
-    gender: profile?.gender,
-    birthday: profile?.birthday,
-  });
 
   return route;
 };

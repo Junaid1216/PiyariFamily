@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Image,
   KeyboardAvoidingView,
@@ -17,12 +17,12 @@ import {
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-simple-toast';
 import { AxiosError } from 'axios';
-import { useFocusEffect } from '@react-navigation/native';
 import { Images } from '../../Assets';
 import BackButton from '../../Components/BackButton';
 import FilterChip from '../../Components/FilterChip';
 import PrimaryButton from '../../Components/PrimaryButton';
 import SetupDropdown from '../../Components/SetupDropdown';
+import { DropdownOverlayHost } from '../../Components/DropdownPortal';
 import SetupProgressBar from '../../Components/SetupProgressBar';
 import {
   Api,
@@ -92,9 +92,7 @@ const PhysicalDetailsScreen = ({ navigation }: Props) => {
   );
   const [saving, setSaving] = useState(false);
 
-  useFocusEffect(
-    useCallback(() => {
-      console.log('Redux PhysicalDetails:', store.getState());
+  useEffect(() => {
 
       const applyPhysical = (profile: {
         height?: string | null;
@@ -121,7 +119,6 @@ const PhysicalDetailsScreen = ({ navigation }: Props) => {
 
       const loadPhysical = async () => {
         try {
-          console.log('Profile Physical Prefill Request:', ENDPOINTS.PROFILE);
           const res = await Api.getProfile();
 
           if (cancelled) {
@@ -129,17 +126,11 @@ const PhysicalDetailsScreen = ({ navigation }: Props) => {
           }
 
           if (res?.status == 200) {
-            console.log('Profile Physical Prefill Success:', res?.data);
             applyPhysical(resolveProfileData(res?.data));
           } else {
-            console.log('Profile Physical Prefill Failed:', res?.data);
           }
         } catch (error) {
           const axiosError = error as AxiosError<ApiErrorResponse>;
-          console.log(
-            'Profile Physical Prefill Error:',
-            axiosError?.response?.data || error,
-          );
         }
       };
 
@@ -148,8 +139,7 @@ const PhysicalDetailsScreen = ({ navigation }: Props) => {
       return () => {
         cancelled = true;
       };
-    }, []),
-  );
+  }, []);
 
   const handleContinue = async () => {
     if (!feet || !inches) {
@@ -180,11 +170,9 @@ const PhysicalDetailsScreen = ({ navigation }: Props) => {
     setSaving(true);
 
     try {
-      console.log('Profile Physical Request:', ENDPOINTS.PROFILE_PHYSICAL);
       const res = await Api.updateProfilePhysical(payload);
 
       if (res?.status == 200 || res?.success === true || res?.success == 200) {
-        console.log('Profile Physical Success:', res);
         saveProfileCache({
           ...(res.user ?? {}),
           height,
@@ -196,12 +184,10 @@ const PhysicalDetailsScreen = ({ navigation }: Props) => {
         Toast.show(res?.message ?? 'Physical details saved', Toast.LONG);
         navigation.navigate('FaithCommunity');
       } else {
-        console.log('Profile Physical Failed:', res);
         Toast.show(res?.message ?? 'Failed to save physical details', Toast.LONG);
       }
     } catch (error) {
       const axiosError = error as AxiosError<ApiErrorResponse>;
-      console.log('Profile Physical Error:', axiosError?.response?.data || error);
       Toast.show(getApiErrorMessage(axiosError), Toast.LONG);
     } finally {
       setSaving(false);
@@ -215,9 +201,11 @@ const PhysicalDetailsScreen = ({ navigation }: Props) => {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView
-          showsVerticalScrollIndicator={false}
+          showsVerticalScrollIndicator={true}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled
+          removeClippedSubviews={false}
         >
           <BackButton variant="pink" onPress={() => navigation.goBack()} />
 
@@ -355,6 +343,7 @@ const PhysicalDetailsScreen = ({ navigation }: Props) => {
             showArrow
           />
         </View>
+        <DropdownOverlayHost />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -396,11 +385,16 @@ const styles = StyleSheet.create({
   },
   heightRow: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
     gap: wp('3%'),
     marginBottom: hp('2%'),
+    zIndex: 50,
+    elevation: 50,
+    overflow: 'visible',
   },
   heightDropdown: {
     flex: 1,
+    overflow: 'visible',
   },
   weightRow: {
     flexDirection: 'row',

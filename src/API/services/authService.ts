@@ -1,7 +1,7 @@
 import { apiClient } from '../apiClient';
 import { ENDPOINTS } from '../endpoints';
 import { clearSession } from '../../Redux/clearSession';
-import { store, setAuthSession } from '../../Redux';
+import { store, setAuthSession, clearProfile } from '../../Redux';
 import { accountStorage } from '../accountStorage';
 import { saveProfileCache } from '../mappers/profileMapper';
 import type { AuthResponse, MessageResponse, OtpActionResponse } from '../types';
@@ -48,8 +48,9 @@ export type ChangePasswordPayload = {
 const postAuth = async <T>(
   endpoint: string,
   payload: Record<string, string | number>,
+  config?: Parameters<typeof apiClient.postForm>[2] & { skipTokenClear?: boolean },
 ) => {
-  const { status, data } = await apiClient.postForm<T>(endpoint, payload);
+  const { status, data } = await apiClient.postForm<T>(endpoint, payload, config);
   return { status, ...data };
 };
 
@@ -67,25 +68,33 @@ const resolveAccountStatus = (
   return 'active' as const;
 };
 
-const pickAuthToken = (response: AuthResponse) =>
-  response.token ||
-  response.access_token ||
-  response.data?.token ||
-  response.data?.access_token ||
+export const pickAuthToken = (response?: AuthResponse | null) =>
+  response?.token ||
+  response?.access_token ||
+  response?.accessToken ||
+  response?.data?.token ||
+  response?.data?.access_token ||
+  response?.data?.accessToken ||
+  (response as { user?: { token?: string } } | undefined)?.user?.token ||
+  response?.data?.user?.token ||
   null;
+
+const pickAuthUser = (response?: AuthResponse | null) =>
+  response?.user || response?.data?.user || null;
 
 const saveAuthSession = (response: AuthResponse) => {
   const token = pickAuthToken(response);
+  const user = pickAuthUser(response);
 
   store.dispatch(
     setAuthSession({
-      user: response.user ?? null,
-      accessToken: token,
+      ...(user ? { user } : {}),
+      ...(token ? { accessToken: token } : {}),
     }),
   );
 
-  if (response.user) {
-    saveProfileCache(response.user);
+  if (user) {
+    saveProfileCache(user);
   }
 
   accountStorage.setStatus(resolveAccountStatus(response));
@@ -96,19 +105,36 @@ const shouldSaveAuthSession = (response: AuthResponse) =>
 
 export const authService = {
   login: async (payload: LoginPayload) => {
-    const response = await postAuth<AuthResponse>(ENDPOINTS.AUTH.LOGIN, {
-      ...payload,
-      email: normalizeEmail(payload.email),
-    });
+    try {
+      const response = await postAuth<AuthResponse>(
+        ENDPOINTS.AUTH.LOGIN,
+        {
+          ...payload,
+          email: normalizeEmail(payload.email),
+        },
+        { skipTokenClear: true },
+      );
 
-    if (shouldSaveAuthSession(response)) {
-      saveAuthSession(response);
+      if (shouldSaveAuthSession(response)) {
+        saveAuthSession(response);
+      }
+
+      return response;
+    } catch (error) {
+      const errorData = (error as { response?: { data?: AuthResponse } })?.response
+        ?.data;
+
+      if (errorData && shouldSaveAuthSession(errorData)) {
+        saveAuthSession(errorData);
+      }
+
+      throw error;
     }
-
-    return response;
   },
 
   register: async (payload: SignUpPayload) => {
+    store.dispatch(clearProfile());
+
     const response = await postAuth<AuthResponse>(ENDPOINTS.AUTH.REGISTER, {
       ...payload,
       email: normalizeEmail(payload.email),
@@ -171,7 +197,6 @@ export const authService = {
 
       return { status, ...data };
     } catch (error) {
-      console.log('Logout API Error:', error);
       return {
         status: 200,
         message: 'Logged out successfully',

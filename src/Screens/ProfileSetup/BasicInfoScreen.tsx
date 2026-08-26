@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Image,
   KeyboardAvoidingView,
@@ -17,12 +17,14 @@ import {
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-simple-toast';
 import { AxiosError } from 'axios';
-import { useFocusEffect } from '@react-navigation/native';
 import { Images } from '../../Assets';
 import AuthInput from '../../Components/AuthInput';
 import BackButton from '../../Components/BackButton';
 import PrimaryButton from '../../Components/PrimaryButton';
 import SetupProgressBar from '../../Components/SetupProgressBar';
+import DropdownOptionsOverlay, {
+  DropdownOverlayHost,
+} from '../../Components/DropdownOptionsOverlay';
 import {
   Api,
   ENDPOINTS,
@@ -137,7 +139,10 @@ const BasicInfoScreen = ({ navigation }: Props) => {
   const [gender, setGender] = useState<Gender>('male');
   const [dateOfBirth, setDateOfBirth] = useState('');
   const [maritalStatus, setMaritalStatus] = useState<MaritalStatus | ''>('');
+  const [siblings, setSiblings] = useState('');
+  const [familyInformation, setFamilyInformation] = useState('');
   const [maritalDropdownOpen, setMaritalDropdownOpen] = useState(false);
+  const maritalAnchorRef = useRef<View>(null);
   const [saving, setSaving] = useState(false);
 
   const age = useMemo(() => {
@@ -148,94 +153,99 @@ const BasicInfoScreen = ({ navigation }: Props) => {
     return calculateAge(parsed);
   }, [dateOfBirth]);
 
-  useFocusEffect(
-    useCallback(() => {
-      console.log('Redux BasicInfo:', store.getState());
+  useEffect(() => {
 
-      const cachedProfile = store.getState().profile.profile;
-      const user = store.getState().auth.user;
+    const cachedProfile = store.getState().profile.profile;
+    const user = store.getState().auth.user;
 
-      if (cachedProfile?.name) {
-        setFullName(cachedProfile.name);
-      } else if (user?.name) {
-        setFullName(user.name);
-      }
+    if (cachedProfile?.name) {
+      setFullName(cachedProfile.name);
+    } else if (user?.name) {
+      setFullName(user.name);
+    }
 
-      if (cachedProfile?.gender === 'male' || cachedProfile?.gender === 'female') {
-        setGender(cachedProfile.gender);
-      }
+    if (cachedProfile?.gender === 'male' || cachedProfile?.gender === 'female') {
+      setGender(cachedProfile.gender);
+    }
 
-      if (cachedProfile?.birthday) {
-        setDateOfBirth(formatBirthdayToInput(cachedProfile.birthday));
-      }
+    if (cachedProfile?.birthday) {
+      setDateOfBirth(formatBirthdayToInput(cachedProfile.birthday));
+    }
 
-      const cachedMarital =
-        MARITAL_STATUS_FROM_API[cachedProfile?.marital_status?.toLowerCase() ?? ''];
-      if (cachedMarital) {
-        setMaritalStatus(cachedMarital);
-      }
+    const cachedMarital =
+      MARITAL_STATUS_FROM_API[cachedProfile?.marital_status?.toLowerCase() ?? ''];
+    if (cachedMarital) {
+      setMaritalStatus(cachedMarital);
+    }
 
-      let cancelled = false;
+    if (cachedProfile?.siblings) {
+      setSiblings(cachedProfile.siblings);
+    }
 
-      const loadBasicInfo = async () => {
-        try {
-          console.log('Profile Basic Info Prefill Request:', ENDPOINTS.PROFILE);
-          const res = await Api.getProfile();
+    if (cachedProfile?.family_information || cachedProfile?.family_info) {
+      setFamilyInformation(
+        cachedProfile.family_information || cachedProfile.family_info || '',
+      );
+    }
 
-          if (cancelled) {
-            return;
+    let cancelled = false;
+
+    const loadBasicInfo = async () => {
+      try {
+        const res = await Api.getProfile();
+
+        if (cancelled) {
+          return;
+        }
+
+        if (res?.status == 200) {
+          const profile = resolveProfileData(res?.data);
+
+          setFullName(prev => prev || profile.name || user?.name || '');
+
+          if (profile.gender === 'male' || profile.gender === 'female') {
+            setGender(profile.gender);
           }
 
-          if (res?.status == 200) {
-            console.log('Profile Basic Info Prefill Success:', res?.data);
-            const profile = resolveProfileData(res?.data);
-
-            if (profile.name) {
-              setFullName(profile.name);
-            } else if (user?.name) {
-              setFullName(user.name);
-            }
-
-            if (profile.gender === 'male' || profile.gender === 'female') {
-              setGender(profile.gender);
-            }
-
-            if (profile.birthday) {
-              setDateOfBirth(formatBirthdayToInput(profile.birthday));
-            }
-
-            const marital =
-              MARITAL_STATUS_FROM_API[profile.marital_status?.toLowerCase() ?? ''];
-            if (marital) {
-              setMaritalStatus(marital);
-            }
-          } else {
-            console.log('Profile Basic Info Prefill Failed:', res?.data);
-            const savedName = user?.name;
-            if (savedName) {
-              setFullName(savedName);
-            }
-          }
-        } catch (error) {
-          const axiosError = error as AxiosError<ApiErrorResponse>;
-          console.log(
-            'Profile Basic Info Prefill Error:',
-            axiosError?.response?.data || error,
+          setDateOfBirth(prev =>
+            prev || (profile.birthday ? formatBirthdayToInput(profile.birthday) : ''),
           );
+
+          const marital =
+            MARITAL_STATUS_FROM_API[profile.marital_status?.toLowerCase() ?? ''];
+          if (marital) {
+            setMaritalStatus(prev => prev || marital);
+          }
+
+          setSiblings(prev => prev || profile.siblings || '');
+          setFamilyInformation(
+            prev =>
+              prev ||
+              profile.family_information ||
+              profile.family_info ||
+              '',
+          );
+        } else {
           const savedName = user?.name;
           if (savedName) {
-            setFullName(savedName);
+            setFullName(prev => prev || savedName);
           }
         }
-      };
+      } catch (error) {
+        const axiosError = error as AxiosError<ApiErrorResponse>;
+        const savedName = user?.name;
+        if (savedName) {
+          setFullName(prev => prev || savedName);
+        }
+      }
+    };
 
-      loadBasicInfo();
+    loadBasicInfo();
 
-      return () => {
-        cancelled = true;
-      };
-    }, []),
-  );
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleContinue = async () => {
     if (!fullName.trim()) {
@@ -245,6 +255,10 @@ const BasicInfoScreen = ({ navigation }: Props) => {
     const birthday = formatBirthdayForApi(dateOfBirth);
     if (!birthday) {
       Toast.show('Please enter a valid date of birth');
+      return;
+    }
+    if (age === null || age < 18) {
+      Toast.show('You must be at least 18 years old to register.');
       return;
     }
     if (!maritalStatus) {
@@ -258,35 +272,44 @@ const BasicInfoScreen = ({ navigation }: Props) => {
     setSaving(true);
 
     const marital = MARITAL_STATUS_TO_API[maritalStatus];
+    const payload: Record<string, string> = {
+      name: fullName.trim(),
+      birthday,
+      gender,
+      marital_status: marital,
+      'marital status': marital,
+    };
+
+    if (siblings.trim()) {
+      payload.siblings = siblings.trim();
+    }
+
+    if (familyInformation.trim()) {
+      payload.family_information = familyInformation.trim();
+      payload.family_info = familyInformation.trim();
+    }
 
     try {
-      console.log('Profile Basic Info Request:', ENDPOINTS.PROFILE_BASIC_INFO);
-      const res = await Api.updateProfileBasicInfo({
-        name: fullName.trim(),
-        birthday,
-        gender,
-        marital_status: marital,
-        'marital status': marital,
-      });
+      const res = await Api.updateProfileBasicInfo(payload);
 
       if (res?.status == 200 || res?.success === true || res?.success == 200) {
-        console.log('Profile Basic Info Success:', res);
         saveProfileCache({
           ...(res.user ?? {}),
           name: fullName.trim(),
           birthday,
           gender,
           marital_status: marital,
+          siblings: siblings.trim(),
+          family_information: familyInformation.trim(),
+          family_info: familyInformation.trim(),
         });
         Toast.show(res?.message ?? 'Basic info saved', Toast.LONG);
         navigation.navigate('Education');
       } else {
-        console.log('Profile Basic Info Failed:', res);
         Toast.show(res?.message ?? 'Failed to save basic info', Toast.LONG);
       }
     } catch (error) {
       const axiosError = error as AxiosError<ApiErrorResponse>;
-      console.log('Profile Basic Info Error:', axiosError?.response?.data || error);
       Toast.show(getApiErrorMessage(axiosError), Toast.LONG);
     } finally {
       setSaving(false);
@@ -300,9 +323,11 @@ const BasicInfoScreen = ({ navigation }: Props) => {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView
-          showsVerticalScrollIndicator={false}
+          showsVerticalScrollIndicator={true}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled
+          removeClippedSubviews={false}
         >
           <BackButton variant="pink" onPress={() => navigation.goBack()} />
 
@@ -372,98 +397,128 @@ const BasicInfoScreen = ({ navigation }: Props) => {
           </View>
 
           <Text style={styles.fieldLabel}>{Strings.dateOfBirthLabel}</Text>
-          <View style={styles.dobRow}>
-            <Icon
-              name="calendar-outline"
-              size={fs(20)}
-              color={Colors.primary}
-              style={styles.dobIcon}
-            />
-            <TextInput
-              style={styles.dobInput}
-              placeholder={Strings.dateOfBirthPlaceholder}
-              placeholderTextColor={Colors.placeholder}
-              value={dateOfBirth}
-              onChangeText={text => setDateOfBirth(formatDateInput(text))}
-              keyboardType="number-pad"
-              maxLength={14}
-            />
-            {age !== null ? (
-              <View style={styles.ageBadge}>
-                <Text style={styles.ageBadgeText}>
-                  Age: {age} {Strings.ageYears}
-                </Text>
-              </View>
+          <View style={styles.dobWrap}>
+            <View style={styles.dobRow}>
+              <Icon
+                name="calendar-outline"
+                size={fs(20)}
+                color={Colors.primary}
+                style={styles.dobIcon}
+              />
+              <TextInput
+                style={styles.dobInput}
+                placeholder={Strings.dateOfBirthPlaceholder}
+                placeholderTextColor={Colors.placeholder}
+                value={dateOfBirth}
+                onChangeText={text => setDateOfBirth(formatDateInput(text))}
+                keyboardType="number-pad"
+                maxLength={14}
+              />
+              {age !== null ? (
+                <View style={styles.ageBadge}>
+                  <Text style={styles.ageBadgeText}>
+                    Age: {age} {Strings.ageYears}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+            {age !== null && age < 18 ? (
+              <Text style={styles.ageErrorText}>
+                You must be at least 18 years old to register.
+              </Text>
             ) : null}
           </View>
 
           <Text style={styles.fieldLabel}>{Strings.maritalStatusDetail}</Text>
-          <TouchableOpacity
-            style={styles.dropdownRow}
-            activeOpacity={0.85}
-            onPress={() => setMaritalDropdownOpen(prev => !prev)}
+          <View
+            style={[
+              styles.dropdownAnchor,
+              maritalDropdownOpen && styles.dropdownOpenWrap,
+            ]}
           >
+            <View
+              ref={maritalAnchorRef}
+              collapsable={false}
+              style={styles.dropdownAnchorInner}
+            >
+              <TouchableOpacity
+                style={styles.dropdownRow}
+                activeOpacity={0.85}
+                onPress={() => setMaritalDropdownOpen(prev => !prev)}
+              >
+                <Icon
+                  name="heart-outline"
+                  size={fs(20)}
+                  color={Colors.primary}
+                  style={styles.dropdownIcon}
+                />
+                <Text
+                  style={[
+                    styles.dropdownText,
+                    !maritalStatus && styles.dropdownPlaceholder,
+                  ]}
+                >
+                  {maritalStatus || Strings.maritalStatusPlaceholder}
+                </Text>
+                <Icon
+                  name={maritalDropdownOpen ? 'chevron-up' : 'chevron-down'}
+                  size={fs(22)}
+                  color={Colors.iconMuted}
+                />
+              </TouchableOpacity>
+              <DropdownOptionsOverlay
+                visible={maritalDropdownOpen}
+                anchorRef={maritalAnchorRef}
+                options={MARITAL_STATUS_OPTIONS}
+                selectedValues={maritalStatus ? [maritalStatus] : []}
+                onSelect={option => {
+                  setMaritalStatus(option as MaritalStatus);
+                  setMaritalDropdownOpen(false);
+                }}
+                onClose={() => setMaritalDropdownOpen(false)}
+              />
+            </View>
+          </View>
+
+          <Text style={styles.fieldLabel}>{Strings.siblingsLabel}</Text>
+          <View style={styles.optionalInputRow}>
             <Icon
-              name="heart-outline"
+              name="account-group-outline"
               size={fs(20)}
               color={Colors.primary}
-              style={styles.dropdownIcon}
+              style={styles.optionalIcon}
             />
-            <Text
-              style={[
-                styles.dropdownText,
-                !maritalStatus && styles.dropdownPlaceholder,
-              ]}
-            >
-              {maritalStatus || Strings.maritalStatusPlaceholder}
-            </Text>
-            <Icon
-              name={maritalDropdownOpen ? 'chevron-up' : 'chevron-down'}
-              size={fs(22)}
-              color={Colors.iconMuted}
+            <TextInput
+              style={styles.optionalInput}
+              placeholder={Strings.siblingsPlaceholder}
+              placeholderTextColor={Colors.placeholder}
+              value={siblings}
+              onChangeText={setSiblings}
             />
-          </TouchableOpacity>
-          {maritalDropdownOpen ? (
-            <View style={styles.dropdownMenu}>
-              <ScrollView
-                nestedScrollEnabled
-                keyboardShouldPersistTaps="handled"
-                showsVerticalScrollIndicator={false}
-                style={styles.dropdownScroll}
-              >
-                {MARITAL_STATUS_OPTIONS.map(option => {
-                  const isSelected = maritalStatus === option;
-
-                  return (
-                    <TouchableOpacity
-                      key={option}
-                      style={[
-                        styles.dropdownOption,
-                        isSelected && styles.dropdownOptionSelected,
-                      ]}
-                      activeOpacity={0.85}
-                      onPress={() => {
-                        setMaritalStatus(option);
-                        setMaritalDropdownOpen(false);
-                      }}
-                    >
-                      <Text
-                        style={[
-                          styles.dropdownOptionText,
-                          isSelected && styles.dropdownOptionTextSelected,
-                        ]}
-                      >
-                        {option}
-                      </Text>
-                      {isSelected ? (
-                        <Icon name="check" size={fs(18)} color={Colors.gold} />
-                      ) : null}
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
+            <View style={styles.optionalBadge}>
+              <Text style={styles.optionalBadgeText}>{Strings.optional}</Text>
             </View>
-          ) : null}
+          </View>
+
+          <Text style={styles.fieldLabel}>{Strings.familyInformationLabel}</Text>
+          <View style={styles.optionalInputRow}>
+            <Icon
+              name="home-account"
+              size={fs(20)}
+              color={Colors.primary}
+              style={styles.optionalIcon}
+            />
+            <TextInput
+              style={styles.optionalInput}
+              placeholder={Strings.familyInformationPlaceholder}
+              placeholderTextColor={Colors.placeholder}
+              value={familyInformation}
+              onChangeText={setFamilyInformation}
+            />
+            <View style={styles.optionalBadge}>
+              <Text style={styles.optionalBadgeText}>{Strings.optional}</Text>
+            </View>
+          </View>
         </ScrollView>
 
         <View
@@ -476,9 +531,11 @@ const BasicInfoScreen = ({ navigation }: Props) => {
             title={Strings.continueBtn}
             onPress={handleContinue}
             loading={saving}
+            disabled={age !== null && age < 18}
             showArrow
           />
         </View>
+        <DropdownOverlayHost />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -568,6 +625,9 @@ const styles = StyleSheet.create({
     color: Colors.white,
     fontFamily: Fonts.bold,
   },
+  dobWrap: {
+    marginBottom: hp('1%'),
+  },
   dobRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -577,7 +637,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.inputBg,
     paddingHorizontal: wp('3.7%'),
     height: AuthStyles.inputHeight,
-    marginBottom: hp('1%'),
   },
   dobIcon: {
     marginRight: wp('2.5%'),
@@ -601,6 +660,59 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.semiBold,
     color: Colors.gold,
   },
+  ageErrorText: {
+    fontSize: fs(11),
+    fontFamily: Fonts.medium,
+    color: Colors.error,
+    marginTop: hp('0.8%'),
+  },
+  optionalInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1.2,
+    borderColor: Colors.border,
+    borderRadius: AuthStyles.inputRadius,
+    backgroundColor: Colors.inputBg,
+    paddingHorizontal: wp('3.7%'),
+    height: AuthStyles.inputHeight,
+    marginBottom: hp('2.2%'),
+  },
+  optionalIcon: {
+    marginRight: wp('2.5%'),
+  },
+  optionalInput: {
+    flex: 1,
+    fontSize: FontSizes.body,
+    fontFamily: Fonts.regular,
+    color: Colors.text,
+    paddingVertical: 0,
+  },
+  optionalBadge: {
+    backgroundColor: '#FFF3E0',
+    paddingHorizontal: wp('2.2%'),
+    paddingVertical: hp('0.45%'),
+    borderRadius: wp('3%'),
+    marginLeft: wp('1.5%'),
+  },
+  optionalBadgeText: {
+    fontSize: fs(11),
+    fontFamily: Fonts.semiBold,
+    color: Colors.gold,
+  },
+  dropdownAnchor: {
+    position: 'relative',
+    zIndex: 1,
+    marginBottom: hp('0.5%'),
+    overflow: 'visible',
+  },
+  dropdownAnchorInner: {
+    position: 'relative',
+    overflow: 'visible',
+  },
+  dropdownOpenWrap: {
+    zIndex: 200,
+    elevation: 200,
+  },
   dropdownRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -610,7 +722,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.inputBg,
     paddingHorizontal: wp('3.7%'),
     height: AuthStyles.inputHeight,
-    marginBottom: hp('0.5%'),
   },
   dropdownIcon: {
     marginRight: wp('2.5%'),
@@ -625,12 +736,21 @@ const styles = StyleSheet.create({
     color: Colors.placeholder,
   },
   dropdownMenu: {
+    position: 'absolute',
+    top: AuthStyles.inputHeight + hp('0.4%'),
+    left: 0,
+    right: 0,
+    zIndex: 40,
+    elevation: 24,
     borderWidth: 1.2,
     borderColor: Colors.dividerPink,
     borderRadius: AuthStyles.inputRadius,
     backgroundColor: Colors.white,
     overflow: 'hidden',
-    marginBottom: hp('1%'),
+    shadowColor: Colors.black,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
   },
   dropdownScroll: {
     maxHeight: hp('28%'),

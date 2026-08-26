@@ -19,15 +19,13 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-simple-toast';
-import { AxiosError } from 'axios';
 import { Images } from '../../Assets';
 import {
   Api,
-  ENDPOINTS,
   getApiErrorMessage,
   getImageCacheKey,
+  isApiSuccess,
   mapMatchProfileDetail,
-  type ApiErrorResponse,
 } from '../../API';
 import { type ProfileDetail } from '../../Constant/MatchProfiles';
 import { Colors } from '../../Constant/Colors';
@@ -35,6 +33,7 @@ import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
 import { HomeStackParamList } from '../../Navigation/HomeStackNavigator';
 import { getFooterBottomPadding } from '../../Functions/safeArea';
+import { navigateToMatchSuccess } from '../../Functions/matchNavigation';
 import { fs, hp, wp } from '../../Functions/responsive';
 import {
   selectIsAccountInactive,
@@ -72,22 +71,17 @@ const ProfileDetailScreen = () => {
     }
 
     try {
-      console.log('Match Profile Request:', `${ENDPOINTS.MATCHES}/${profileId}`);
       const res = await Api.getMatchProfile(profileId);
 
-      if (res?.status == 200) {
-        console.log('Match Profile Success:', res?.data);
+      if (isApiSuccess(res?.status, res?.data?.success)) {
         setProfile(mapMatchProfileDetail(res?.data, profileId, preview));
       } else {
-        console.log('Match Profile Failed:', res?.data);
         if (!name) {
           setProfile(null);
         }
         Toast.show(res?.data?.message ?? 'Failed to load profile', Toast.LONG);
       }
     } catch (error) {
-      const axiosError = error as AxiosError<ApiErrorResponse>;
-      console.log('Match Profile Error:', axiosError?.response?.data || error);
       if (!name) {
         setProfile(null);
       }
@@ -138,32 +132,21 @@ const ProfileDetailScreen = () => {
       setSending(true);
 
       try {
-        console.log(
-          'Shortlist Interest Request:',
-          `${ENDPOINTS.SHORTLIST}/${profileId}/interest`,
-        );
 
         const res = await Api.sendShortlistInterest(profileId);
 
-        if (res?.status == 200) {
-          console.log('Shortlist Interest Success:', res);
-          navigation.navigate('MatchSuccess', {
-            name: profile.fullName.split(' ')[0],
+        if (isApiSuccess(res?.status, res?.success)) {
+          navigateToMatchSuccess(navigation, {
+            name: profile.fullName.split(' ')[0] || profile.fullName,
             fullName: profile.fullName,
             matchId: profileId,
             matchImage: profile.image,
             mutualMatch: Boolean(res.mutual_match),
           });
         } else {
-          console.log('Shortlist Interest Failed:', res);
           Toast.show(res?.message ?? 'Failed to send interest', Toast.LONG);
         }
       } catch (error) {
-        const axiosError = error as AxiosError<ApiErrorResponse>;
-        console.log(
-          'Shortlist Interest Error:',
-          axiosError?.response?.data || error,
-        );
         Toast.show(
           getApiErrorMessage(error, 'Failed to send interest'),
           Toast.LONG,
@@ -177,7 +160,7 @@ const ProfileDetailScreen = () => {
   return (
     <View style={styles.root}>
       <ScrollView
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={true}
         contentContainerStyle={[
           styles.scrollContent,
           { paddingBottom: hp('8%') + insets.bottom },

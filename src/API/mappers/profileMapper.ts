@@ -29,6 +29,9 @@ export type ProfileApiData = {
   community?: string | null;
   residential_status?: string | null;
   residence_status?: string | null;
+  siblings?: string | null;
+  family_information?: string | null;
+  family_info?: string | null;
   age?: number | null;
   is_verified?: boolean;
   phone_verified?: boolean;
@@ -53,6 +56,8 @@ export type ProfileApiData = {
   religion?: string | null;
   sect?: string | null;
   photos?: Array<Record<string, unknown> | string> | null;
+  main_photo_index?: number | string | null;
+  removed_photo_indexes?: number[];
 };
 
 export type EditProfileFormData = {
@@ -85,6 +90,106 @@ export type SettingsProfileData = {
   additionalPhotosVisible: boolean;
 };
 
+export type PhotoVisibilityFlags = {
+  profile_photo_visible?: boolean | number | string | null;
+  additional_photos_visible?: boolean | number | string | null;
+};
+
+export type PhotoVisibilityResponse = {
+  success?: boolean | number;
+  message?: string;
+  data?: PhotoVisibilityFlags;
+};
+
+export const parseVisibilityFlag = (value: unknown): boolean | undefined => {
+  if (value === true || value === 1) {
+    return true;
+  }
+
+  if (value === false || value === 0) {
+    return false;
+  }
+
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+
+    if (['1', 'true', 'yes', 'on'].includes(normalized)) {
+      return true;
+    }
+
+    if (['0', 'false', 'no', 'off'].includes(normalized)) {
+      return false;
+    }
+  }
+
+  return undefined;
+};
+
+const pickVisibilityValue = (
+  source: Record<string, unknown>,
+  keys: string[],
+) => {
+  for (const key of keys) {
+    if (key in source) {
+      const parsed = parseVisibilityFlag(source[key]);
+      if (parsed !== undefined) {
+        return parsed;
+      }
+    }
+  }
+
+  return undefined;
+};
+
+const mergeVisibilityFlags = (
+  profile: ProfileApiData,
+  ...sources: Array<Record<string, unknown> | null | undefined>
+): ProfileApiData => {
+  const pictureKeys = [
+    'profile_photo_visible',
+    'profilePhotoVisible',
+    'profile_picture_visible',
+  ];
+  const additionalKeys = [
+    'additional_photos_visible',
+    'additionalPhotosVisible',
+  ];
+
+  for (const source of sources) {
+    if (!source || typeof source !== 'object') {
+      continue;
+    }
+
+    const nested = [
+      source,
+      source.settings,
+      source.visibility,
+      source.photo_visibility,
+      source.photos_visibility,
+    ];
+
+    for (const candidate of nested) {
+      if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
+        continue;
+      }
+
+      const record = candidate as Record<string, unknown>;
+      const pictureVisible = pickVisibilityValue(record, pictureKeys);
+      const additionalVisible = pickVisibilityValue(record, additionalKeys);
+
+      if (pictureVisible !== undefined) {
+        profile.profile_photo_visible = pictureVisible;
+      }
+
+      if (additionalVisible !== undefined) {
+        profile.additional_photos_visible = additionalVisible;
+      }
+    }
+  }
+
+  return profile;
+};
+
 const MARITAL_STATUS_MAP: Record<string, string> = {
   single: 'Never Married',
   'never married': 'Never Married',
@@ -94,6 +199,7 @@ const MARITAL_STATUS_MAP: Record<string, string> = {
 
 const MARITAL_TO_API: Record<string, string> = {
   'Never Married': 'never married',
+  Single: 'single',
   Divorced: 'divorced',
   Widowed: 'widowed',
 };
@@ -106,20 +212,135 @@ export const normalizeProfileData = (source: unknown): ProfileApiData => {
   const obj = source as Record<string, unknown>;
 
   if (obj.user && typeof obj.user === 'object') {
-    return mapGetProfileFields(obj.user as Record<string, unknown>);
+    return withNormalizedPhotos(
+      mapGetProfileFields(obj.user as Record<string, unknown>),
+      obj,
+    );
   }
 
   if (obj.data && typeof obj.data === 'object') {
     const data = obj.data as Record<string, unknown>;
 
     if (data.user && typeof data.user === 'object') {
-      return mapGetProfileFields(data.user as Record<string, unknown>);
+      return withNormalizedPhotos(
+        mapGetProfileFields(data.user as Record<string, unknown>),
+        data,
+        obj,
+      );
     }
 
-    return mapGetProfileFields(data);
+    return withNormalizedPhotos(mapGetProfileFields(data), obj);
   }
 
-  return mapGetProfileFields(obj);
+  return withNormalizedPhotos(mapGetProfileFields(obj));
+};
+
+const photoIndexValue = (photo: unknown, fallback = -1) => {
+  if (photo && typeof photo === 'object') {
+    const value = (photo as Record<string, unknown>).index;
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value;
+    }
+    if (typeof value === 'string' && value.trim()) {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
+  }
+
+  return fallback;
+};
+
+export const mergeRemovedPhotoIndexes = (
+  ...lists: Array<Array<number | string> | null | undefined>
+) => {
+  const indexes = new Set<number>();
+
+  lists.forEach(list => {
+    list?.forEach(value => {
+      const parsed = typeof value === 'number' ? value : Number(value);
+      if (Number.isFinite(parsed)) {
+        indexes.add(parsed);
+      }
+    });
+  });
+
+  return [...indexes];
+};
+
+export const filterPhotosByRemovedIndexes = (
+  photos?: ProfileApiData['photos'],
+  removedIndexes?: number[] | null,
+) => {
+  if (!Array.isArray(photos)) {
+    return photos;
+  }
+
+  if (!removedIndexes?.length) {
+    return photos;
+  }
+
+  const removed = new Set(removedIndexes);
+
+  return photos.filter((photo, position) => {
+    const index = photoIndexValue(photo, position);
+    return !removed.has(index);
+  });
+};
+
+const pickPhotosArray = (
+  ...candidates: Array<ProfileApiData['photos'] | unknown>
+): ProfileApiData['photos'] | undefined => {
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate) && candidate.length > 0) {
+      return candidate as ProfileApiData['photos'];
+    }
+  }
+
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) {
+      return candidate as ProfileApiData['photos'];
+    }
+  }
+
+  return undefined;
+};
+
+const readPhotosFromSource = (
+  source?: Record<string, unknown> | null,
+): ProfileApiData['photos'] | undefined => {
+  if (!source) {
+    return undefined;
+  }
+
+  return pickPhotosArray(
+    source.photos,
+    source.profile_photos,
+    source.gallery,
+    source.images,
+    source.media,
+  );
+};
+
+const withNormalizedPhotos = (
+  profile: ProfileApiData,
+  ...sources: Array<Record<string, unknown> | null | undefined>
+): ProfileApiData => {
+  const photos = pickPhotosArray(
+    profile.photos,
+    ...sources.map(source => readPhotosFromSource(source)),
+  );
+
+  if (photos) {
+    profile.photos = photos;
+  }
+
+  return mergeVisibilityFlags(
+    profile,
+    profile as Record<string, unknown>,
+    ...sources,
+  );
 };
 
 const mapGetProfileFields = (
@@ -153,6 +374,22 @@ const mapGetProfileFields = (
     profile.marital_status = marital;
   }
 
+  const siblings = pick('siblings');
+  if (typeof siblings === 'string') {
+    profile.siblings = siblings;
+  }
+
+  const familyInformation = pick(
+    'family_information',
+    'family_info',
+    'familyInformation',
+    'family',
+  );
+  if (typeof familyInformation === 'string') {
+    profile.family_information = familyInformation;
+    profile.family_info = familyInformation;
+  }
+
   const gender = pick('gender');
   if (typeof gender === 'string') {
     profile.gender = gender.toLowerCase();
@@ -175,6 +412,40 @@ const mapGetProfileFields = (
 
   if (profile.language && !profile.mother_tongue) {
     profile.mother_tongue = profile.language;
+  }
+
+  const photos = readPhotosFromSource(obj);
+  if (photos) {
+    profile.photos = photos;
+  }
+
+  const profilePhotoVisible = parseVisibilityFlag(
+    pick('profile_photo_visible', 'profilePhotoVisible'),
+  );
+  if (profilePhotoVisible !== undefined) {
+    profile.profile_photo_visible = profilePhotoVisible;
+  }
+
+  const additionalPhotosVisible = parseVisibilityFlag(
+    pick('additional_photos_visible', 'additionalPhotosVisible'),
+  );
+  if (additionalPhotosVisible !== undefined) {
+    profile.additional_photos_visible = additionalPhotosVisible;
+  }
+
+  const countryValue = pick('country', 'country_name', 'countryName');
+  if (typeof countryValue === 'string') {
+    profile.country = countryValue;
+  } else if (countryValue && typeof countryValue === 'object') {
+    const countryObj = countryValue as Record<string, unknown>;
+    const countryName = countryObj.name ?? countryObj.country;
+    if (typeof countryName === 'string' && countryName.trim()) {
+      profile.country = countryName.trim();
+    }
+    const nestedId = countryObj.id ?? countryObj.country_id;
+    if (nestedId !== undefined && nestedId !== null && nestedId !== '') {
+      profile.country_id = nestedId as number | string;
+    }
   }
 
   return profile;
@@ -206,8 +477,14 @@ export const resolveProfileData = (source: unknown): ProfileApiData => {
     gender: pickProfileField(fromApi.gender, cached?.gender),
     birthday: pickProfileField(fromApi.birthday, cached?.birthday),
     bio: pickProfileField(fromApi.bio, cached?.bio),
-    city: pickProfileField(fromApi.city, cached?.city),
-    country: pickProfileField(fromApi.country, cached?.country),
+    city: pickProfileField(
+      typeof fromApi.city === 'string' ? fromApi.city : undefined,
+      typeof cached?.city === 'string' ? cached.city : undefined,
+    ),
+    country: pickProfileField(
+      typeof fromApi.country === 'string' ? fromApi.country : undefined,
+      typeof cached?.country === 'string' ? cached.country : undefined,
+    ),
     country_id: pickProfileField(fromApi.country_id, cached?.country_id),
     height: pickProfileField(fromApi.height, cached?.height),
     mother_tongue: pickProfileField(
@@ -221,6 +498,19 @@ export const resolveProfileData = (source: unknown): ProfileApiData => {
     marital_status: pickProfileField(
       fromApi.marital_status,
       cached?.marital_status,
+    ),
+    siblings: pickProfileField(fromApi.siblings, cached?.siblings),
+    family_information: pickProfileField(
+      fromApi.family_information,
+      fromApi.family_info,
+      cached?.family_information,
+      cached?.family_info,
+    ),
+    family_info: pickProfileField(
+      fromApi.family_information,
+      fromApi.family_info,
+      cached?.family_information,
+      cached?.family_info,
     ),
     community: pickProfileField(fromApi.community, cached?.community),
     residential_status: pickProfileField(
@@ -236,17 +526,24 @@ export const resolveProfileData = (source: unknown): ProfileApiData => {
     ),
     profile_photo: pickProfileField(
       fromApi.profile_photo,
-      fromApi.image,
       cached?.profile_photo,
+      fromApi.image,
     ),
-    profile_photo_visible: pickProfileField(
-      fromApi.profile_photo_visible,
-      cached?.profile_photo_visible,
+    removed_photo_indexes: mergeRemovedPhotoIndexes(
+      fromApi.removed_photo_indexes,
+      cached?.removed_photo_indexes,
     ),
-    additional_photos_visible: pickProfileField(
-      fromApi.additional_photos_visible,
-      cached?.additional_photos_visible,
+    photos: pickPhotosArray(fromApi.photos, cached?.photos),
+    main_photo_index: pickProfileField(
+      fromApi.main_photo_index,
+      cached?.main_photo_index,
     ),
+    profile_photo_visible:
+      parseVisibilityFlag(fromApi.profile_photo_visible) ??
+      parseVisibilityFlag(cached?.profile_photo_visible),
+    additional_photos_visible:
+      parseVisibilityFlag(fromApi.additional_photos_visible) ??
+      parseVisibilityFlag(cached?.additional_photos_visible),
     location: pickProfileField(fromApi.location, cached?.location),
   };
 
@@ -271,12 +568,16 @@ export const saveProfileCache = (source: unknown): ProfileApiData => {
   return resolved;
 };
 
-const PHOTO_FIELD_KEYS = [
+const MAIN_PHOTO_FIELD_KEYS = [
   'profile_photo',
   'profile_picture',
   'profile_image',
   'profilePhoto',
   'profile_photo_url',
+] as const;
+
+const PHOTO_FIELD_KEYS = [
+  ...MAIN_PHOTO_FIELD_KEYS,
   'photo_url',
   'image_url',
   'thumbnail_url',
@@ -420,12 +721,32 @@ export const pickImageUrl = (item?: unknown, depth = 0): string => {
   }
 
   const obj = item as Record<string, unknown>;
+
+  for (const key of MAIN_PHOTO_FIELD_KEYS) {
+    const value = obj[key];
+
+    if (typeof value === 'string' && !isEmptyPhotoValue(value)) {
+      return resolveMediaUrl(value.trim());
+    }
+
+    if (value && typeof value === 'object') {
+      const url = pickImageUrl(value, depth + 1);
+      if (url) {
+        return url;
+      }
+    }
+  }
+
   const fromPhotos = pickFromPhotosArray(obj.photos);
   if (fromPhotos) {
     return fromPhotos;
   }
 
   for (const key of PHOTO_FIELD_KEYS) {
+    if ((MAIN_PHOTO_FIELD_KEYS as readonly string[]).includes(key)) {
+      continue;
+    }
+
     const value = obj[key];
 
     if (typeof value === 'string' && !isEmptyPhotoValue(value)) {
@@ -475,35 +796,127 @@ export const extractProfilePhotoSlots = (
     return slots;
   }
 
+  const photoItems = Array.isArray(profile.photos) ? profile.photos : [];
+  const orderedPhotos = [...photoItems].sort(
+    (left, right) => Number(isMainPhoto(right)) - Number(isMainPhoto(left)),
+  );
+  const urls: string[] = [];
+
+  for (const photo of orderedPhotos) {
+    const url = extractPhotoUrl(photo);
+    if (url && !urls.includes(url)) {
+      urls.push(url);
+    }
+  }
+
   const mainPhoto = pickImageUrl(profile) || null;
   if (mainPhoto) {
-    slots[0] = mainPhoto;
-  }
-
-  if (!Array.isArray(profile.photos)) {
-    return slots;
-  }
-
-  let slotIndex = mainPhoto ? 1 : 0;
-
-  for (const photo of profile.photos) {
-    const url = extractPhotoUrl(photo);
-
-    if (!url || url === mainPhoto) {
-      continue;
-    }
-
-    while (slotIndex < slotCount && slots[slotIndex]) {
-      slotIndex += 1;
-    }
-
-    if (slotIndex < slotCount) {
-      slots[slotIndex] = url;
-      slotIndex += 1;
+    const mainIndex = urls.indexOf(mainPhoto);
+    if (mainIndex > 0) {
+      urls.splice(mainIndex, 1);
+      urls.unshift(mainPhoto);
+    } else if (mainIndex < 0) {
+      urls.unshift(mainPhoto);
     }
   }
+
+  urls.slice(0, slotCount).forEach((url, index) => {
+    slots[index] = url;
+  });
 
   return slots;
+};
+
+const pickPhotoIndex = (photo: unknown, fallback: number): number => {
+  if (photo && typeof photo === 'object') {
+    const value = (photo as Record<string, unknown>).index;
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value;
+    }
+    if (typeof value === 'string' && value.trim()) {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
+  }
+
+  return fallback;
+};
+
+const pickPhotoPath = (photo: unknown): string | null => {
+  if (!photo || typeof photo !== 'object') {
+    return null;
+  }
+
+  const path = (photo as Record<string, unknown>).path;
+  return typeof path === 'string' && path.trim() ? path.trim() : null;
+};
+
+export type ProfileGalleryPhoto = {
+  id: string | null;
+  index: number | null;
+  url: string;
+  path: string | null;
+  isMain: boolean;
+};
+
+export const extractProfileGalleryPhotos = (
+  profile?: ProfileApiData | null,
+): ProfileGalleryPhoto[] => {
+  const photoItems = Array.isArray(profile?.photos) ? profile.photos : [];
+
+  if (photoItems.length > 0) {
+    const mainIndexValue = profile?.main_photo_index;
+    const parsedMainIndex =
+      typeof mainIndexValue === 'number'
+        ? mainIndexValue
+        : typeof mainIndexValue === 'string' && mainIndexValue.trim()
+          ? Number(mainIndexValue)
+          : NaN;
+    const mainIndex = Number.isFinite(parsedMainIndex)
+      ? parsedMainIndex
+      : photoItems.findIndex(isMainPhoto);
+
+    return photoItems
+      .map((photo, position) => {
+        const url = extractPhotoUrl(photo);
+        if (!url) {
+          return null;
+        }
+
+        const index = pickPhotoIndex(photo, position);
+        const isMain = index === (mainIndex >= 0 ? mainIndex : 0);
+
+        return {
+          id: String(index),
+          index,
+          url,
+          path: pickPhotoPath(photo),
+          isMain,
+        };
+      })
+      .filter((photo): photo is ProfileGalleryPhoto => photo !== null)
+      .filter(
+        photo =>
+          photo.index == null ||
+          !profile?.removed_photo_indexes?.includes(photo.index),
+      );
+  }
+
+  return extractProfilePhotoSlots(profile)
+    .map((url, index) =>
+      url
+        ? {
+            id: String(index),
+            index,
+            url,
+            path: null,
+            isMain: index === 0,
+          }
+        : null,
+    )
+    .filter((photo): photo is ProfileGalleryPhoto => photo !== null);
 };
 
 const formatBirthday = (value?: string | null) => {
@@ -614,10 +1027,8 @@ export const mapProfileToForm = (
       '',
     email: safeProfile.email ?? '',
     phone: safeProfile.phone ?? '',
-    city:
-      safeProfile.location ??
-      (buildLocation(safeProfile) || safeProfile.city || ''),
-    country: safeProfile.country ?? '',
+    city: typeof safeProfile.city === 'string' ? safeProfile.city : '',
+    country: typeof safeProfile.country === 'string' ? safeProfile.country : '',
     heightFeet: height.feet,
     heightInches: height.inches,
     motherTongue: safeProfile.mother_tongue
@@ -641,7 +1052,8 @@ export const mapProfileToSettings = (
   profile?: ProfileApiData | null,
 ): SettingsProfileData => {
   const form = mapProfileToForm(profile);
-  const meta = [form.age ? String(form.age) : '', form.city]
+  const location = [form.city, form.country].filter(Boolean).join(', ');
+  const meta = [form.age ? String(form.age) : '', location]
     .filter(Boolean)
     .join(' · ');
 
@@ -650,8 +1062,10 @@ export const mapProfileToSettings = (
     meta,
     isVerified: Boolean(profile?.is_verified),
     profilePhoto: form.profilePhoto,
-    profilePictureVisible: profile?.profile_photo_visible ?? true,
-    additionalPhotosVisible: profile?.additional_photos_visible ?? true,
+    profilePictureVisible:
+      parseVisibilityFlag(profile?.profile_photo_visible) ?? true,
+    additionalPhotosVisible:
+      parseVisibilityFlag(profile?.additional_photos_visible) ?? true,
   };
 };
 
@@ -692,9 +1106,7 @@ export const mapFormToProfilePayload = (
     payload.mother_tongue = form.motherTongue;
   }
 
-  if (form.otherLanguages.length > 0) {
-    payload.other_languages = JSON.stringify(form.otherLanguages);
-  }
+  payload.other_languages = [...form.otherLanguages];
 
   if (form.maritalStatus) {
     payload.marital_status =
@@ -715,6 +1127,27 @@ export const mapFormToProfilePayload = (
 
   if (form.heightFeet && form.heightInches) {
     payload.height = `${form.heightFeet}.${form.heightInches}`;
+  }
+
+  const cached = profileStorage.get();
+  const siblings = cached?.siblings?.trim();
+  if (siblings) {
+    payload.siblings = siblings;
+  }
+
+  const familyInformation = (
+    cached?.family_information ||
+    cached?.family_info ||
+    ''
+  ).trim();
+  if (familyInformation) {
+    payload.family_information = familyInformation;
+    payload.family_info = familyInformation;
+  }
+
+  if (bio) {
+    payload.about = bio;
+    payload.about_me = bio;
   }
 
   return payload;

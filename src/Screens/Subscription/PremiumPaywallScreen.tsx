@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   ScrollView,
   StyleSheet,
@@ -7,21 +7,25 @@ import {
   View,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
   SafeAreaView,
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import Toast from 'react-native-simple-toast';
 import PrimaryButton from '../../Components/PrimaryButton';
 import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
 import {
-  PAYWALL_LOCKED_FEATURES,
-  PLAN_OPTIONS,
-} from '../../Constant/Subscription';
+  Api,
+  getApiErrorMessage,
+  isApiSuccess,
+  mapSubscriptions,
+  type SubscriptionPlanData,
+} from '../../API';
 import { Strings } from '../../Constant/Strings';
 import { ProfileStackParamList } from '../../Navigation/ProfileStackNavigator';
 import { getFooterBottomPadding } from '../../Functions/safeArea';
@@ -43,14 +47,52 @@ const PremiumPaywallScreen = () => {
   const navigation = useNavigation<NavigationProp>();
   const insets = useSafeAreaInsets();
   useHideTabBar();
+  const [vipPlan, setVipPlan] = useState<SubscriptionPlanData | null>(null);
+
+  const fetchSubscriptions = useCallback(async () => {
+    try {
+      const res = await Api.getSubscriptions();
+
+      if (isApiSuccess(res?.status, res?.data?.success)) {
+        const mapped = mapSubscriptions(res?.data);
+        setVipPlan(
+          mapped.vipPlan.apiId ? mapped.vipPlan : mapped.vvipPlan.apiId
+            ? mapped.vvipPlan
+            : mapped.vipPlan,
+        );
+      } else {
+        Toast.show(
+          res?.data?.message ?? 'Failed to load subscription plans',
+          Toast.LONG,
+        );
+      }
+    } catch (error) {
+      Toast.show(
+        getApiErrorMessage(error, 'Failed to load subscription plans'),
+        Toast.LONG,
+      );
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchSubscriptions();
+    }, [fetchSubscriptions]),
+  );
 
   const openPayment = () => {
+    if (!vipPlan?.apiId && !vipPlan?.priceLabel) {
+      return;
+    }
+
     navigation.navigate('CompletePayment', {
-      plan: 'VIP',
-      price: PLAN_OPTIONS.VIP.price,
-      priceLabel: PLAN_OPTIONS.VIP.priceLabel,
+      plan: vipPlan.id,
+      price: vipPlan.price,
+      priceLabel: vipPlan.priceLabel,
     });
   };
+
+  const lockedFeatures = vipPlan?.features ?? [];
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
@@ -80,23 +122,22 @@ const PremiumPaywallScreen = () => {
 
       <View style={styles.contentSheet}>
         <ScrollView
-          showsVerticalScrollIndicator={false}
+          showsVerticalScrollIndicator={true}
           contentContainerStyle={styles.scrollContent}
         >
           <Text style={styles.limitTitle}>{Strings.paywallTitle}</Text>
           <Text style={styles.limitSubtitle}>{Strings.paywallSubtitle}</Text>
 
-          {PAYWALL_LOCKED_FEATURES.map(item => (
-            <View key={item.label} style={styles.lockRow}>
+          {lockedFeatures.map(label => (
+            <View key={label} style={styles.lockRow}>
               <View style={styles.lockIconWrap}>
-                <Icon name={item.icon} size={fs(18)} color={Colors.gold} />
+                <Icon name="lock-outline" size={fs(18)} color={Colors.gold} />
               </View>
               <View style={styles.lockTextWrap}>
-                <Text style={styles.lockLabel}>{item.label}</Text>
-                <Text style={styles.lockDesc}>{item.description}</Text>
+                <Text style={styles.lockLabel}>{label}</Text>
               </View>
               <TouchableOpacity style={styles.unlockBtn} activeOpacity={0.85}>
-                <Text style={styles.unlockBtnText}>{item.tag}</Text>
+                <Text style={styles.unlockBtnText}>{Strings.unlockPremium}</Text>
               </TouchableOpacity>
             </View>
           ))}

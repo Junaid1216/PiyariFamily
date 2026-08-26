@@ -6,6 +6,8 @@ import { Colors } from '../Constant/Colors';
 import { Fonts } from '../Constant/Fonts';
 import { fs, hp, wp } from '../Functions/responsive';
 
+export const RESEND_COOLDOWN_SECONDS = 120;
+
 type Props = {
   cooldownSeconds?: number;
   loading?: boolean;
@@ -19,7 +21,7 @@ const formatTime = (seconds: number) => {
 };
 
 const ResendCodeSection = ({
-  cooldownSeconds = 45,
+  cooldownSeconds = RESEND_COOLDOWN_SECONDS,
   loading = false,
   onResend,
 }: Props) => {
@@ -28,19 +30,24 @@ const ResendCodeSection = ({
 
   useEffect(() => {
     setSeconds(cooldownSeconds);
-  }, [cooldownSeconds]);
 
-  useEffect(() => {
-    if (seconds <= 0) {
+    if (cooldownSeconds <= 0) {
       return;
     }
 
     const timer = setInterval(() => {
-      setSeconds(prev => (prev > 0 ? prev - 1 : 0));
+      setSeconds(prev => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          return 0;
+        }
+
+        return prev - 1;
+      });
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [seconds]);
+  }, [cooldownSeconds]);
 
   const handleResend = () => {
     if (!canResend || loading) {

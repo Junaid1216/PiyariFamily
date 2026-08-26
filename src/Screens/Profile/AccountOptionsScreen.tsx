@@ -26,10 +26,9 @@ import { ProfileStackParamList } from '../../Navigation/ProfileStackNavigator';
 import { resetToLogin } from '../../Functions/authNavigation';
 import { fs, hp, wp } from '../../Functions/responsive';
 import {
-  clearAuth,
   clearHomeMatches,
-  clearProfile,
   clearReferral,
+  clearSession,
   clearShortlist,
   setAccountStatus,
   useAppDispatch,
@@ -53,14 +52,6 @@ const AccountOptionsScreen = () => {
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const clearSession = () => {
-    dispatch(clearAuth());
-    dispatch(clearProfile());
-    dispatch(clearHomeMatches());
-    dispatch(clearShortlist());
-    dispatch(clearReferral());
-  };
-
   const goToLogin = () => {
     resetToLogin(navigation);
   };
@@ -72,34 +63,21 @@ const AccountOptionsScreen = () => {
       setLoading(true);
 
       try {
-        console.log('Deactivate Account Request:', ENDPOINTS.ACCOUNT_DEACTIVATE, {
-          action: 'deactivate',
-        });
 
         const res = await Api.updateAccountStatus('deactivate');
 
-        console.log(
-          'Deactivate Account Response:',
-          JSON.stringify(res, null, 2),
-        );
 
         if (res?.isSuccess || res?.status == 200 || res?.success == 200) {
-          console.log(
-            'Deactivate Account Success:',
-            JSON.stringify(res, null, 2),
-          );
           dispatch(setAccountStatus(res?.accountStatus ?? 'inactive'));
+          dispatch(clearHomeMatches());
+          dispatch(clearShortlist());
+          dispatch(clearReferral());
           Toast.show(res?.message || 'Account deactivated', Toast.LONG);
           navigation.getParent()?.navigate('Home');
         } else {
-          console.log(
-            'Deactivate Account Failed:',
-            JSON.stringify(res, null, 2),
-          );
           Toast.show(res?.message || 'Failed to deactivate account', Toast.LONG);
         }
       } catch (error: any) {
-        console.log('Deactivate Account API Error:', error?.response?.data);
         Toast.show(
           error?.response?.data?.message || 'Failed to deactivate account',
           Toast.LONG,
@@ -117,32 +95,18 @@ const AccountOptionsScreen = () => {
       setDeleting(true);
 
       try {
-        console.log('Delete Account Request:', ENDPOINTS.ACCOUNT_DELETE);
 
         const res = await Api.deleteAccount();
 
-        console.log(
-          'Delete Account Response:',
-          JSON.stringify(res, null, 2),
-        );
 
         if (res?.status == 200) {
-          console.log(
-            'Delete Account Success:',
-            JSON.stringify(res, null, 2),
-          );
           clearSession();
           Toast.show(res?.message || 'Account deleted successfully', Toast.LONG);
           goToLogin();
         } else {
-          console.log(
-            'Delete Account Failed:',
-            JSON.stringify(res, null, 2),
-          );
           Toast.show(res?.message || 'Failed to delete account', Toast.LONG);
         }
       } catch (error: any) {
-        console.log('Delete Account API Error:', error?.response?.data);
         Toast.show(
           error?.response?.data?.message || 'Failed to delete account',
           Toast.LONG,
@@ -167,7 +131,7 @@ const AccountOptionsScreen = () => {
       />
 
       <ScrollView
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={true}
         contentContainerStyle={styles.scrollContent}
       >
         <View style={styles.heroSection}>

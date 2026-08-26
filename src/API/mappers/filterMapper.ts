@@ -4,11 +4,6 @@ import type {
   MatchListResponse,
 } from './matchMapper';
 import { normalizeMatchListResponse } from './matchMapper';
-import {
-  INCOME_RANGE_OPTIONS,
-  QUALIFICATION_OPTIONS,
-  RELIGION_OPTIONS,
-} from '../../Constant/ProfileSetup';
 
 export type FilterQuickOption = {
   id: string;
@@ -43,22 +38,6 @@ export type FilterSetupData = {
 
 export const FILTER_ANY = 'Any';
 
-const FILTER_MARITAL_STATUSES = [
-  'never married',
-  'divorced',
-  'widowed',
-  'single',
-] as const;
-
-const DEFAULT_FILTER_OPTIONS: FilterOptionLists = {
-  cities: [],
-  qualifications: [...QUALIFICATION_OPTIONS],
-  professions: [],
-  religions: [...RELIGION_OPTIONS],
-  maritalStatuses: [...FILTER_MARITAL_STATUSES],
-  incomeRanges: [...INCOME_RANGE_OPTIONS],
-};
-
 const pickNumber = (value?: number | string | null, fallback = 0) => {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return value;
@@ -78,6 +57,17 @@ const pickString = (value?: string | number | null) => {
   }
 
   return String(value).trim();
+};
+
+const pickFirstString = (...values: Array<string | number | null | undefined>) => {
+  for (const value of values) {
+    const text = pickString(value);
+    if (text) {
+      return text;
+    }
+  }
+
+  return '';
 };
 
 const normalizeList = (values?: Array<string | null | undefined>) =>
@@ -142,32 +132,43 @@ const extractOptionsFromProfiles = (
   incomeRanges: [],
 });
 
-const mapQuickFilters = (
-  quickFilters?: Record<string, string | number | null>,
-): FilterQuickOption[] =>
-  Object.entries(quickFilters ?? {}).map(([id, label]) => ({
+export const mapQuickFilters = (quickFilters?: MatchListResponse['quick_filters']) => {
+  if (!quickFilters) {
+    return [];
+  }
+
+  if (Array.isArray(quickFilters)) {
+    return quickFilters
+      .map((item, index) => {
+        if (typeof item === 'string' && item.trim()) {
+          return { id: item.trim(), label: item.trim() };
+        }
+
+        if (item && typeof item === 'object') {
+          const record = item as Record<string, unknown>;
+          const id =
+            pickFirstString(record.id as string | number | null, record.key as string | number | null, record.slug as string | number | null) ||
+            String(index);
+          const label =
+            pickFirstString(
+              record.label as string | number | null,
+              record.name as string | number | null,
+              record.title as string | number | null,
+            ) || id;
+
+          return { id, label };
+        }
+
+        return null;
+      })
+      .filter((item): item is FilterQuickOption => Boolean(item));
+  }
+
+  return Object.entries(quickFilters).map(([id, label]) => ({
     id,
     label: pickString(label) || id,
   }));
-
-const mergeWithDefaults = (options: FilterOptionLists): FilterOptionLists => ({
-  cities: options.cities.length ? options.cities : DEFAULT_FILTER_OPTIONS.cities,
-  qualifications: options.qualifications.length
-    ? options.qualifications
-    : DEFAULT_FILTER_OPTIONS.qualifications,
-  professions: options.professions.length
-    ? options.professions
-    : DEFAULT_FILTER_OPTIONS.professions,
-  religions: options.religions.length
-    ? options.religions
-    : DEFAULT_FILTER_OPTIONS.religions,
-  maritalStatuses: options.maritalStatuses.length
-    ? options.maritalStatuses
-    : DEFAULT_FILTER_OPTIONS.maritalStatuses,
-  incomeRanges: options.incomeRanges.length
-    ? options.incomeRanges
-    : DEFAULT_FILTER_OPTIONS.incomeRanges,
-});
+};
 
 const appendFromApplied = (
   options: FilterOptionLists,
@@ -188,7 +189,10 @@ const appendFromApplied = (
     professions: add(options.professions, applied.profession),
     religions: add(options.religions, applied.religion),
     maritalStatuses: add(options.maritalStatuses, applied.marital_status),
-    incomeRanges: options.incomeRanges,
+    incomeRanges: add(
+      options.incomeRanges,
+      applied.income_range ?? applied.monthly_income,
+    ),
   };
 };
 
@@ -200,34 +204,32 @@ const mapFilterOptionLists = (
   const applied = response?.filters_applied;
 
   if (fromApi && typeof fromApi === 'object') {
-    return mergeWithDefaults(
-      appendFromApplied(
-        {
-          cities: normalizeList(fromApi.cities).length
-            ? normalizeList(fromApi.cities)
-            : fromProfiles.cities,
-          qualifications: normalizeList(fromApi.qualifications).length
-            ? normalizeList(fromApi.qualifications)
-            : fromProfiles.qualifications,
-          professions: normalizeList(fromApi.professions).length
-            ? normalizeList(fromApi.professions)
-            : fromProfiles.professions,
-          religions: normalizeList(fromApi.religions).length
-            ? normalizeList(fromApi.religions)
-            : fromProfiles.religions,
-          maritalStatuses: normalizeList(fromApi.marital_statuses).length
-            ? normalizeList(fromApi.marital_statuses)
-            : fromProfiles.maritalStatuses,
-          incomeRanges: normalizeList(fromApi.income_ranges).length
-            ? normalizeList(fromApi.income_ranges)
-            : fromProfiles.incomeRanges,
-        },
-        applied,
-      ),
+    return appendFromApplied(
+      {
+        cities: normalizeList(fromApi.cities).length
+          ? normalizeList(fromApi.cities)
+          : fromProfiles.cities,
+        qualifications: normalizeList(fromApi.qualifications).length
+          ? normalizeList(fromApi.qualifications)
+          : fromProfiles.qualifications,
+        professions: normalizeList(fromApi.professions).length
+          ? normalizeList(fromApi.professions)
+          : fromProfiles.professions,
+        religions: normalizeList(fromApi.religions).length
+          ? normalizeList(fromApi.religions)
+          : fromProfiles.religions,
+        maritalStatuses: normalizeList(fromApi.marital_statuses).length
+          ? normalizeList(fromApi.marital_statuses)
+          : fromProfiles.maritalStatuses,
+        incomeRanges: normalizeList(fromApi.income_ranges).length
+          ? normalizeList(fromApi.income_ranges)
+          : fromProfiles.incomeRanges,
+      },
+      applied,
     );
   }
 
-  return mergeWithDefaults(appendFromApplied(fromProfiles, applied));
+  return appendFromApplied(fromProfiles, applied);
 };
 
 const mapDefaults = (
@@ -245,19 +247,22 @@ const mapDefaults = (
     profession: pickString(applied.profession) || FILTER_ANY,
     religion: pickString(applied.religion) || FILTER_ANY,
     maritalStatus: pickString(applied.marital_status),
-    incomeRange: FILTER_ANY,
+    incomeRange:
+      pickFirstString(applied.income_range, applied.monthly_income) ||
+      FILTER_ANY,
   };
 };
 
 export const mapFilterSetup = (
   response?: MatchListResponse | null,
 ): FilterSetupData => {
-  const options = mapFilterOptionLists(response);
+  const normalized = normalizeMatchListResponse(response);
+  const options = mapFilterOptionLists(normalized);
 
   return {
-    quickFilters: mapQuickFilters(response?.quick_filters),
+    quickFilters: mapQuickFilters(normalized.quick_filters),
     options,
-    defaults: mapDefaults(response, options),
+    defaults: mapDefaults(normalized, options),
   };
 };
 
@@ -344,6 +349,15 @@ export const buildMatchFilterParams = ({
   }
 
   Object.assign(params, mapIncomeToParams(incomeRange));
+
+  if (
+    incomeRange &&
+    incomeRange !== FILTER_ANY &&
+    params.monthly_income_min == null &&
+    params.monthly_income_max == null
+  ) {
+    params.monthly_income = incomeRange;
+  }
 
   Object.entries(activeQuickFilters).forEach(([key, enabled]) => {
     if (enabled) {

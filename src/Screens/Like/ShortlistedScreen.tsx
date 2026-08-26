@@ -13,20 +13,17 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-simple-toast';
-import { AxiosError } from 'axios';
 import { Images } from '../../Assets';
 import ScreenHeader from '../../Components/ScreenHeader';
 import {
   Api,
-  ENDPOINTS,
   extractShortlistProfiles,
   getApiErrorMessage,
   getImageCacheKey,
   hydrateMatchImages,
-  isSuccessStatus,
+  isApiSuccess,
   mapShortlistProfiles,
   pickShortlistTotal,
-  type ApiErrorResponse,
   type ShortlistTab,
   type ShortlistedProfile,
 } from '../../API';
@@ -73,19 +70,11 @@ const ShortlistedScreen = () => {
 
   const loadShortlistTab = useCallback(async (tab: ShortlistTab) => {
     try {
-      console.log('Shortlist Request:', `${ENDPOINTS.SHORTLIST}?tab=${tab}`);
       const res = await Api.getShortlist(tab);
       const body = res?.data;
-      const ok =
-        isSuccessStatus(res?.status) ||
-        body?.success == 200 ||
-        body?.success === true;
-
-      console.log(`Shortlist HTTP Status [${tab}]:`, res?.status);
-      console.log(`Shortlist Success [${tab}]:`, body);
+      const ok = isApiSuccess(res?.status, body?.success);
 
       if (!ok) {
-        console.log(`Shortlist Failed [${tab}]:`, body);
         dispatch(
           setShortlistData({
             tab,
@@ -93,21 +82,15 @@ const ShortlistedScreen = () => {
             total: 0,
           }),
         );
+        Toast.show(
+          body?.message ?? 'Failed to load shortlisted profiles',
+          Toast.LONG,
+        );
         return;
       }
 
-      const rawProfiles = extractShortlistProfiles(body);
-      console.log(`Shortlist Profiles Count [${tab}]:`, rawProfiles.length);
+      const rawProfiles = extractShortlistProfiles(body, tab);
       const mapped = await hydrateMatchImages(mapShortlistProfiles(rawProfiles));
-      console.log(
-        `Shortlist Mapped [${tab}]:`,
-        mapped.map(item => ({
-          id: item.id,
-          name: item.name,
-          age: item.age,
-          image: item.image,
-        })),
-      );
 
       dispatch(
         setShortlistData({
@@ -117,17 +100,16 @@ const ShortlistedScreen = () => {
         }),
       );
     } catch (error) {
-      const axiosError = error as AxiosError<ApiErrorResponse>;
-      console.log(
-        `Shortlist Error [${tab}]:`,
-        axiosError?.response?.data || error,
-      );
       dispatch(
         setShortlistData({
           tab,
           profiles: [],
           total: 0,
         }),
+      );
+      Toast.show(
+        getApiErrorMessage(error, 'Failed to load shortlisted profiles'),
+        Toast.LONG,
       );
     }
   }, [dispatch]);
@@ -143,8 +125,6 @@ const ShortlistedScreen = () => {
         loadShortlistTab('i_liked'),
       ]);
     } catch (error) {
-      const axiosError = error as AxiosError<ApiErrorResponse>;
-      console.log('Shortlist Error:', axiosError?.response?.data || error);
       if (!hasCacheRef.current) {
         Toast.show(
           getApiErrorMessage(error, 'Failed to load shortlisted profiles'),
@@ -169,9 +149,6 @@ const ShortlistedScreen = () => {
         source={item.image}
         style={styles.avatar}
         resizeMode="cover"
-        onError={error =>
-          console.log('Shortlist Image Error:', item.id, error.nativeEvent)
-        }
       />
 
       <View style={styles.cardBody}>
@@ -316,7 +293,7 @@ const ShortlistedScreen = () => {
           data={profiles}
           keyExtractor={item => item.id}
           renderItem={renderProfile}
-          showsVerticalScrollIndicator={false}
+          showsVerticalScrollIndicator={true}
           contentContainerStyle={[
             styles.listContent,
             profiles.length === 0 && styles.emptyListContent,

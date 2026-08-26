@@ -40,22 +40,18 @@ const ForgotPasswordScreen = ({ navigation }: Props) => {
       setLoading(true);
 
       try {
-        console.log('Forgot Password Request:', ENDPOINTS.AUTH.FORGOT_PASSWORD);
 
         const res = await authService.forgotPassword({
           email: email.trim(),
         });
 
         if (res?.status == 200) {
-          console.log('Forgot Password Success:', res);
           Toast.show(res?.message || 'Reset code sent to your email', Toast.LONG);
           navigation.navigate('CheckEmail', { email: email.trim() });
         } else {
-          console.log('Forgot Password Failed:', res);
           Toast.show(res?.message || 'Failed to send reset code. Please try again.');
         }
       } catch (error: any) {
-        console.log('Forgot Password Error:', error?.response?.data || error);
         Toast.show(
           error?.response?.data?.message ||
             'Failed to send reset code. Please try again.',
@@ -74,7 +70,7 @@ const ForgotPasswordScreen = ({ navigation }: Props) => {
             style={styles.scrollView}
             contentContainerStyle={styles.scroll}
             keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
+            showsVerticalScrollIndicator={true}
             enableOnAndroid
             bounces={false}
           >

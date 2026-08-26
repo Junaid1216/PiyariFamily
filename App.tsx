@@ -1,5 +1,6 @@
 import React from 'react';
 import { ActivityIndicator, Platform, StatusBar, useColorScheme, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Provider } from 'react-redux';
 import { PersistGate } from 'redux-persist/integration/react';
 import {
@@ -10,32 +11,37 @@ import { getSafeAreaInitialMetrics } from './src/Functions/safeArea';
 import { AppNavigator } from './src/Navigation';
 import { persistor, store } from './src/Redux';
 import { Colors } from './src/Constant/Colors';
+import { DropdownPortalProvider } from './src/Components/DropdownPortal';
 
 function App() {
   const isDarkMode = useColorScheme() === 'dark';
 
   return (
-    <Provider store={store}>
-      <PersistGate
-        loading={
-          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-            <ActivityIndicator size="large" color={Colors.primary} />
-          </View>
-        }
-        persistor={persistor}
-      >
-        <SafeAreaProvider
-          initialMetrics={getSafeAreaInitialMetrics(initialWindowMetrics)}
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <Provider store={store}>
+        <PersistGate
+          loading={
+            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+              <ActivityIndicator size="large" color={Colors.primary} />
+            </View>
+          }
+          persistor={persistor}
         >
-          <StatusBar
-            barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-            translucent={Platform.OS === 'android'}
-            backgroundColor="transparent"
-          />
-          <AppNavigator />
-        </SafeAreaProvider>
-      </PersistGate>
-    </Provider>
+          <SafeAreaProvider
+            initialMetrics={getSafeAreaInitialMetrics(initialWindowMetrics)}
+          >
+            <StatusBar
+              barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+              translucent={Platform.OS === 'android'}
+              backgroundColor="transparent"
+            />
+            <DropdownPortalProvider>
+              <AppNavigator />
+            </DropdownPortalProvider>
+          </SafeAreaProvider>
+        </PersistGate>
+      </Provider>
+    </GestureHandlerRootView>
   );
 }
 

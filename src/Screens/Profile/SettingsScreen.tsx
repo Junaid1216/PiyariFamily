@@ -20,11 +20,11 @@ import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
-import { Api, ENDPOINTS, authService, getApiErrorMessage, mapProfileToSettings, resolveProfileData, type ApiErrorResponse } from '../../API';
+import { Api, authService, getApiErrorMessage, isApiSuccess, mapProfileToSettings, parseVisibilityFlag, saveProfileCache, type ApiErrorResponse } from '../../API';
 import { ProfileStackParamList } from '../../Navigation/ProfileStackNavigator';
 import { resetToLogin } from '../../Functions/authNavigation';
 import { fs, hp, wp } from '../../Functions/responsive';
-import { useAppDispatch, useAppSelector, selectProfilePhoto, selectUser, setProfile, store } from '../../Redux';
+import { useAppSelector, selectProfilePhoto, selectUser, store } from '../../Redux';
 
 type NavigationProp = NativeStackNavigationProp<
   ProfileStackParamList,
@@ -70,7 +70,6 @@ const SettingItem = ({
 
 const SettingsScreen = () => {
   const navigation = useNavigation<NavigationProp>();
-  const dispatch = useAppDispatch();
   const user = useAppSelector(selectUser);
   const profilePhoto = useAppSelector(selectProfilePhoto);
   const [profileName, setProfileName] = useState(user?.name ?? '');
@@ -78,36 +77,130 @@ const SettingsScreen = () => {
   const [isVerified, setIsVerified] = useState(false);
   const [profilePictureVisible, setProfilePictureVisible] = useState(true);
   const [additionalPhotosVisible, setAdditionalPhotosVisible] = useState(true);
+  const [savingVisibility, setSavingVisibility] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
+  const applyProfile = useCallback((rawProfile: ReturnType<typeof saveProfileCache>) => {
+    const profile = mapProfileToSettings(rawProfile);
+    setProfileName(profile.name);
+    setProfileMeta(profile.meta);
+    setIsVerified(profile.isVerified);
+    setProfilePictureVisible(profile.profilePictureVisible);
+    setAdditionalPhotosVisible(profile.additionalPhotosVisible);
+  }, []);
+
   const fetchProfile = useCallback(async () => {
+    const cachedProfile = store.getState().profile.profile;
+    if (cachedProfile) {
+      applyProfile(cachedProfile);
+    }
+
     try {
-      console.log('Profile Request:', ENDPOINTS.PROFILE);
       const res = await Api.getProfile();
 
       if (res?.status == 200) {
-        console.log('Profile Success:', res?.data);
-        const rawProfile = resolveProfileData(res?.data);
-        const profile = mapProfileToSettings(rawProfile);
-        dispatch(setProfile(rawProfile));
-        setProfileName(profile.name);
-        setProfileMeta(profile.meta);
-        setIsVerified(profile.isVerified);
-        setProfilePictureVisible(profile.profilePictureVisible);
-        setAdditionalPhotosVisible(profile.additionalPhotosVisible);
-      } else {
-        console.log('Profile Failed:', res?.data);
+        applyProfile(saveProfileCache(res?.data));
+      } else if (!cachedProfile) {
+        Toast.show(res?.data?.message || 'Failed to load profile', Toast.LONG);
       }
     } catch (error: any) {
-      console.log('Profile Error:', error?.response?.data || error);
+      if (!cachedProfile) {
+        Toast.show(
+          getApiErrorMessage(error, 'Failed to load profile'),
+          Toast.LONG,
+        );
+      }
     }
-  }, [dispatch]);
+  }, [applyProfile]);
 
   useFocusEffect(
     useCallback(() => {
-      console.log('Redux Settings:', store.getState());
       fetchProfile();
     }, [fetchProfile]),
+  );
+
+  const persistPhotoVisibility = useCallback(
+    async (nextProfileVisible: boolean, nextAdditionalVisible: boolean) => {
+      if (savingVisibility) {
+        return;
+      }
+
+      const previousProfileVisible = profilePictureVisible;
+      const previousAdditionalVisible = additionalPhotosVisible;
+
+      if (
+        nextProfileVisible === previousProfileVisible &&
+        nextAdditionalVisible === previousAdditionalVisible
+      ) {
+        return;
+      }
+
+      setProfilePictureVisible(nextProfileVisible);
+      setAdditionalPhotosVisible(nextAdditionalVisible);
+      setSavingVisibility(true);
+
+      try {
+        const res = await Api.updatePhotoVisibility({
+          profile_photo_visible: nextProfileVisible,
+          additional_photos_visible: nextAdditionalVisible,
+        });
+
+        if (isApiSuccess(res?.status, res?.data?.success)) {
+          const body = res.data;
+          const flags =
+            body?.data && typeof body.data === 'object'
+              ? body.data
+              : body;
+          applyProfile(
+            saveProfileCache({
+              ...store.getState().profile.profile,
+              profile_photo_visible:
+                parseVisibilityFlag(
+                  flags && typeof flags === 'object'
+                    ? (flags as { profile_photo_visible?: unknown })
+                        .profile_photo_visible
+                    : undefined,
+                ) ?? nextProfileVisible,
+              additional_photos_visible:
+                parseVisibilityFlag(
+                  flags && typeof flags === 'object'
+                    ? (flags as { additional_photos_visible?: unknown })
+                        .additional_photos_visible
+                    : undefined,
+                ) ?? nextAdditionalVisible,
+            }),
+          );
+
+          Toast.show(
+            body?.message || 'Photo visibility updated',
+            Toast.LONG,
+          );
+          return;
+        }
+
+        setProfilePictureVisible(previousProfileVisible);
+        setAdditionalPhotosVisible(previousAdditionalVisible);
+        Toast.show(
+          res?.data?.message || 'Failed to update photo visibility',
+          Toast.LONG,
+        );
+      } catch (error) {
+        setProfilePictureVisible(previousProfileVisible);
+        setAdditionalPhotosVisible(previousAdditionalVisible);
+        Toast.show(
+          getApiErrorMessage(error, 'Failed to update photo visibility'),
+          Toast.LONG,
+        );
+      } finally {
+        setSavingVisibility(false);
+      }
+    },
+    [
+      additionalPhotosVisible,
+      applyProfile,
+      profilePictureVisible,
+      savingVisibility,
+    ],
   );
 
   const handleLogout = async () => {
@@ -118,12 +211,10 @@ const SettingsScreen = () => {
     setLoggingOut(true);
 
     try {
-      console.log('Logout Request:', ENDPOINTS.AUTH.LOGOUT);
       const res = await authService.logout();
       Toast.show(res?.message ?? 'Logged out successfully', Toast.LONG);
     } catch (error) {
       const axiosError = error as AxiosError<ApiErrorResponse>;
-      console.log('Logout Error:', axiosError?.response?.data || error);
       Toast.show('Logged out successfully', Toast.LONG);
     } finally {
       setLoggingOut(false);
@@ -139,7 +230,7 @@ const SettingsScreen = () => {
       />
 
       <ScrollView
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={true}
         contentContainerStyle={styles.scrollContent}
       >
         <View style={styles.profileCard}>
@@ -205,7 +296,10 @@ const SettingsScreen = () => {
             <Text style={styles.toggleLabel}>{Strings.profilePicture}</Text>
             <Switch
               value={profilePictureVisible}
-              onValueChange={setProfilePictureVisible}
+              disabled={savingVisibility}
+              onValueChange={value =>
+                persistPhotoVisibility(value, additionalPhotosVisible)
+              }
               trackColor={{
                 false: Colors.divider,
                 true: Colors.focusBorder,
@@ -220,7 +314,10 @@ const SettingsScreen = () => {
             <Text style={styles.toggleLabel}>{Strings.additionalPhotos}</Text>
             <Switch
               value={additionalPhotosVisible}
-              onValueChange={setAdditionalPhotosVisible}
+              disabled={savingVisibility}
+              onValueChange={value =>
+                persistPhotoVisibility(profilePictureVisible, value)
+              }
               trackColor={{
                 false: Colors.divider,
                 true: Colors.focusBorder,

@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -15,7 +15,7 @@ import {
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-simple-toast';
 import { AxiosError } from 'axios';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import BackButton from '../../Components/BackButton';
 import PrimaryButton from '../../Components/PrimaryButton';
@@ -93,9 +93,7 @@ const SelectCountryScreen = () => {
     [countries, selectedId],
   );
 
-  useFocusEffect(
-    useCallback(() => {
-      console.log('Redux SelectCountry:', store.getState());
+  useEffect(() => {
 
       let cancelled = false;
 
@@ -105,7 +103,6 @@ const SelectCountryScreen = () => {
         let nextCountries = PROFILE_COUNTRIES;
 
         try {
-          console.log('Countries Request:', ENDPOINTS.COUNTRIES);
           const res = await Api.getCountries();
 
           if (cancelled) {
@@ -113,10 +110,8 @@ const SelectCountryScreen = () => {
           }
 
           if (res?.status == 200) {
-            console.log('Countries Success:', res?.data);
             nextCountries = mapCountries(res?.data);
           } else {
-            console.log('Countries Failed:', res?.data);
             nextCountries = mapCountries();
             Toast.show(
               res?.data?.message ?? 'Failed to load countries',
@@ -125,7 +120,6 @@ const SelectCountryScreen = () => {
           }
         } catch (error) {
           const axiosError = error as AxiosError<ApiErrorResponse>;
-          console.log('Countries Error:', axiosError?.response?.data || error);
           nextCountries = mapCountries();
           Toast.show(
             getApiErrorMessage(error, 'Failed to load countries'),
@@ -155,7 +149,6 @@ const SelectCountryScreen = () => {
 
         if (token) {
           try {
-            console.log('Profile Country Prefill Request:', ENDPOINTS.PROFILE);
             const res = await Api.getProfile({ skipTokenClear: true });
 
             if (cancelled) {
@@ -163,7 +156,6 @@ const SelectCountryScreen = () => {
             }
 
             if (res?.status == 200) {
-              console.log('Profile Country Prefill Success:', res?.data);
               const profile = resolveProfileData(res?.data);
               const prefill = applyCountryPrefill(profile);
               if (prefill.city) {
@@ -173,14 +165,9 @@ const SelectCountryScreen = () => {
                 setState(prefill.state);
               }
             } else {
-              console.log('Profile Country Prefill Failed:', res?.data);
             }
           } catch (error) {
             const axiosError = error as AxiosError<ApiErrorResponse>;
-            console.log(
-              'Profile Country Prefill Error:',
-              axiosError?.response?.data || error,
-            );
           }
         }
 
@@ -196,8 +183,7 @@ const SelectCountryScreen = () => {
       return () => {
         cancelled = true;
       };
-    }, []),
-  );
+  }, []);
 
   const saveProfileCountry = useCallback(async () => {
     if (!selectedCountry || saving) {
@@ -207,7 +193,6 @@ const SelectCountryScreen = () => {
     setSaving(true);
 
     try {
-      console.log('Profile Country Request:', ENDPOINTS.PROFILE_COUNTRY);
       const res = await Api.updateProfileCountry({
         country: selectedCountry.name,
         country_id: selectedCountry.id,
@@ -216,7 +201,6 @@ const SelectCountryScreen = () => {
       });
 
       if (res?.status == 200) {
-        console.log('Profile Country Success:', res);
         saveProfileCache({
           country: selectedCountry.name,
           country_id: selectedCountry.id,
@@ -226,15 +210,10 @@ const SelectCountryScreen = () => {
         Toast.show(res?.message ?? 'Country saved', Toast.LONG);
         navigation.navigate('BasicInfo');
       } else {
-        console.log('Profile Country Failed:', res);
         Toast.show(res?.message ?? 'Failed to save country', Toast.LONG);
       }
     } catch (error) {
       const axiosError = error as AxiosError<ApiErrorResponse>;
-      console.log(
-        'Profile Country Error:',
-        axiosError?.response?.data || error,
-      );
       const message = `${axiosError?.response?.data?.message ?? ''}`.toLowerCase();
       if (
         axiosError?.response?.status === 401 ||
@@ -301,7 +280,7 @@ const SelectCountryScreen = () => {
           <FlatList
             data={filteredCountries}
             keyExtractor={(item: CountryOption) => String(item.id)}
-            showsVerticalScrollIndicator={false}
+            showsVerticalScrollIndicator={true}
             contentContainerStyle={styles.listContent}
             ItemSeparatorComponent={CountrySeparator}
             ListEmptyComponent={

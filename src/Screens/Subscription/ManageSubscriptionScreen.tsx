@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   ScrollView,
   StyleSheet,
@@ -7,15 +7,22 @@ import {
   View,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import Toast from 'react-native-simple-toast';
 import ScreenHeader from '../../Components/ScreenHeader';
 import { AuthStyles } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
-import { PLAN_OPTIONS } from '../../Constant/Subscription';
+import {
+  Api,
+  getApiErrorMessage,
+  isApiSuccess,
+  mapSubscriptions,
+  type SubscriptionPlanData,
+} from '../../API';
 import { Strings } from '../../Constant/Strings';
 import { ProfileStackParamList } from '../../Navigation/ProfileStackNavigator';
 import { useHideTabBar } from '../../Functions/useHideTabBar';
@@ -64,8 +71,46 @@ const ManageItem = ({
 const ManageSubscriptionScreen = () => {
   const navigation = useNavigation<NavigationProp>();
   useHideTabBar();
+  const [upgradePlan, setUpgradePlan] = useState<SubscriptionPlanData | null>(
+    null,
+  );
+  const [currentTitle, setCurrentTitle] = useState('');
+  const [currentMeta, setCurrentMeta] = useState('');
 
-  const renewDate = '15 Jan 2026';
+  const fetchSubscriptions = useCallback(async () => {
+    try {
+      const res = await Api.getSubscriptions();
+
+      if (isApiSuccess(res?.status, res?.data?.success)) {
+        const mapped = mapSubscriptions(res?.data);
+        setUpgradePlan(
+          mapped.vvipPlan.apiId ? mapped.vvipPlan : mapped.vipPlan,
+        );
+        const current = mapped.currentPlan;
+        setCurrentTitle(
+          current.title
+            ? `${current.title}${current.isPaid ? ` — ${Strings.activeStatus}` : ''}`
+            : '',
+        );
+        setCurrentMeta(
+          [current.priceLabel, current.period, current.renewsAt ? `Renews ${current.renewsAt}` : '']
+            .filter(Boolean)
+            .join(' · '),
+        );
+      }
+    } catch (error) {
+      Toast.show(
+        getApiErrorMessage(error, 'Failed to load subscription plans'),
+        Toast.LONG,
+      );
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchSubscriptions();
+    }, [fetchSubscriptions]),
+  );
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
@@ -82,7 +127,7 @@ const ManageSubscriptionScreen = () => {
       />
 
       <ScrollView
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={true}
         contentContainerStyle={styles.scrollContent}
       >
         <View style={styles.currentPlanCard}>
@@ -91,10 +136,12 @@ const ManageSubscriptionScreen = () => {
           </View>
 
           <View style={styles.planInfo}>
-            <Text style={styles.planName}>{Strings.vipPlanActiveTitle}</Text>
-            <Text style={styles.planMeta}>
-              {Strings.planRenewalSummary.replace('{date}', renewDate)}
+            <Text style={styles.planName}>
+              {currentTitle || Strings.freePlan}
             </Text>
+            {currentMeta ? (
+              <Text style={styles.planMeta}>{currentMeta}</Text>
+            ) : null}
           </View>
 
           <View style={styles.activePill}>
@@ -111,13 +158,17 @@ const ManageSubscriptionScreen = () => {
           iconColor={Colors.gold}
           title={Strings.upgradeToPlatinum}
           subtitle={Strings.upgradeToPlatinumSubtitle}
-          onPress={() =>
+          onPress={() => {
+            if (!upgradePlan?.apiId && !upgradePlan?.priceLabel) {
+              return;
+            }
+
             navigation.navigate('CompletePayment', {
-              plan: 'VVIP',
-              price: PLAN_OPTIONS.VVIP.price,
-              priceLabel: PLAN_OPTIONS.VVIP.priceLabel,
-            })
-          }
+              plan: upgradePlan.id,
+              price: upgradePlan.price,
+              priceLabel: upgradePlan.priceLabel,
+            });
+          }}
         />
 
         <ManageItem

@@ -1,9 +1,8 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import {
   Image,
   ImageSourcePropType,
   ImageStyle,
-  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -15,6 +14,7 @@ import { AuthStyles, FontSizes } from '../Constant/AuthStyles';
 import { Colors } from '../Constant/Colors';
 import { Fonts } from '../Constant/Fonts';
 import { fs, hp, wp } from '../Functions/responsive';
+import DropdownOptionsOverlay from './DropdownOptionsOverlay';
 
 type Props = {
   label?: string;
@@ -45,88 +45,79 @@ const SetupDropdown = ({
   onSelect,
   style,
 }: Props) => {
-  return (
-    <View style={style}>
-      {label ? <Text style={styles.fieldLabel}>{label}</Text> : null}
-      <TouchableOpacity
-        style={styles.dropdownRow}
-        activeOpacity={0.85}
-        onPress={onToggle}
-      >
-        {iconSource ? (
-          <Image
-            source={iconSource}
-            style={[
-              styles.dropdownIcon,
-              styles.iconImage,
-              { width: iconImageSize, height: iconImageSize } as ImageStyle,
-            ]}
-            resizeMode="contain"
-          />
-        ) : iconText ? (
-          <Text style={[styles.dropdownIcon, styles.iconText]}>{iconText}</Text>
-        ) : (
-          <Icon
-            name={iconName!}
-            size={fs(20)}
-            color={Colors.primary}
-            style={styles.dropdownIcon}
-          />
-        )}
-        <Text
-          style={[styles.dropdownText, !value && styles.dropdownPlaceholder]}
-        >
-          {value || placeholder}
-        </Text>
-        <Icon
-          name={isOpen ? 'chevron-up' : 'chevron-down'}
-          size={fs(22)}
-          color={Colors.iconMuted}
-        />
-      </TouchableOpacity>
-      {isOpen ? (
-        <View style={styles.dropdownMenu}>
-          <ScrollView
-            nestedScrollEnabled
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-            style={styles.dropdownScroll}
-          >
-            {options.map(option => {
-              const isSelected = value === option;
+  const anchorRef = useRef<View>(null);
 
-              return (
-                <TouchableOpacity
-                  key={option}
-                  style={[
-                    styles.dropdownOption,
-                    isSelected && styles.dropdownOptionSelected,
-                  ]}
-                  activeOpacity={0.85}
-                  onPress={() => onSelect(option)}
-                >
-                  <Text
-                    style={[
-                      styles.dropdownOptionText,
-                      isSelected && styles.dropdownOptionTextSelected,
-                    ]}
-                  >
-                    {option}
-                  </Text>
-                  {isSelected ? (
-                    <Icon name="check" size={fs(18)} color={Colors.gold} />
-                  ) : null}
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        </View>
-      ) : null}
+  return (
+    <View style={[style, styles.wrap, isOpen && styles.openWrap]}>
+      {label ? <Text style={styles.fieldLabel}>{label}</Text> : null}
+      <View ref={anchorRef} collapsable={false} style={styles.anchor}>
+        <TouchableOpacity
+          style={styles.dropdownRow}
+          activeOpacity={0.85}
+          onPress={onToggle}
+        >
+          {iconSource ? (
+            <Image
+              source={iconSource}
+              style={[
+                styles.dropdownIcon,
+                styles.iconImage,
+                { width: iconImageSize, height: iconImageSize } as ImageStyle,
+              ]}
+              resizeMode="contain"
+            />
+          ) : iconText ? (
+            <Text style={[styles.dropdownIcon, styles.iconText]}>
+              {iconText}
+            </Text>
+          ) : (
+            <Icon
+              name={iconName!}
+              size={fs(20)}
+              color={Colors.primary}
+              style={styles.dropdownIcon}
+            />
+          )}
+          <Text
+            style={[styles.dropdownText, !value && styles.dropdownPlaceholder]}
+          >
+            {value || placeholder}
+          </Text>
+          <Icon
+            name={isOpen ? 'chevron-up' : 'chevron-down'}
+            size={fs(22)}
+            color={Colors.iconMuted}
+          />
+        </TouchableOpacity>
+
+        <DropdownOptionsOverlay
+          visible={isOpen}
+          anchorRef={anchorRef}
+          options={options}
+          selectedValues={value ? [value] : []}
+          onSelect={onSelect}
+          onClose={onToggle}
+        />
+      </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
+  wrap: {
+    marginBottom: hp('0.5%'),
+    overflow: 'visible',
+    zIndex: 1,
+  },
+  openWrap: {
+    zIndex: 200,
+    elevation: 200,
+  },
+  anchor: {
+    position: 'relative',
+    overflow: 'visible',
+    zIndex: 1,
+  },
   fieldLabel: {
     fontSize: FontSizes.body,
     color: Colors.label,
@@ -144,7 +135,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.inputBg,
     paddingHorizontal: wp('3.7%'),
     height: AuthStyles.inputHeight,
-    marginBottom: hp('0.5%'),
   },
   dropdownIcon: {
     marginRight: wp('2.5%'),
@@ -168,38 +158,6 @@ const styles = StyleSheet.create({
   },
   dropdownPlaceholder: {
     color: Colors.placeholder,
-  },
-  dropdownMenu: {
-    borderWidth: 1.2,
-    borderColor: Colors.dividerPink,
-    borderRadius: AuthStyles.inputRadius,
-    backgroundColor: Colors.white,
-    overflow: 'hidden',
-    marginBottom: hp('1%'),
-  },
-  dropdownScroll: {
-    maxHeight: hp('28%'),
-  },
-  dropdownOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: wp('4%'),
-    paddingVertical: hp('1.4%'),
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.dividerPink,
-  },
-  dropdownOptionSelected: {
-    backgroundColor: Colors.inputBg,
-  },
-  dropdownOptionText: {
-    fontSize: FontSizes.body,
-    fontFamily: Fonts.regular,
-    color: Colors.text,
-  },
-  dropdownOptionTextSelected: {
-    fontFamily: Fonts.semiBold,
-    color: Colors.primary,
   },
 });
 

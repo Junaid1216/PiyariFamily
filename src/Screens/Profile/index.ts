@@ -4,6 +4,8 @@ export { default as VerifyProfileScreen } from './VerifyProfileScreen';
 export { default as VerifyProfileCodeScreen } from './VerifyProfileCodeScreen';
 export { default as ProfileVerifiedScreen } from './ProfileVerifiedScreen';
 export { default as NotificationsScreen } from './NotificationsScreen';
+export { default as ViewProfileRequestsScreen } from './ViewProfileRequestsScreen';
+export { default as ViewProfileGalleryScreen } from './ViewProfileGalleryScreen';
 export { default as ChangePasswordScreen } from './ChangePasswordScreen';
 export { default as AccountOptionsScreen } from './AccountOptionsScreen';
 export { default as ReferralProgramScreen } from './ReferralProgramScreen';

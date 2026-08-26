@@ -92,7 +92,7 @@ const ProfilePreviewSheet = ({
         <ScrollView
           ref={scrollViewRef}
           style={styles.scrollView}
-          showsVerticalScrollIndicator={false}
+          showsVerticalScrollIndicator={true}
           bounces={false}
           nestedScrollEnabled
           keyboardShouldPersistTaps="handled"
