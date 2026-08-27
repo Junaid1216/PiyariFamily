@@ -3,8 +3,15 @@ import { ENDPOINTS } from '../endpoints';
 import { clearSession } from '../../Redux/clearSession';
 import { store, setAuthSession, clearProfile } from '../../Redux';
 import { accountStorage } from '../accountStorage';
+import { pendingReferralStorage } from '../pendingReferralStorage';
+import { normalizeReferralLink } from '../mappers/referralMapper';
 import { saveProfileCache } from '../mappers/profileMapper';
-import type { AuthResponse, MessageResponse, OtpActionResponse } from '../types';
+import {
+  isApiSuccess,
+  type AuthResponse,
+  type MessageResponse,
+  type OtpActionResponse,
+} from '../types';
 
 export type LoginPayload = {
   email: string;
@@ -17,6 +24,7 @@ export type SignUpPayload = {
   phone: string;
   password: string;
   password_confirmation: string;
+  referral_link?: string;
 };
 
 export type VerifyEmailOtpPayload = {
@@ -135,10 +143,20 @@ export const authService = {
   register: async (payload: SignUpPayload) => {
     store.dispatch(clearProfile());
 
+    const { referral_link: payloadReferralLink, ...rest } = payload;
+    const referralLink =
+      normalizeReferralLink(payloadReferralLink) ||
+      (await pendingReferralStorage.get());
+
     const response = await postAuth<AuthResponse>(ENDPOINTS.AUTH.REGISTER, {
-      ...payload,
+      ...rest,
       email: normalizeEmail(payload.email),
+      ...(referralLink ? { referral_link: referralLink } : {}),
     });
+
+    if (isApiSuccess(response.status, response.success)) {
+      await pendingReferralStorage.clear();
+    }
 
     if (shouldSaveAuthSession(response)) {
       saveAuthSession(response);

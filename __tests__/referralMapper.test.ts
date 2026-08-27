@@ -7,6 +7,8 @@ import {
   mergeReferralData,
   applyReferralRedeem,
   extractReferralCodeFromUrl,
+  normalizeReferralLink,
+  SHAREABLE_INVITE_PAGE,
   type ReferralStatsResponse,
 } from '../src/API/mappers/referralMapper';
 
@@ -31,9 +33,7 @@ describe('GET /referrals/stats', () => {
     const stats = mapReferralStats(POSTMAN_REFERRAL_STATS);
 
     expect(stats.referralCode).toBe('60287E6A');
-    expect(stats.referralLink).toBe(
-      'https://ranglerz.click/piyarifamily/60287E6A',
-    );
+    expect(stats.referralLink).toBe(`${SHAREABLE_INVITE_PAGE}?ref=60287E6A`);
     expect(stats.registered).toBe(0);
     expect(stats.pointsEarned).toBe(0);
     expect(stats.pointValuePkr).toBe(4);
@@ -77,7 +77,7 @@ describe('GET /referrals/stats', () => {
 
     expect(stats.referralCode).toBe('AB12CD34');
     expect(stats.referralLink).toBe(
-      'https://ranglerz.click/piyarifamily/AB12CD34',
+      `${SHAREABLE_INVITE_PAGE}?ref=AB12CD34`,
     );
     expect(stats.registered).toBe(3);
     expect(stats.pointsEarned).toBe(12);
@@ -210,9 +210,7 @@ describe('GET /referrals/link and /referrals/rewards', () => {
     });
 
     expect(link.referralCode).toBe('60287E6A');
-    expect(link.referralLink).toBe(
-      'https://ranglerz.click/piyarifamily/60287E6A',
-    );
+    expect(link.referralLink).toBe(`${SHAREABLE_INVITE_PAGE}?ref=60287E6A`);
     expect(link.rewardsTable[0].points).toBe('4 pts');
     expect(link.shareMessage).toContain('verifies email');
   });
@@ -323,5 +321,55 @@ describe('GET /referrals/link and /referrals/rewards', () => {
     expect(next.pointsEarned).toBe(50);
     expect(next.totalValuePkr).toBe(200);
     expect(next.redeemed).toBe(1);
+  });
+});
+
+describe('referral invite links', () => {
+  it('extracts the code from the shared Postman URL', () => {
+    expect(
+      extractReferralCodeFromUrl(
+        'https://ranglerz.click/piyarifamily/60287E6A',
+      ),
+    ).toBe('60287E6A');
+  });
+
+  it('ignores the site path without a code and API URLs', () => {
+    expect(
+      extractReferralCodeFromUrl('https://ranglerz.click/piyarifamily'),
+    ).toBeNull();
+    expect(
+      extractReferralCodeFromUrl(
+        'https://ranglerz.click/piyarifamily/api/register',
+      ),
+    ).toBeNull();
+  });
+
+  it('normalizes a bare code and custom scheme to the canonical invite URL', () => {
+    expect(normalizeReferralLink('60287E6A')).toBe(
+      'https://ranglerz.click/piyarifamily/60287E6A',
+    );
+    expect(normalizeReferralLink('piyarifamily://60287E6A')).toBe(
+      'https://ranglerz.click/piyarifamily/60287E6A',
+    );
+  });
+
+  it('keeps the original https invite URL for register', () => {
+    expect(
+      normalizeReferralLink('https://ranglerz.click/piyarifamily/60287E6A'),
+    ).toBe('https://ranglerz.click/piyarifamily/60287E6A');
+  });
+
+  it('upgrades http invite URLs to https', () => {
+    expect(
+      normalizeReferralLink('http://ranglerz.click/piyarifamily/F86CD84C'),
+    ).toBe('https://ranglerz.click/piyarifamily/F86CD84C');
+  });
+
+  it('reads a referral code from query params even on API URLs', () => {
+    expect(
+      extractReferralCodeFromUrl(
+        'https://ranglerz.click/piyarifamily/api?ref=F86CD84C',
+      ),
+    ).toBe('F86CD84C');
   });
 });

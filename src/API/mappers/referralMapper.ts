@@ -350,11 +350,12 @@ export const mapReferralStats = (
 
   return {
     referralCode: pickString(data?.referral_code, data?.code, data?.ref_code),
-    referralLink: pickString(
+    referralLink: toDisplayReferralLink(
       data?.referral_link,
       data?.link,
       data?.url,
       data?.share_url,
+      pickString(data?.referral_code, data?.code, data?.ref_code),
     ),
     registered: pickNumber(
       data?.total_registered,
@@ -426,7 +427,10 @@ export const mapReferralLink = (
 
   return {
     referralCode: pickString(data?.referral_code),
-    referralLink: pickString(data?.referral_link),
+    referralLink: toDisplayReferralLink(
+      data?.referral_link,
+      data?.referral_code,
+    ),
     shareMessage: pickString(data?.message),
     rewardsTable: buildRewardsTable(data?.reward_per_registration),
   };
@@ -850,33 +854,98 @@ export const mapReferralHistory = (
   response?: ReferralHistoryResponse | null,
 ): ReferralHistoryItem[] => extractHistory(response).map(mapReferralHistoryItem);
 
-export const extractReferralCodeFromUrl = (url?: string | null) => {
-  if (!url) {
+const REFERRAL_CODE_PATTERN = /^[A-Za-z0-9]{6,16}$/;
+const RESERVED_REFERRAL_SEGMENTS =
+  /^(api|login|register|profile|matches|notifications|piyarifamily)$/i;
+
+export const CANONICAL_REFERRAL_BASE =
+  'https://ranglerz.click/piyarifamily';
+
+export const SHAREABLE_INVITE_PAGE =
+  'https://cdn.jsdelivr.net/gh/Junaid1216/PiyariFamily@main/web-invite/invite.html';
+
+const isReferralCode = (value?: string | null) => {
+  const code = value?.trim() ?? '';
+  return REFERRAL_CODE_PATTERN.test(code) && !RESERVED_REFERRAL_SEGMENTS.test(code);
+};
+
+export const buildShareableInviteLink = (code?: string | null) => {
+  if (!isReferralCode(code)) {
+    return '';
+  }
+
+  return `${SHAREABLE_INVITE_PAGE}?ref=${encodeURIComponent(code.trim())}`;
+};
+
+const toDisplayReferralLink = (...values: Array<string | null | undefined>) => {
+  const picked = pickString(...values);
+  return (
+    buildShareableInviteLink(extractReferralCodeFromUrl(picked)) || picked
+  );
+};
+
+const toParseableUrl = (value: string) => {
+  if (/^[a-z][a-z0-9+.-]*:/i.test(value)) {
+    return value;
+  }
+
+  if (value.includes('.') || value.includes('/')) {
+    return `https://${value.replace(/^\/+/, '')}`;
+  }
+
+  return value;
+};
+
+export const extractReferralCodeFromUrl = (url?: string | null): string | null => {
+  if (!url?.trim()) {
     return null;
   }
 
+  const trimmed = url.trim();
+
+  if (isReferralCode(trimmed)) {
+    return trimmed;
+  }
+
   try {
-    const parsed = new URL(url);
+    const parsed = new URL(toParseableUrl(trimmed));
+
     const fromQuery =
       parsed.searchParams.get('referral_code') ||
+      parsed.searchParams.get('referral_link') ||
       parsed.searchParams.get('ref') ||
       parsed.searchParams.get('code');
 
     if (fromQuery?.trim()) {
-      return fromQuery.trim();
+      return extractReferralCodeFromUrl(fromQuery.trim());
+    }
+
+    if (/\/api(\/|$)/i.test(parsed.pathname)) {
+      return null;
     }
 
     const last = parsed.pathname.split('/').filter(Boolean).pop() ?? '';
 
-    if (
-      /^[A-Za-z0-9]{6,16}$/.test(last) &&
-      !/^(api|login|register|profile)$/i.test(last)
-    ) {
+    if (isReferralCode(last)) {
       return last;
+    }
+
+    if (!last && isReferralCode(parsed.hostname)) {
+      return parsed.hostname;
     }
   } catch {
     return null;
   }
 
   return null;
+};
+
+export const normalizeReferralLink = (value?: string | null): string | null => {
+  const code = extractReferralCodeFromUrl(value);
+
+  if (!code) {
+    return null;
+  }
+
+  return `${CANONICAL_REFERRAL_BASE}/${code}`;
 };
