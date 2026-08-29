@@ -220,6 +220,9 @@ const pickNumber = (value?: number | string | null) => {
   return 0;
 };
 
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+
 const stripEmptyMedia = (item: MatchApiItem): MatchApiItem => {
   const next = { ...item };
   const mediaKeys = [
@@ -308,17 +311,44 @@ const resolveProfileImage = (
   return Images.femaleProfile;
 };
 
-const resolveLocation = (item: MatchApiItem) => {
-  const directLocation = pickString(item.location);
-
-  if (directLocation) {
-    return directLocation;
+const locationPart = (value: unknown): string => {
+  if (typeof value === 'string' && value.trim()) {
+    return value.trim();
   }
 
-  const city = pickString(item.city);
-  const country = pickString(item.country);
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return String(value);
+  }
 
-  return [city, country].filter(Boolean).join(', ');
+  if (!isPlainObject(value)) {
+    return '';
+  }
+
+  return locationPart(
+    value.name ??
+      value.title ??
+      value.city_name ??
+      value.city ??
+      value.country_name ??
+      value.country,
+  );
+};
+
+const resolveLocation = (item: MatchApiItem) => {
+  if (typeof item.location === 'string' && item.location.trim()) {
+    return item.location.trim();
+  }
+
+  const locationObj = isPlainObject(item.location) ? item.location : null;
+  const city =
+    locationPart(item.city) ||
+    locationPart(locationObj?.city) ||
+    locationPart(locationObj?.name);
+  const state = locationPart(item.state) || locationPart(locationObj?.state);
+  const country =
+    locationPart(item.country) || locationPart(locationObj?.country);
+
+  return [city, state, country].filter(Boolean).join(', ');
 };
 
 const resolveId = (item: MatchApiItem, index: number) => {
@@ -931,9 +961,6 @@ const formatDetailValue = (label: string, value: string) => {
 
   return value;
 };
-
-const isPlainObject = (value: unknown): value is Record<string, unknown> =>
-  Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 
 const unwrapMatchRecord = (
   source?: unknown,

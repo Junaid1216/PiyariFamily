@@ -14,9 +14,11 @@ import type {
   MatchSearchParams,
 } from './mappers/matchMapper';
 import type {
+  PhotoAccessAction,
   PhotoAccessRequestsResponse,
   PhotoAccessRespondResponse,
 } from './mappers/photoAccessMapper';
+import type { PhotoGalleryResponse } from './mappers/photoGalleryMapper';
 import type {
   ReferralHistoryResponse,
   ReferralLinkResponse,
@@ -320,11 +322,20 @@ export const Api = {
 
   respondToPhotoAccessRequest: (
     requestId: string,
-    action: 'approve' | 'reject',
-  ) =>
-    apiClient.postForm<PhotoAccessRespondResponse>(
+    action: PhotoAccessAction,
+  ) => {
+    const formData = new FormData();
+    formData.append('action', action);
+
+    return apiClient.postFormData<PhotoAccessRespondResponse>(
       `${ENDPOINTS.PHOTO_ACCESS_REQUESTS}/${requestId}/respond`,
-      { action },
+      formData,
+    );
+  },
+
+  getProfilePhotoGallery: (userId: string) =>
+    apiClient.get<PhotoGalleryResponse>(
+      `${ENDPOINTS.PROFILE}/${userId}/photo-gallery`,
     ),
 
   getNotifications: () =>

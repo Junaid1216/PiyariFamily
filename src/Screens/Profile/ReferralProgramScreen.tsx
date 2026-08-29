@@ -1,6 +1,7 @@
 import React, { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Linking,
   ScrollView,
   Share,
   StyleSheet,
@@ -86,17 +87,55 @@ const ReferralProgramScreen = () => {
       const linkOk = isApiSuccess(linkRes?.status, linkRes?.data?.success);
       const statsOk = isApiSuccess(statsRes?.status, statsRes?.data?.success);
 
+      console.log(
+        '[Referral] GET /referrals/link',
+        JSON.stringify(
+          {
+            status: linkResult.status,
+            httpStatus: linkRes?.status,
+            data:
+              linkRes?.data ??
+              (linkResult.status === 'rejected' ? String(linkResult.reason) : null),
+          },
+          null,
+          2,
+        ),
+      );
+      console.log(
+        '[Referral] GET /referrals/stats',
+        JSON.stringify(
+          {
+            status: statsResult.status,
+            httpStatus: statsRes?.status,
+            data:
+              statsRes?.data ??
+              (statsResult.status === 'rejected' ? String(statsResult.reason) : null),
+          },
+          null,
+          2,
+        ),
+      );
+
       if (linkOk || statsOk) {
-        dispatch(
-          setReferralStats(
-            mergeReferralData(
-              linkOk ? linkRes?.data : null,
-              null,
-              statsOk ? statsRes?.data : null,
-              cachedStatsRef.current,
-            ),
+        const mapped = mergeReferralData(
+          linkOk ? linkRes?.data : null,
+          null,
+          statsOk ? statsRes?.data : null,
+          cachedStatsRef.current,
+        );
+        console.log(
+          '[Referral] mapped share fields',
+          JSON.stringify(
+            {
+              referralCode: mapped.referralCode,
+              referralLink: mapped.referralLink,
+              shareMessage: mapped.shareMessage,
+            },
+            null,
+            2,
           ),
         );
+        dispatch(setReferralStats(mapped));
       }
 
       if (linkResult.status === 'rejected') {
@@ -126,6 +165,10 @@ const ReferralProgramScreen = () => {
         );
       }
     } catch (error) {
+      console.log(
+        '[Referral] Referral Program fetch error',
+        getApiErrorMessage(error, 'Failed to load referral stats'),
+      );
       Toast.show(
         getApiErrorMessage(error, 'Failed to load referral stats'),
         Toast.LONG,
@@ -144,6 +187,20 @@ const ReferralProgramScreen = () => {
   const shareMessage = [stats.shareMessage, stats.referralLink]
     .filter(Boolean)
     .join('\n');
+
+  const handleOpenLink = async () => {
+    if (!stats.referralLink) {
+      return;
+    }
+
+    console.log('[Referral] open share link', stats.referralLink);
+
+    try {
+      await Linking.openURL(stats.referralLink);
+    } catch {
+      Toast.show(stats.referralLink, Toast.LONG);
+    }
+  };
 
   const handleCopy = async () => {
     if (!stats.referralLink) {
@@ -223,9 +280,15 @@ const ReferralProgramScreen = () => {
 
           <Text style={styles.sectionLabel}>{Strings.yourReferralLink}</Text>
           <View style={styles.linkBox}>
-            <Text style={styles.linkText} numberOfLines={1}>
-              {stats.referralLink}
-            </Text>
+            <TouchableOpacity
+              style={styles.linkTextWrap}
+              activeOpacity={0.85}
+              onPress={handleOpenLink}
+            >
+              <Text style={styles.linkText} numberOfLines={2}>
+                {stats.referralLink}
+              </Text>
+            </TouchableOpacity>
             <TouchableOpacity
               style={styles.linkCopyBtn}
               activeOpacity={0.85}
@@ -447,12 +510,14 @@ const styles = StyleSheet.create({
     paddingVertical: hp('1.1%'),
     marginBottom: hp('1.2%'),
   },
-  linkText: {
+  linkTextWrap: {
     flex: 1,
+    marginRight: wp('2%'),
+  },
+  linkText: {
     fontSize: fs(12),
     fontFamily: Fonts.medium,
     color: Colors.primary,
-    marginRight: wp('2%'),
   },
   linkCopyBtn: {
     width: wp('9%'),

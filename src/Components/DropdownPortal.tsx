@@ -8,11 +8,14 @@ import React, {
   useState,
 } from 'react';
 import {
+  Keyboard,
   Platform,
+  Pressable,
+  ScrollView as RNScrollView,
   StyleSheet,
   Text,
-  Pressable,
   View,
+  type ScrollViewProps,
 } from 'react-native';
 import {
   GestureHandlerRootView,
@@ -28,6 +31,7 @@ export const DROPDOWN_MAX_HEIGHT = hp('28%');
 const INPUT_BORDER_WIDTH = 1.2;
 const OPTION_ROW_HEIGHT = hp('1.4%') * 2 + FontSizes.body + 8;
 const MENU_GAP = hp('0.35%');
+const POSITION_EPSILON = 0.5;
 
 export type DropdownPortalEntry = {
   x: number;
@@ -39,6 +43,29 @@ export type DropdownPortalEntry = {
   onSelect: (value: string) => void;
   onClose: () => void;
 };
+
+const near = (a: number, b: number) => Math.abs(a - b) < POSITION_EPSILON;
+
+const sameStringList = (
+  a: readonly string[] | undefined,
+  b: readonly string[] | undefined,
+) =>
+  !!a &&
+  !!b &&
+  a.length === b.length &&
+  a.every((value, index) => value === b[index]);
+
+const sameDropdownLayout = (
+  prev: DropdownPortalEntry | null,
+  next: DropdownPortalEntry,
+) =>
+  !!prev &&
+  near(prev.x, next.x) &&
+  near(prev.y, next.y) &&
+  near(prev.width, next.width) &&
+  prev.closeOnSelect === next.closeOnSelect &&
+  sameStringList(prev.options, next.options) &&
+  sameStringList(prev.selectedValues, next.selectedValues);
 
 type DropdownPortalContextValue = {
   openDropdown: (entry: DropdownPortalEntry) => void;
@@ -67,7 +94,7 @@ export const DropdownPortalProvider = ({ children }: ProviderProps) => {
   const [entry, setEntry] = useState<DropdownPortalEntry | null>(null);
 
   const openDropdown = useCallback((next: DropdownPortalEntry) => {
-    setEntry(next);
+    setEntry(prev => (sameDropdownLayout(prev, next) ? prev : next));
   }, []);
 
   const closeDropdown = useCallback(() => {
@@ -86,6 +113,33 @@ export const DropdownPortalProvider = ({ children }: ProviderProps) => {
   );
 };
 
+/** Locks parent scrolling while a dropdown is open so the menu cannot detach. */
+export const DropdownSafeScrollView = React.forwardRef<
+  RNScrollView,
+  ScrollViewProps
+>(function DropdownSafeScrollView(
+  { scrollEnabled = true, onScrollBeginDrag, ...props },
+  ref,
+) {
+  const { entry, closeDropdown } = useDropdownPortal();
+  const dropdownOpen = entry != null;
+
+  return (
+    <RNScrollView
+      ref={ref}
+      {...props}
+      scrollEnabled={scrollEnabled && !dropdownOpen}
+      onScrollBeginDrag={event => {
+        if (entry) {
+          entry.onClose();
+          closeDropdown();
+        }
+        onScrollBeginDrag?.(event);
+      }}
+    />
+  );
+});
+
 /** Place as the last child of the screen root (outside ScrollView / footer). */
 export const DropdownOverlayHost = () => {
   const { entry, closeDropdown } = useDropdownPortal();
@@ -94,9 +148,19 @@ export const DropdownOverlayHost = () => {
 
   const syncHostOrigin = useCallback(() => {
     hostRef.current?.measureInWindow((x, y) => {
-      setHostOrigin({ x, y });
+      setHostOrigin(prev =>
+        near(prev.x, x) && near(prev.y, y) ? prev : { x, y },
+      );
     });
   }, []);
+
+  const dismiss = useCallback(() => {
+    if (!entry) {
+      return;
+    }
+    entry.onClose();
+    closeDropdown();
+  }, [entry, closeDropdown]);
 
   useEffect(() => {
     if (!entry) {
@@ -136,6 +200,15 @@ export const DropdownOverlayHost = () => {
       onLayout={syncHostOrigin}
     >
       <View
+        collapsable={false}
+        style={styles.backdrop}
+        onStartShouldSetResponder={() => true}
+        onMoveShouldSetResponder={() => true}
+        onResponderRelease={dismiss}
+        onResponderTerminate={dismiss}
+      />
+      <View
+        pointerEvents="auto"
         style={[
           styles.menu,
           {
@@ -229,9 +302,15 @@ export const DropdownOptionsOverlay = ({
   const { openDropdown, closeDropdown } = useDropdownPortal();
   const onSelectRef = useRef(onSelect);
   const onCloseRef = useRef(onClose);
+  const optionsRef = useRef(options);
+  const selectedValuesRef = useRef(selectedValues);
+  const closeOnSelectRef = useRef(closeOnSelect);
   const wasVisibleRef = useRef(false);
   onSelectRef.current = onSelect;
   onCloseRef.current = onClose;
+  optionsRef.current = options;
+  selectedValuesRef.current = selectedValues;
+  closeOnSelectRef.current = closeOnSelect;
 
   useEffect(() => {
     if (!visible) {
@@ -244,6 +323,7 @@ export const DropdownOptionsOverlay = ({
 
     wasVisibleRef.current = true;
     let cancelled = false;
+    let frame = 0;
 
     const publish = () => {
       anchorRef?.current?.measureInWindow((x, y, width, height) => {
@@ -254,33 +334,32 @@ export const DropdownOptionsOverlay = ({
           x,
           y: y + height,
           width,
-          options,
-          selectedValues,
-          closeOnSelect,
+          options: optionsRef.current,
+          selectedValues: selectedValuesRef.current,
+          closeOnSelect: closeOnSelectRef.current,
           onSelect: value => onSelectRef.current(value),
           onClose: () => onCloseRef.current(),
         });
       });
     };
 
-    const frame = requestAnimationFrame(() => {
+    const schedule = () => {
       publish();
-      setTimeout(publish, 32);
-    });
+      frame = requestAnimationFrame(publish);
+    };
+    schedule();
+    const retry = setTimeout(publish, 32);
+    const keyboardShow = Keyboard.addListener('keyboardDidShow', schedule);
+    const keyboardHide = Keyboard.addListener('keyboardDidHide', schedule);
 
     return () => {
       cancelled = true;
       cancelAnimationFrame(frame);
+      clearTimeout(retry);
+      keyboardShow.remove();
+      keyboardHide.remove();
     };
-  }, [
-    visible,
-    anchorRef,
-    options,
-    selectedValues,
-    closeOnSelect,
-    openDropdown,
-    closeDropdown,
-  ]);
+  }, [visible, anchorRef, openDropdown, closeDropdown]);
 
   useEffect(() => {
     return () => closeDropdown();
@@ -295,8 +374,14 @@ const styles = StyleSheet.create({
     zIndex: 9999,
     elevation: 9999,
   },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'transparent',
+    zIndex: 0,
+  },
   menu: {
     position: 'absolute',
+    zIndex: 1,
     borderWidth: INPUT_BORDER_WIDTH,
     borderColor: Colors.dividerPink,
     borderTopLeftRadius: AuthStyles.inputRadius,

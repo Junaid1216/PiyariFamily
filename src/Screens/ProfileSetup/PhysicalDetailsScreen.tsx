@@ -3,7 +3,6 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
-  ScrollView,
   StyleSheet,
   Switch,
   Text,
@@ -22,7 +21,10 @@ import BackButton from '../../Components/BackButton';
 import FilterChip from '../../Components/FilterChip';
 import PrimaryButton from '../../Components/PrimaryButton';
 import SetupDropdown from '../../Components/SetupDropdown';
-import { DropdownOverlayHost } from '../../Components/DropdownPortal';
+import {
+  DropdownOverlayHost,
+  DropdownSafeScrollView as ScrollView,
+} from '../../Components/DropdownPortal';
 import SetupProgressBar from '../../Components/SetupProgressBar';
 import {
   Api,

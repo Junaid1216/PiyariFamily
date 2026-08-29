@@ -6,7 +6,6 @@ import {
   Modal,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -29,6 +28,7 @@ import PrimaryButton from '../../Components/PrimaryButton';
 import SetupDropdown from '../../Components/SetupDropdown';
 import DropdownOptionsOverlay, {
   DropdownOverlayHost,
+  DropdownSafeScrollView as ScrollView,
 } from '../../Components/DropdownOptionsOverlay';
 import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import {
@@ -130,6 +130,7 @@ const EditProfileScreen = () => {
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const [deletingPhoto, setDeletingPhoto] = useState(false);
   const [showAllAdditional, setShowAllAdditional] = useState(false);
+  const [galleryGridWidth, setGalleryGridWidth] = useState(0);
   const languagesAnchorRef = useRef<View>(null);
   const newPhotoRef = useRef<UploadFile | null>(null);
   const pendingGalleryFilesRef = useRef<UploadFile[]>([]);
@@ -558,6 +559,10 @@ const EditProfileScreen = () => {
   const visibleGalleryPhotos = showAllAdditional ? additionalPhotos : [];
   const showGalleryAddSlot =
     showAllAdditional || additionalPhotos.length === 0;
+  const gallerySlotSize =
+    galleryGridWidth > 0
+      ? Math.floor((galleryGridWidth - GALLERY_SLOT_GAP * 2) / 3)
+      : GALLERY_SLOT_SIZE;
 
   const handleToggleAdditionalPhotos = () => {
     if (additionalPhotos.length === 0) {
@@ -683,23 +688,51 @@ const EditProfileScreen = () => {
                 : Strings.photoGalleryHint}
             </Text>
             {showGalleryAddSlot ? (
-              <View style={styles.photoGrid}>
+              <View
+                style={styles.photoGrid}
+                onLayout={event => {
+                  const nextWidth = Math.round(event.nativeEvent.layout.width);
+                  setGalleryGridWidth(current =>
+                    current === nextWidth ? current : nextWidth,
+                  );
+                }}
+              >
                 {visibleGalleryPhotos.map((photo, index) => (
                   <TouchableOpacity
                     key={`${photo.id ?? photo.url}-${index}`}
-                    style={styles.photoSlot}
+                    style={[
+                      styles.photoSlot,
+                      {
+                        width: gallerySlotSize,
+                        height: gallerySlotSize,
+                        marginRight: (index + 1) % 3 === 0 ? 0 : GALLERY_SLOT_GAP,
+                      },
+                    ]}
                     activeOpacity={0.9}
                     onPress={() => setViewerIndex(index)}
                   >
-                    <Image
-                      source={{ uri: photo.url }}
-                      style={styles.galleryImage}
-                      resizeMode="cover"
-                    />
+                    <View style={styles.photoSlotImageWrap}>
+                      <Image
+                        source={{ uri: photo.url }}
+                        style={styles.galleryImage}
+                        resizeMode="cover"
+                      />
+                    </View>
                   </TouchableOpacity>
                 ))}
                 <TouchableOpacity
-                  style={[styles.photoSlot, styles.photoSlotAdd]}
+                  style={[
+                    styles.photoSlot,
+                    styles.photoSlotAdd,
+                    {
+                      width: gallerySlotSize,
+                      height: gallerySlotSize,
+                      marginRight:
+                        (visibleGalleryPhotos.length + 1) % 3 === 0
+                          ? 0
+                          : GALLERY_SLOT_GAP,
+                    },
+                  ]}
                   activeOpacity={0.85}
                   onPress={handlePickGalleryPhoto}
                 >
@@ -1139,6 +1172,15 @@ const EditProfileScreen = () => {
   );
 };
 
+const GALLERY_CARD_PADDING = wp('3.2%');
+const GALLERY_SLOT_GAP = wp('2%');
+const GALLERY_SLOT_SIZE =
+  (wp('100%') -
+    AuthStyles.horizontalPadding * 2 -
+    GALLERY_CARD_PADDING * 2 -
+    GALLERY_SLOT_GAP * 2) /
+  3;
+
 const styles = StyleSheet.create({
   root: {
     flex: 1,
@@ -1222,10 +1264,11 @@ const styles = StyleSheet.create({
     borderRadius: wp('4%'),
     borderWidth: 1,
     borderColor: Colors.goldLight,
-    paddingHorizontal: wp('3.2%'),
+    paddingHorizontal: GALLERY_CARD_PADDING,
     paddingTop: hp('1.2%'),
     paddingBottom: hp('1.4%'),
     marginBottom: hp('1.8%'),
+    overflow: 'visible',
   },
   galleryHeader: {
     flexDirection: 'row',
@@ -1269,14 +1312,14 @@ const styles = StyleSheet.create({
   photoGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    columnGap: wp('2%'),
-    rowGap: hp('1.2%'),
+    width: '100%',
+    overflow: 'visible',
   },
   photoSlot: {
-    width: '31%',
-    aspectRatio: 1,
+    flexGrow: 0,
+    flexShrink: 0,
+    marginBottom: GALLERY_SLOT_GAP,
     borderRadius: wp('3%'),
-    overflow: 'hidden',
     backgroundColor: Colors.tabActiveBg,
     position: 'relative',
   },
@@ -1286,6 +1329,13 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.tabActiveBg,
     borderWidth: 1.2,
     borderColor: Colors.goldLight,
+    overflow: 'visible',
+  },
+  photoSlotImageWrap: {
+    width: '100%',
+    height: '100%',
+    borderRadius: wp('3%'),
+    overflow: 'hidden',
   },
   galleryImage: {
     width: '100%',

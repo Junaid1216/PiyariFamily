@@ -2,7 +2,6 @@ import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
-  ImageSourcePropType,
   ScrollView,
   StyleSheet,
   Text,
@@ -22,6 +21,8 @@ import {
   getApiErrorMessage,
   isApiSuccess,
   mapPhotoAccessRequests,
+  resolvePhotoAccessRespond,
+  type PhotoAccessAction,
   type ViewProfileRequest,
   type ViewProfileRequestStatus,
 } from '../../API';
@@ -37,25 +38,14 @@ type NavigationProp = NativeStackNavigationProp<
   'ViewProfileRequests'
 >;
 
-const STATUS_LABEL: Record<ViewProfileRequestStatus, string> = {
-  pending: Strings.pendingStatus,
-  accepted: Strings.acceptedStatus,
-  declined: Strings.declinedStatus,
-};
-
-const getRequestPhotos = (request: ViewProfileRequest): ImageSourcePropType[] =>
-  request.photos?.length
-    ? request.photos
-    : request.image
-      ? [request.image]
-      : [];
-
 const ViewProfileRequestsScreen = () => {
   const navigation = useNavigation<NavigationProp>();
   const [requests, setRequests] = useState<ViewProfileRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [respondingId, setRespondingId] = useState<string | null>(null);
+  const [respondingAction, setRespondingAction] =
+    useState<PhotoAccessAction | null>(null);
 
   const fetchRequests = useCallback(async () => {
     setLoading(true);
@@ -92,65 +82,52 @@ const ViewProfileRequestsScreen = () => {
     }, [fetchRequests]),
   );
 
-  const openProfileDetail = (request: ViewProfileRequest) => {
-    if (!request.profileId) {
-      return;
-    }
-
-    navigation.navigate('ProfileDetail', {
-      profileId: request.profileId,
-      name: request.name,
-      age: request.age,
-      location: request.location,
-      image: request.image,
-      isVerified: request.isVerified,
-    });
-  };
-
   const openGallery = (request: ViewProfileRequest) => {
+    const accessGranted = request.status === 'accepted';
+
     navigation.navigate('ViewProfileGallery', {
-      name: request.name,
-      photos: getRequestPhotos(request),
+      userId: request.profileId || undefined,
+      name: request.name ?? '',
+      accessGranted,
     });
   };
 
   const respondToRequest = async (
     request: ViewProfileRequest,
-    action: 'approve' | 'reject',
+    action: PhotoAccessAction,
   ) => {
     if (respondingId) {
       return;
     }
 
     setRespondingId(request.id);
+    setRespondingAction(action);
 
     try {
       const res = await Api.respondToPhotoAccessRequest(request.id, action);
 
       if (isApiSuccess(res?.status, res?.data?.success)) {
-        const nextStatus: ViewProfileRequestStatus =
-          action === 'approve' ? 'accepted' : 'declined';
-        const apiStatus = res?.data?.status;
-        const mappedStatus =
-          apiStatus === 'approved' || apiStatus === 'accepted'
-            ? 'accepted'
-            : apiStatus === 'rejected' || apiStatus === 'declined'
-              ? 'declined'
-              : nextStatus;
+        const resolved = resolvePhotoAccessRespond(res?.data);
+        const backendMessage =
+          resolved.message ||
+          (typeof res?.data?.message === 'string' ? res.data.message.trim() : '');
+        if (backendMessage) {
+          Toast.show(backendMessage, Toast.LONG);
+        }
+
+        const mappedStatus: ViewProfileRequestStatus =
+          resolved.status ?? (action === 'approve' ? 'accepted' : 'declined');
+        const targetId = resolved.requestId || request.id;
 
         setRequests(current =>
-          applyPhotoAccessStatus(current, request.id, mappedStatus),
+          applyPhotoAccessStatus(
+            current,
+            targetId,
+            mappedStatus,
+            res?.data?.status,
+            resolved.request,
+          ),
         );
-        Toast.show(
-          res?.data?.message ??
-            (action === 'approve'
-              ? `${Strings.requestAccepted}. ${Strings.photosUnlocked}`
-              : Strings.requestRejected),
-        );
-
-        if (mappedStatus === 'accepted') {
-          openGallery({ ...request, status: 'accepted' });
-        }
       } else {
         Toast.show(
           res?.data?.message ?? Strings.viewProfileRequestsError,
@@ -164,6 +141,7 @@ const ViewProfileRequestsScreen = () => {
       );
     } finally {
       setRespondingId(null);
+      setRespondingAction(null);
     }
   };
 
@@ -176,10 +154,16 @@ const ViewProfileRequestsScreen = () => {
   };
 
   const renderRequest = (request: ViewProfileRequest) => {
-    const nameLabel =
-      request.age !== undefined ? `${request.name}, ${request.age}` : request.name;
+    const name = request.name?.trim();
+    const nameLabel = name
+      ? request.age != null
+        ? `${name}, ${request.age}`
+        : name
+      : request.age != null
+        ? String(request.age)
+        : '';
     const isAccepted = request.status === 'accepted';
-    const isPending = request.status === 'pending';
+    const isDeclined = request.status === 'declined';
 
     return (
       <View key={request.id} style={styles.requestCard}>
@@ -201,9 +185,11 @@ const ViewProfileRequestsScreen = () => {
 
           <View style={styles.requestInfo}>
             <View style={styles.requestNameRow}>
-              <Text style={styles.requestName} numberOfLines={1}>
-                {nameLabel}
-              </Text>
+              {nameLabel ? (
+                <Text style={styles.requestName} numberOfLines={1}>
+                  {nameLabel}
+                </Text>
+              ) : null}
               {request.isVerified ? (
                 <View style={styles.verifiedBadge}>
                   <Icon name="shield-check" size={fs(10)} color={Colors.gold} />
@@ -237,7 +223,7 @@ const ViewProfileRequestsScreen = () => {
                   request.status === 'declined' && styles.statusDeclinedText,
                 ]}
               >
-                {STATUS_LABEL[request.status]}
+                {request.statusLabel}
               </Text>
             </View>
           </View>
@@ -246,73 +232,105 @@ const ViewProfileRequestsScreen = () => {
         </View>
 
         <TouchableOpacity
-          style={styles.viewProfileBtn}
+          style={styles.photosBtn}
           activeOpacity={0.88}
-          onPress={() => openProfileDetail(request)}
+          onPress={() => openGallery(request)}
         >
-          <Icon name="account-circle-outline" size={fs(16)} color={Colors.gold} />
-          <Text style={styles.viewProfileText}>{Strings.viewProfile}</Text>
-          <Icon name="arrow-right" size={fs(15)} color={Colors.gold} />
+          <LinearGradient
+            colors={
+              isAccepted
+                ? [Colors.primary, Colors.primaryDark]
+                : ['#8A5A66', '#6E414B']
+            }
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.photosBtnFill}
+          >
+            <Icon
+              name={isAccepted ? 'image-multiple-outline' : 'lock-outline'}
+              size={fs(16)}
+              color={Colors.white}
+            />
+            <Text style={styles.photosBtnText}>{Strings.viewPhotos}</Text>
+          </LinearGradient>
         </TouchableOpacity>
 
-        {isAccepted ? (
+        <View style={styles.actionRow}>
           <TouchableOpacity
-            style={styles.photosBtn}
+            style={[
+              styles.rejectBtn,
+              isDeclined && styles.rejectBtnDeclined,
+            ]}
             activeOpacity={0.88}
-            onPress={() => openGallery(request)}
+            onPress={() => handleReject(request)}
+            disabled={Boolean(respondingId)}
           >
-            <LinearGradient
-              colors={[Colors.primary, Colors.primaryDark]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.photosBtnFill}
-            >
-              <Icon name="image-multiple-outline" size={fs(16)} color={Colors.white} />
-              <Text style={styles.photosBtnText}>{Strings.viewPhotos}</Text>
-            </LinearGradient>
+            {respondingId === request.id && respondingAction === 'reject' ? (
+              <ActivityIndicator
+                size="small"
+                color={isDeclined ? Colors.white : Colors.primary}
+              />
+            ) : (
+              <>
+                <Icon
+                  name="close"
+                  size={fs(16)}
+                  color={isDeclined ? Colors.white : Colors.primary}
+                />
+                <Text
+                  style={[
+                    styles.rejectText,
+                    isDeclined && styles.rejectTextDeclined,
+                  ]}
+                >
+                  {Strings.rejectedButton}
+                </Text>
+              </>
+            )}
           </TouchableOpacity>
-        ) : isPending ? (
-          <View style={styles.actionRow}>
-            <TouchableOpacity
-              style={styles.rejectBtn}
-              activeOpacity={0.88}
-              onPress={() => handleReject(request)}
-              disabled={Boolean(respondingId)}
-            >
-              {respondingId === request.id ? (
+
+          <TouchableOpacity
+            style={[
+              styles.acceptBtn,
+              isDeclined && styles.acceptBtnIdle,
+            ]}
+            activeOpacity={0.88}
+            onPress={() => handleAccept(request)}
+            disabled={Boolean(respondingId)}
+          >
+            {isDeclined ? (
+              respondingId === request.id && respondingAction === 'approve' ? (
                 <ActivityIndicator size="small" color={Colors.primary} />
               ) : (
                 <>
-              <Icon name="close" size={fs(16)} color={Colors.primary} />
-              <Text style={styles.rejectText}>{Strings.reject}</Text>
+                  <Icon name="check" size={fs(16)} color={Colors.primary} />
+                  <Text style={styles.acceptTextIdle}>
+                    {Strings.acceptedButton}
+                  </Text>
                 </>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.acceptBtn}
-              activeOpacity={0.88}
-              onPress={() => handleAccept(request)}
-              disabled={Boolean(respondingId)}
-            >
+              )
+            ) : (
               <LinearGradient
                 colors={[Colors.primary, Colors.primaryDark]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.acceptBtnFill}
               >
-                {respondingId === request.id ? (
+                {respondingId === request.id &&
+                respondingAction === 'approve' ? (
                   <ActivityIndicator size="small" color={Colors.white} />
                 ) : (
                   <>
-                <Icon name="check" size={fs(16)} color={Colors.white} />
-                <Text style={styles.acceptText}>{Strings.accept}</Text>
+                    <Icon name="check" size={fs(16)} color={Colors.white} />
+                    <Text style={styles.acceptText}>
+                      {Strings.acceptedButton}
+                    </Text>
                   </>
                 )}
               </LinearGradient>
-            </TouchableOpacity>
-          </View>
-        ) : null}
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
     );
   };
@@ -502,23 +520,6 @@ const styles = StyleSheet.create({
   statusDeclinedText: {
     color: Colors.redish,
   },
-  viewProfileBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: wp('1.5%'),
-    height: hp('4.8%'),
-    borderRadius: AuthStyles.inputRadius,
-    borderWidth: 1.2,
-    borderColor: Colors.gold,
-    backgroundColor: '#FFFBF0',
-    marginBottom: hp('1%'),
-  },
-  viewProfileText: {
-    fontSize: fs(13),
-    fontFamily: Fonts.semiBold,
-    color: Colors.gold,
-  },
   actionRow: {
     flexDirection: 'row',
     gap: wp('2.5%'),
@@ -535,16 +536,32 @@ const styles = StyleSheet.create({
     borderColor: Colors.primary,
     backgroundColor: Colors.white,
   },
+  rejectBtnDeclined: {
+    backgroundColor: Colors.redish,
+    borderColor: Colors.redish,
+  },
   rejectText: {
     fontSize: fs(13),
     fontFamily: Fonts.semiBold,
     color: Colors.primary,
+  },
+  rejectTextDeclined: {
+    color: Colors.white,
   },
   acceptBtn: {
     flex: 1,
     height: hp('5%'),
     borderRadius: AuthStyles.inputRadius,
     overflow: 'hidden',
+  },
+  acceptBtnIdle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: wp('1.2%'),
+    backgroundColor: Colors.white,
+    borderWidth: 1.2,
+    borderColor: Colors.primary,
   },
   acceptBtnFill: {
     flex: 1,
@@ -558,10 +575,16 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.semiBold,
     color: Colors.white,
   },
+  acceptTextIdle: {
+    fontSize: fs(13),
+    fontFamily: Fonts.semiBold,
+    color: Colors.primary,
+  },
   photosBtn: {
     height: hp('5%'),
     borderRadius: AuthStyles.inputRadius,
     overflow: 'hidden',
+    marginBottom: hp('1%'),
   },
   photosBtnFill: {
     flex: 1,

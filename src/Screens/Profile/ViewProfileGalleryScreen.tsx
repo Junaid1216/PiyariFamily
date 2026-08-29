@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
+  ActivityIndicator,
   Image,
   ImageSourcePropType,
   Modal,
@@ -11,11 +12,23 @@ import {
   View,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
-import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
+import {
+  RouteProp,
+  useFocusEffect,
+  useNavigation,
+  useRoute,
+} from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import Toast from 'react-native-simple-toast';
 import ScreenHeader from '../../Components/ScreenHeader';
+import {
+  Api,
+  getApiErrorMessage,
+  isApiSuccess,
+  mapPhotoGallery,
+} from '../../API';
 import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
@@ -38,31 +51,113 @@ const ProtectedPhoto = ({
   resizeMode,
 }: {
   source: ImageSourcePropType;
-  style: object;
+  style?: object;
   resizeMode: 'cover' | 'contain';
-}) => (
-  <View style={[styles.protectedWrap, style]} collapsable={false}>
-    <Image
-      source={source}
-      style={StyleSheet.absoluteFill}
-      resizeMode={resizeMode}
-      pointerEvents="none"
-      accessible={false}
-    />
-    <Pressable
-      style={StyleSheet.absoluteFill}
-      onLongPress={() => undefined}
-      delayLongPress={10000}
-    />
-  </View>
-);
+}) => {
+  const uri =
+    source && typeof source === 'object' && 'uri' in source
+      ? String(source.uri ?? '')
+      : '';
+
+  return (
+    <View style={[styles.protectedWrap, style]} collapsable={false}>
+      <Image
+        source={uri ? { uri } : source}
+        style={styles.photoImage}
+        resizeMode={resizeMode}
+        pointerEvents="none"
+        accessible={false}
+      />
+      <Pressable
+        style={StyleSheet.absoluteFill}
+        onLongPress={() => undefined}
+        delayLongPress={10000}
+      />
+    </View>
+  );
+};
 
 const ViewProfileGalleryScreen = () => {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<GalleryRoute>();
-  const { name, photos } = route.params;
+  const { userId, name: previewName, accessGranted: requestAccessGranted } =
+    route.params;
+  const [name, setName] = useState(previewName);
+  const [photos, setPhotos] = useState<ImageSourcePropType[]>([]);
+  const [accessGranted, setAccessGranted] = useState(requestAccessGranted);
+  const [loading, setLoading] = useState(
+    Boolean(userId) && requestAccessGranted,
+  );
+  const [error, setError] = useState<string | null>(null);
   const [activePhoto, setActivePhoto] = useState<number | null>(null);
   const { isRecording } = useSecurePhotoScreen();
+
+  const fetchGallery = useCallback(async () => {
+    if (!requestAccessGranted) {
+      setPhotos([]);
+      setAccessGranted(false);
+      setError(Strings.photoGalleryAccessDenied);
+      setLoading(false);
+      return;
+    }
+
+    if (!userId) {
+      setPhotos([]);
+      setAccessGranted(false);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const res = await Api.getProfilePhotoGallery(userId);
+      const galleryOk =
+        isApiSuccess(res?.status, res?.data?.success) ||
+        Array.isArray(res?.data?.photos) ||
+        Boolean(res?.data?.visibility) ||
+        typeof res?.data?.access_granted !== 'undefined';
+      const backendMessage =
+        typeof res?.data?.message === 'string' ? res.data.message.trim() : '';
+
+      if (galleryOk) {
+        const gallery = mapPhotoGallery(res?.data, userId, previewName);
+        setName(gallery.name || previewName);
+        setAccessGranted(gallery.photos.length > 0);
+        setPhotos(gallery.photos);
+        setError(null);
+        if (backendMessage) {
+          Toast.show(backendMessage, Toast.LONG);
+        }
+      } else {
+        const message = backendMessage || Strings.photoGalleryError;
+        setPhotos([]);
+        setAccessGranted(false);
+        setError(message);
+        Toast.show(message, Toast.LONG);
+      }
+    } catch (requestError) {
+      const message = getApiErrorMessage(
+        requestError,
+        Strings.photoGalleryError,
+      );
+      setPhotos([]);
+      setAccessGranted(false);
+      setError(message);
+      Toast.show(message, Toast.LONG);
+    } finally {
+      setLoading(false);
+    }
+  }, [previewName, requestAccessGranted, userId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchGallery();
+    }, [fetchGallery]),
+  );
+
+  const emptyMessage = error || Strings.noPhotosYet;
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
@@ -84,10 +179,18 @@ const ViewProfileGalleryScreen = () => {
         <Text style={styles.privacyText}>{Strings.photoPrivacyNotice}</Text>
       </View>
 
-      {photos.length === 0 ? (
+      {loading ? (
         <View style={styles.centerContent}>
-          <Icon name="image-off-outline" size={fs(36)} color={Colors.gold} />
-          <Text style={styles.emptyText}>{Strings.noPhotosYet}</Text>
+          <ActivityIndicator size="large" color={Colors.primary} />
+        </View>
+      ) : photos.length === 0 ? (
+        <View style={styles.centerContent}>
+          <Icon
+            name={accessGranted ? 'image-off-outline' : 'lock-outline'}
+            size={fs(36)}
+            color={Colors.gold}
+          />
+          <Text style={styles.emptyText}>{emptyMessage}</Text>
         </View>
       ) : isRecording ? (
         <View style={styles.centerContent}>
@@ -111,11 +214,7 @@ const ViewProfileGalleryScreen = () => {
                 delayLongPress={10000}
                 onLongPress={() => undefined}
               >
-                <ProtectedPhoto
-                  source={photo}
-                  style={StyleSheet.absoluteFillObject}
-                  resizeMode="cover"
-                />
+                <ProtectedPhoto source={photo} resizeMode="cover" />
                 <LinearGradient
                   colors={['transparent', 'rgba(107, 4, 29, 0.35)']}
                   style={styles.photoOverlay}
@@ -215,12 +314,20 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: Colors.goldLight,
+    backgroundColor: Colors.notificationBg,
   },
   photoOverlay: {
     ...StyleSheet.absoluteFillObject,
   },
   protectedWrap: {
+    width: '100%',
+    height: '100%',
     overflow: 'hidden',
+    backgroundColor: Colors.notificationBg,
+  },
+  photoImage: {
+    width: '100%',
+    height: '100%',
   },
   emptyText: {
     fontSize: FontSizes.bodySmall,

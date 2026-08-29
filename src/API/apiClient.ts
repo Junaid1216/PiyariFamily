@@ -96,6 +96,7 @@ axiosInstance.interceptors.response.use(
     console.log('API Success:', {
       method: response.config.method?.toUpperCase(),
       url: response.config.url,
+      params: response.config.params ?? null,
       status: response.status,
       data: response.data,
     });

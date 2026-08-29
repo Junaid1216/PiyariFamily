@@ -69,17 +69,19 @@ const MyRewardsScreen = () => {
     [],
   );
   const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [rewardsLoading, setRewardsLoading] = useState(!cachedStats);
   const [redeemingType, setRedeemingType] = useState<string | null>(null);
 
   const fetchReferralStats = useCallback(async () => {
+    setRewardsLoading(true);
+
     try {
-      const [linkResult, rewardsResult, statsResult] = await Promise.allSettled(
-        [
-          Api.getReferralLink(),
-          Api.getReferralRewards(),
-          Api.getReferralStats(),
-        ],
-      );
+      const [linkResult, rewardsResult, statsResult] = await Promise.allSettled([
+        Api.getReferralLink(),
+        Api.getReferralRewards(),
+        Api.getReferralStats(),
+      ]);
       const linkRes =
         linkResult.status === 'fulfilled' ? linkResult.value : null;
       const rewardsRes =
@@ -93,6 +95,51 @@ const MyRewardsScreen = () => {
       );
       const statsOk = isApiSuccess(statsRes?.status, statsRes?.data?.success);
 
+      console.log(
+        '[Referral] GET /referrals/link',
+        JSON.stringify(
+          {
+            status: linkResult.status,
+            httpStatus: linkRes?.status,
+            data:
+              linkRes?.data ??
+              (linkResult.status === 'rejected' ? String(linkResult.reason) : null),
+          },
+          null,
+          2,
+        ),
+      );
+      console.log(
+        '[Referral] GET /referrals/rewards',
+        JSON.stringify(
+          {
+            status: rewardsResult.status,
+            httpStatus: rewardsRes?.status,
+            data:
+              rewardsRes?.data ??
+              (rewardsResult.status === 'rejected'
+                ? String(rewardsResult.reason)
+                : null),
+          },
+          null,
+          2,
+        ),
+      );
+      console.log(
+        '[Referral] GET /referrals/stats',
+        JSON.stringify(
+          {
+            status: statsResult.status,
+            httpStatus: statsRes?.status,
+            data:
+              statsRes?.data ??
+              (statsResult.status === 'rejected' ? String(statsResult.reason) : null),
+          },
+          null,
+          2,
+        ),
+      );
+
       if (linkOk || rewardsOk || statsOk) {
         dispatch(
           setReferralStats(
@@ -103,6 +150,18 @@ const MyRewardsScreen = () => {
               cachedStatsRef.current,
             ),
           ),
+        );
+      }
+
+      if (linkResult.status === 'rejected') {
+        Toast.show(
+          getApiErrorMessage(linkResult.reason, 'Failed to load referral link'),
+          Toast.LONG,
+        );
+      } else if (!linkOk) {
+        Toast.show(
+          linkRes?.data?.message ?? 'Failed to load referral link',
+          Toast.LONG,
         );
       }
 
@@ -136,15 +195,22 @@ const MyRewardsScreen = () => {
         );
       }
     } catch (error) {
+      console.log(
+        '[Referral] My Rewards fetch error',
+        getApiErrorMessage(error, 'Failed to load referral rewards'),
+      );
       Toast.show(
         getApiErrorMessage(error, 'Failed to load referral rewards'),
         Toast.LONG,
       );
+    } finally {
+      setRewardsLoading(false);
     }
   }, [dispatch]);
 
   const fetchReferralHistory = useCallback(async () => {
     setHistoryLoading(true);
+    setHistoryError(null);
 
     try {
       const res = await Api.getReferralHistory();
@@ -152,16 +218,20 @@ const MyRewardsScreen = () => {
       if (isApiSuccess(res?.status, res?.data?.success)) {
         setReferralHistory(mapReferralHistory(res?.data));
       } else {
-        Toast.show(
-          res?.data?.message ?? 'Failed to load referral history',
-          Toast.LONG,
-        );
+        const message =
+          res?.data?.message ?? 'Failed to load referral history';
+        setReferralHistory([]);
+        setHistoryError(message);
+        Toast.show(message, Toast.LONG);
       }
     } catch (error) {
-      Toast.show(
-        getApiErrorMessage(error, 'Failed to load referral history'),
-        Toast.LONG,
+      const message = getApiErrorMessage(
+        error,
+        'Failed to load referral history',
       );
+      setReferralHistory([]);
+      setHistoryError(message);
+      Toast.show(message, Toast.LONG);
     } finally {
       setHistoryLoading(false);
     }
@@ -187,8 +257,12 @@ const MyRewardsScreen = () => {
 
         if (isApiSuccess(res?.status, res?.data?.success)) {
           dispatch(setReferralStats(applyReferralRedeem(stats, res?.data)));
-          Toast.show(res?.data?.message ?? Strings.rewardRedeemed);
+          Toast.show(
+            res?.data?.message ?? Strings.rewardRedeemed,
+            Toast.LONG,
+          );
           fetchReferralStats();
+          fetchReferralHistory();
         } else {
           Toast.show(
             res?.data?.message ?? 'Failed to redeem reward',
@@ -204,7 +278,7 @@ const MyRewardsScreen = () => {
         setRedeemingType(null);
       }
     },
-    [dispatch, fetchReferralStats, redeemingType, stats],
+    [dispatch, fetchReferralHistory, fetchReferralStats, redeemingType, stats],
   );
 
   return (
@@ -224,6 +298,12 @@ const MyRewardsScreen = () => {
         showsVerticalScrollIndicator={true}
         contentContainerStyle={styles.scrollContent}
       >
+        {rewardsLoading && !cachedStats ? (
+          <View style={styles.loaderWrap}>
+            <ActivityIndicator size="large" color={Colors.primary} />
+          </View>
+        ) : null}
+
         <LinearGradient
           colors={[Colors.primary, Colors.primaryDark]}
           style={styles.heroCard}
@@ -300,6 +380,8 @@ const MyRewardsScreen = () => {
           <View style={styles.loaderWrap}>
             <ActivityIndicator size="large" color={Colors.primary} />
           </View>
+        ) : historyError ? (
+          <Text style={styles.emptyText}>{historyError}</Text>
         ) : referralHistory.length > 0 ? (
           referralHistory.map(item => (
             <View key={item.id} style={styles.historyRow}>

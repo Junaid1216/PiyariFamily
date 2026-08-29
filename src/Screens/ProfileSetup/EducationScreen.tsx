@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -18,7 +17,10 @@ import AuthInput from '../../Components/AuthInput';
 import BackButton from '../../Components/BackButton';
 import PrimaryButton from '../../Components/PrimaryButton';
 import SetupDropdown from '../../Components/SetupDropdown';
-import { DropdownOverlayHost } from '../../Components/DropdownPortal';
+import {
+  DropdownOverlayHost,
+  DropdownSafeScrollView as ScrollView,
+} from '../../Components/DropdownPortal';
 import SetupProgressBar from '../../Components/SetupProgressBar';
 import {
   Api,

@@ -107,7 +107,11 @@ export type {
 export {
   applyPhotoAccessStatus,
   mapPhotoAccessRequests,
+  mapPhotoAccessStatus,
+  overlayPhotoAccessDetails,
   pickPendingPhotoAccessCount,
+  resolvePhotoAccessLocation,
+  resolvePhotoAccessRespond,
 } from './mappers/photoAccessMapper';
 export type {
   PhotoAccessAction,
@@ -116,6 +120,11 @@ export type {
   ViewProfileRequest,
   ViewProfileRequestStatus,
 } from './mappers/photoAccessMapper';
+export { mapPhotoGallery } from './mappers/photoGalleryMapper';
+export type {
+  PhotoGalleryData,
+  PhotoGalleryResponse,
+} from './mappers/photoGalleryMapper';
 export {
   extractShortlistProfiles,
   mapShortlistItem,

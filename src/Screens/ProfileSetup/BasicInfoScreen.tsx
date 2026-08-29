@@ -3,7 +3,6 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -24,6 +23,7 @@ import PrimaryButton from '../../Components/PrimaryButton';
 import SetupProgressBar from '../../Components/SetupProgressBar';
 import DropdownOptionsOverlay, {
   DropdownOverlayHost,
+  DropdownSafeScrollView as ScrollView,
 } from '../../Components/DropdownOptionsOverlay';
 import {
   Api,

@@ -36,8 +36,9 @@ export type ProfileStackParamList = {
   Notifications: undefined;
   ViewProfileRequests: undefined;
   ViewProfileGallery: {
+    userId?: string;
     name: string;
-    photos: ImageSourcePropType[];
+    accessGranted: boolean;
   };
   ProfileDetail: ProfileDetailParams;
   MatchSuccess: {

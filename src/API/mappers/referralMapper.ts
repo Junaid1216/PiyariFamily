@@ -14,6 +14,7 @@ export type ReferralRedeemOption = {
   title: string;
   pointsRequired: string;
   icon: string;
+  canRedeem: boolean;
 };
 
 export type ReferralRewardApiItem = {
@@ -23,8 +24,10 @@ export type ReferralRewardApiItem = {
   label?: string | null;
   points_required?: number | string | null;
   required_points?: number | string | null;
+  points_cost?: number | string | null;
   points?: number | string | null;
   cost?: number | string | null;
+  can_redeem?: boolean | number | string | null;
   icon?: string | null;
   [key: string]: unknown;
 };
@@ -77,6 +80,7 @@ export type ReferralStatsResponse = {
   point_value_pkr?: number | string | null;
   point_value?: number | string | null;
   pkr_value?: number | string | null;
+  reward_value_pkr?: number | string | null;
   total_value_pkr?: number | string | null;
   total_pkr?: number | string | null;
   total_value?: number | string | null;
@@ -300,26 +304,44 @@ const mapRedeemOptions = (
     return [];
   }
 
-  return rewards.map((item, index) => {
+  return rewards.flatMap((item, index) => {
     const type = pickString(item.type);
     const title =
-      pickString(item.title, item.name, item.label) ||
-      humanizeType(type) ||
-      `Reward ${index + 1}`;
+      pickString(item.title, item.name, item.label) || humanizeType(type);
+
+    if (!type || !title) {
+      return [];
+    }
+
     const points = pickNumber(
       item.points_required,
       item.required_points,
+      item.points_cost,
       item.points,
       item.cost,
     );
+    const canRedeemValue = item.can_redeem;
+    const canRedeemDenied =
+      canRedeemValue === false ||
+      canRedeemValue === 0 ||
+      canRedeemValue === '0' ||
+      canRedeemValue === 'false';
+    const canRedeemAllowed =
+      canRedeemValue === true ||
+      canRedeemValue === 1 ||
+      canRedeemValue === '1' ||
+      canRedeemValue === 'true';
 
-    return {
-      id: pickString(String(item.type ?? ''), String(index)) || `reward-${index}`,
-      type,
-      title,
-      pointsRequired: points ? `${points} pts required` : formatPoints(item.points),
-      icon: iconForReward(type, pickString(item.icon)),
-    };
+    return [
+      {
+        id: type || `reward-${index}`,
+        type,
+        title,
+        pointsRequired: points ? `${points} pts required` : formatPoints(item.points),
+        icon: iconForReward(type, pickString(item.icon)),
+        canRedeem: canRedeemDenied ? false : canRedeemAllowed || canRedeemValue == null,
+      },
+    ];
   });
 };
 
@@ -345,17 +367,20 @@ export const mapReferralStats = (
     data?.total_value_pkr,
     data?.total_pkr,
     data?.total_value,
+    data?.reward_value_pkr,
     pointsEarned && pointValuePkr ? pointsEarned * pointValuePkr : 0,
   );
 
   return {
     referralCode: pickString(data?.referral_code, data?.code, data?.ref_code),
-    referralLink: toDisplayReferralLink(
+    referralLink: pickString(
       data?.referral_link,
       data?.link,
       data?.url,
       data?.share_url,
-      pickString(data?.referral_code, data?.code, data?.ref_code),
+      buildRegisterReferralLink(
+        pickString(data?.referral_code, data?.code, data?.ref_code),
+      ),
     ),
     registered: pickNumber(
       data?.total_registered,
@@ -393,6 +418,7 @@ export type ReferralRewardsResponse = {
   total_points?: number | string | null;
   point_value_pkr?: number | string | null;
   total_value_pkr?: number | string | null;
+  reward_value_pkr?: number | string | null;
   redeemed?: number | string | null;
   redeemed_count?: number | string | null;
   total_registered?: number | string | null;
@@ -424,13 +450,12 @@ export const mapReferralLink = (
   'referralCode' | 'referralLink' | 'shareMessage' | 'rewardsTable'
 > => {
   const data = flattenResponse(response);
+  const referralCode = pickString(data?.referral_code);
 
   return {
-    referralCode: pickString(data?.referral_code),
-    referralLink: toDisplayReferralLink(
-      data?.referral_link,
-      data?.referral_code,
-    ),
+    referralCode,
+    referralLink:
+      pickString(data?.referral_link) || buildRegisterReferralLink(referralCode),
     shareMessage: pickString(data?.message),
     rewardsTable: buildRewardsTable(data?.reward_per_registration),
   };
@@ -453,7 +478,7 @@ export const mapReferralRewards = (
   return {
     pointsEarned: pickNumber(data?.total_points),
     pointValuePkr: pickNumber(data?.point_value_pkr),
-    totalValuePkr: pickNumber(data?.total_value_pkr),
+    totalValuePkr: pickNumber(data?.total_value_pkr, data?.reward_value_pkr),
     registered: pickNumber(data?.total_registered, data?.registrations),
     redeemed: pickNumber(data?.redeemed, data?.redeemed_count),
     redeemOptions: mapRedeemOptions(data?.rewards),
@@ -467,18 +492,18 @@ export const mergeReferralData = (
   stats?: ReferralStatsResponse | null,
   previous?: ReferralStats | null,
 ): ReferralStats => {
-  const fromLink = mapReferralLink(link);
+  const fromLink = link ? mapReferralLink(link) : null;
   const fromRewards = rewards ? mapReferralRewards(rewards) : null;
   const fromStats = mapReferralStats(stats);
 
   return {
     referralCode:
-      fromLink.referralCode ||
+      fromLink?.referralCode ||
       fromStats.referralCode ||
       previous?.referralCode ||
       '',
     referralLink:
-      fromLink.referralLink ||
+      fromLink?.referralLink ||
       fromStats.referralLink ||
       previous?.referralLink ||
       '',
@@ -499,14 +524,13 @@ export const mergeReferralData = (
         ? fromStats.totalValuePkr
         : previous?.totalValuePkr ?? 0,
     conversionRate: fromStats.conversionRate || previous?.conversionRate || '',
-    rewardsTable:
-      fromLink.referralLink || fromLink.referralCode
+    rewardsTable: fromStats.rewardsTable.length
+      ? fromStats.rewardsTable
+      : fromLink?.rewardsTable.length
         ? fromLink.rewardsTable
-        : fromStats.rewardsTable.length
-          ? fromStats.rewardsTable
-          : previous?.rewardsTable ?? [],
+        : previous?.rewardsTable ?? [],
     shareMessage:
-      fromLink.shareMessage ||
+      fromLink?.shareMessage ||
       fromRewards?.shareMessage ||
       fromStats.shareMessage ||
       previous?.shareMessage ||
@@ -869,20 +893,16 @@ const isReferralCode = (value?: string | null) => {
   return REFERRAL_CODE_PATTERN.test(code) && !RESERVED_REFERRAL_SEGMENTS.test(code);
 };
 
-export const buildShareableInviteLink = (code?: string | null) => {
+export const buildRegisterReferralLink = (code?: string | null) => {
   if (!isReferralCode(code)) {
     return '';
   }
 
-  return `${SHAREABLE_INVITE_PAGE}?ref=${encodeURIComponent(code.trim())}`;
+  return `${CANONICAL_REFERRAL_BASE}/${code.trim()}`;
 };
 
-const toDisplayReferralLink = (...values: Array<string | null | undefined>) => {
-  const picked = pickString(...values);
-  return (
-    buildShareableInviteLink(extractReferralCodeFromUrl(picked)) || picked
-  );
-};
+export const buildShareableInviteLink = (code?: string | null) =>
+  buildRegisterReferralLink(code);
 
 const toParseableUrl = (value: string) => {
   if (/^[a-z][a-z0-9+.-]*:/i.test(value)) {
@@ -947,5 +967,5 @@ export const normalizeReferralLink = (value?: string | null): string | null => {
     return null;
   }
 
-  return `${CANONICAL_REFERRAL_BASE}/${code}`;
+  return buildRegisterReferralLink(code);
 };

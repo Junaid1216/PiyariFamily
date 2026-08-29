@@ -148,11 +148,30 @@ export const authService = {
       normalizeReferralLink(payloadReferralLink) ||
       (await pendingReferralStorage.get());
 
+    console.log(
+      '[Referral] POST /register referral_link',
+      JSON.stringify({ referral_link: referralLink || null }, null, 2),
+    );
+
     const response = await postAuth<AuthResponse>(ENDPOINTS.AUTH.REGISTER, {
       ...rest,
       email: normalizeEmail(payload.email),
       ...(referralLink ? { referral_link: referralLink } : {}),
     });
+
+    console.log(
+      '[Referral] POST /register response',
+      JSON.stringify(
+        {
+          status: response.status,
+          success: response.success,
+          message: response.message,
+          data: response.data,
+        },
+        null,
+        2,
+      ),
+    );
 
     if (isApiSuccess(response.status, response.success)) {
       await pendingReferralStorage.clear();

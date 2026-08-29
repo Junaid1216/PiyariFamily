@@ -42,8 +42,8 @@ type NavigationProp = NativeStackNavigationProp<
 
 const NotificationsScreen = () => {
   const navigation = useNavigation<NavigationProp>();
-  const [pendingViewProfileCount, setPendingViewProfileCount] = useState(0);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [pendingViewProfileCount, setPendingViewProfileCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [readingId, setReadingId] = useState<string | null>(null);
@@ -58,53 +58,53 @@ const NotificationsScreen = () => {
     setError(null);
 
     try {
-      const res = await Api.getNotifications();
+      const [notificationsRes, photoAccessRes] = await Promise.allSettled([
+        Api.getNotifications(),
+        Api.getPhotoAccessRequests(),
+      ]);
 
-      if (isApiSuccess(res?.status, res?.data?.success)) {
-        setNotifications(
-          mapNotifications(res?.data).filter(
-            item => !isViewProfileRequestNotification(item),
-          ),
-        );
+      if (notificationsRes.status === 'fulfilled') {
+        const res = notificationsRes.value;
+        if (isApiSuccess(res?.status, res?.data?.success)) {
+          setNotifications(
+            mapNotifications(res?.data).filter(
+              item => !isViewProfileRequestNotification(item),
+            ),
+          );
+        } else {
+          const message = res?.data?.message ?? Strings.notificationsError;
+          setError(message);
+          Toast.show(message, Toast.LONG);
+          setNotifications(current => (current.length > 0 ? current : []));
+        }
       } else {
-        const message = res?.data?.message ?? Strings.notificationsError;
+        const message = getApiErrorMessage(
+          notificationsRes.reason,
+          Strings.notificationsError,
+        );
         setError(message);
         Toast.show(message, Toast.LONG);
         setNotifications(current => (current.length > 0 ? current : []));
       }
-    } catch (requestError) {
-      const message = getApiErrorMessage(
-        requestError,
-        Strings.notificationsError,
-      );
-      setError(message);
-      Toast.show(message, Toast.LONG);
-      setNotifications(current => (current.length > 0 ? current : []));
+
+      if (photoAccessRes.status === 'fulfilled') {
+        const res = photoAccessRes.value;
+        if (isApiSuccess(res?.status, res?.data?.success)) {
+          setPendingViewProfileCount(
+            pickPendingPhotoAccessCount(mapPhotoAccessRequests(res?.data)),
+          );
+        }
+      }
     } finally {
       setLoading(false);
-    }
-  }, []);
-
-  const fetchPendingPhotoAccessCount = useCallback(async () => {
-    try {
-      const res = await Api.getPhotoAccessRequests();
-
-      if (isApiSuccess(res?.status, res?.data?.success)) {
-        setPendingViewProfileCount(
-          pickPendingPhotoAccessCount(mapPhotoAccessRequests(res?.data)),
-        );
-      }
-    } catch {
-      setPendingViewProfileCount(0);
     }
   }, []);
 
   useFocusEffect(
     useCallback(() => {
       fetchNotifications();
-      fetchPendingPhotoAccessCount();
       return () => setMenuOpen(false);
-    }, [fetchNotifications, fetchPendingPhotoAccessCount]),
+    }, [fetchNotifications]),
   );
 
   const markAsRead = async (item: AppNotification) => {
