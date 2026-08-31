@@ -27,8 +27,8 @@ import ScreenHeader from '../../Components/ScreenHeader';
 import PrimaryButton from '../../Components/PrimaryButton';
 import SetupDropdown from '../../Components/SetupDropdown';
 import DropdownOptionsOverlay, {
-  DropdownOverlayHost,
   DropdownSafeScrollView as ScrollView,
+  useGuardedDropdownPress,
 } from '../../Components/DropdownOptionsOverlay';
 import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import {
@@ -132,6 +132,9 @@ const EditProfileScreen = () => {
   const [showAllAdditional, setShowAllAdditional] = useState(false);
   const [galleryGridWidth, setGalleryGridWidth] = useState(0);
   const languagesAnchorRef = useRef<View>(null);
+  const handleLanguagesPress = useGuardedDropdownPress(() =>
+    setOpenDropdown(prev => (prev === 'languages' ? null : 'languages')),
+  );
   const newPhotoRef = useRef<UploadFile | null>(null);
   const pendingGalleryFilesRef = useRef<UploadFile[]>([]);
   const galleryDirtyRef = useRef(false);
@@ -983,11 +986,7 @@ const EditProfileScreen = () => {
               <TouchableOpacity
                 style={styles.dropdownRow}
                 activeOpacity={0.85}
-                onPress={() =>
-                  setOpenDropdown(prev =>
-                    prev === 'languages' ? null : 'languages',
-                  )
-                }
+                onPress={handleLanguagesPress}
               >
                 <Image
                   source={Images.msgTextIcon}
@@ -1111,7 +1110,6 @@ const EditProfileScreen = () => {
             showArrow
           />
         </View>
-        <DropdownOverlayHost />
       </KeyboardAvoidingView>
       )}
 
@@ -1439,7 +1437,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1.2,
-    borderColor: Colors.border,
+    borderColor: Colors.dividerPink,
     borderRadius: AuthStyles.inputRadius,
     backgroundColor: Colors.inputBg,
     paddingHorizontal: wp('3.7%'),
@@ -1520,7 +1518,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     borderWidth: 1.2,
-    borderColor: Colors.border,
+    borderColor: Colors.dividerPink,
     borderRadius: AuthStyles.inputRadius,
     backgroundColor: Colors.tabActiveBg,
     paddingHorizontal: wp('3.7%'),

@@ -3,24 +3,19 @@ import React, {
   useCallback,
   useContext,
   useEffect,
-  useMemo,
   useRef,
   useState,
 } from 'react';
 import {
+  Dimensions,
   Keyboard,
-  Platform,
   Pressable,
-  ScrollView as RNScrollView,
+  ScrollView,
   StyleSheet,
   Text,
   View,
   type ScrollViewProps,
 } from 'react-native';
-import {
-  GestureHandlerRootView,
-  ScrollView,
-} from 'react-native-gesture-handler';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { AuthStyles, FontSizes } from '../Constant/AuthStyles';
 import { Colors } from '../Constant/Colors';
@@ -28,252 +23,131 @@ import { Fonts } from '../Constant/Fonts';
 import { fs, hp, wp } from '../Functions/responsive';
 
 export const DROPDOWN_MAX_HEIGHT = hp('28%');
-const INPUT_BORDER_WIDTH = 1.2;
-const OPTION_ROW_HEIGHT = hp('1.4%') * 2 + FontSizes.body + 8;
-const MENU_GAP = hp('0.35%');
-const POSITION_EPSILON = 0.5;
+const ROW = hp('1.4%') * 2 + FontSizes.body + 8;
 
-export type DropdownPortalEntry = {
+type Menu = {
   x: number;
   y: number;
   width: number;
   options: readonly string[];
-  selectedValues: readonly string[];
-  closeOnSelect?: boolean;
+  selected: readonly string[];
+  closeOnSelect: boolean;
   onSelect: (value: string) => void;
   onClose: () => void;
 };
 
-const near = (a: number, b: number) => Math.abs(a - b) < POSITION_EPSILON;
-
-const sameStringList = (
-  a: readonly string[] | undefined,
-  b: readonly string[] | undefined,
-) =>
-  !!a &&
-  !!b &&
-  a.length === b.length &&
-  a.every((value, index) => value === b[index]);
-
-const sameDropdownLayout = (
-  prev: DropdownPortalEntry | null,
-  next: DropdownPortalEntry,
-) =>
-  !!prev &&
-  near(prev.x, next.x) &&
-  near(prev.y, next.y) &&
-  near(prev.width, next.width) &&
-  prev.closeOnSelect === next.closeOnSelect &&
-  sameStringList(prev.options, next.options) &&
-  sameStringList(prev.selectedValues, next.selectedValues);
-
-type DropdownPortalContextValue = {
-  openDropdown: (entry: DropdownPortalEntry) => void;
-  closeDropdown: () => void;
-  entry: DropdownPortalEntry | null;
-};
-
-const DropdownPortalContext =
-  createContext<DropdownPortalContextValue | null>(null);
+const Ctx = createContext<{
+  openMenu: (menu: Menu) => void;
+  closeMenu: () => void;
+  menu: Menu | null;
+  hostRef: React.RefObject<View | null>;
+} | null>(null);
 
 export const useDropdownPortal = () => {
-  const ctx = useContext(DropdownPortalContext);
+  const ctx = useContext(Ctx);
   if (!ctx) {
-    throw new Error(
-      'useDropdownPortal must be used within DropdownPortalProvider',
-    );
+    throw new Error('useDropdownPortal needs DropdownPortalProvider');
   }
   return ctx;
 };
 
-type ProviderProps = {
+export const useGuardedDropdownPress = (onPress: () => void) => onPress;
+
+export const DropdownPortalProvider = ({
+  children,
+}: {
   children: React.ReactNode;
-};
+}) => {
+  const [menu, setMenu] = useState<Menu | null>(null);
+  const hostRef = useRef<View>(null);
 
-export const DropdownPortalProvider = ({ children }: ProviderProps) => {
-  const [entry, setEntry] = useState<DropdownPortalEntry | null>(null);
-
-  const openDropdown = useCallback((next: DropdownPortalEntry) => {
-    setEntry(prev => (sameDropdownLayout(prev, next) ? prev : next));
-  }, []);
-
-  const closeDropdown = useCallback(() => {
-    setEntry(null);
-  }, []);
-
-  const value = useMemo(
-    () => ({ openDropdown, closeDropdown, entry }),
-    [openDropdown, closeDropdown, entry],
-  );
+  const openMenu = useCallback((next: Menu) => setMenu(next), []);
+  const closeMenu = useCallback(() => setMenu(null), []);
 
   return (
-    <DropdownPortalContext.Provider value={value}>
+    <Ctx.Provider value={{ openMenu, closeMenu, menu, hostRef }}>
       {children}
-    </DropdownPortalContext.Provider>
+    </Ctx.Provider>
   );
 };
 
-/** Locks parent scrolling while a dropdown is open so the menu cannot detach. */
 export const DropdownSafeScrollView = React.forwardRef<
-  RNScrollView,
+  ScrollView,
   ScrollViewProps
->(function DropdownSafeScrollView(
-  { scrollEnabled = true, onScrollBeginDrag, ...props },
-  ref,
-) {
-  const { entry, closeDropdown } = useDropdownPortal();
-  const dropdownOpen = entry != null;
+>(function DropdownSafeScrollView({ scrollEnabled = true, ...props }, ref) {
+  const { menu } = useDropdownPortal();
 
   return (
-    <RNScrollView
+    <ScrollView
       ref={ref}
       {...props}
-      scrollEnabled={scrollEnabled && !dropdownOpen}
-      onScrollBeginDrag={event => {
-        if (entry) {
-          entry.onClose();
-          closeDropdown();
-        }
-        onScrollBeginDrag?.(event);
-      }}
+      scrollEnabled={scrollEnabled && menu == null}
     />
   );
 });
 
-/** Place as the last child of the screen root (outside ScrollView / footer). */
 export const DropdownOverlayHost = () => {
-  const { entry, closeDropdown } = useDropdownPortal();
-  const hostRef = useRef<View>(null);
-  const [hostOrigin, setHostOrigin] = useState({ x: 0, y: 0 });
+  const { menu, closeMenu, hostRef } = useDropdownPortal();
 
-  const syncHostOrigin = useCallback(() => {
-    hostRef.current?.measureInWindow((x, y) => {
-      setHostOrigin(prev =>
-        near(prev.x, x) && near(prev.y, y) ? prev : { x, y },
-      );
-    });
-  }, []);
-
-  const dismiss = useCallback(() => {
-    if (!entry) {
-      return;
-    }
-    entry.onClose();
-    closeDropdown();
-  }, [entry, closeDropdown]);
-
-  useEffect(() => {
-    if (!entry) {
-      return;
-    }
-    const frame = requestAnimationFrame(syncHostOrigin);
-    return () => cancelAnimationFrame(frame);
-  }, [entry, syncHostOrigin]);
-
-  if (!entry) {
-    return (
-      <View
-        ref={hostRef}
-        collapsable={false}
-        pointerEvents="none"
-        style={styles.host}
-        onLayout={syncHostOrigin}
-      />
-    );
+  if (!menu) {
+    return <View ref={hostRef} collapsable={false} style={styles.host} pointerEvents="none" />;
   }
 
-  // Show every option up to max height — 3 items = all 3; more = scroll inside.
-  const listHeight = Math.min(
-    Math.max(entry.options.length, 1) * OPTION_ROW_HEIGHT,
+  const height = Math.min(
+    Math.max(menu.options.length, 1) * ROW,
     DROPDOWN_MAX_HEIGHT,
+    Math.max(Dimensions.get('window').height - menu.y - hp('14%'), ROW * 3),
   );
 
-  const top = entry.y - hostOrigin.y + MENU_GAP;
-  const left = entry.x - hostOrigin.x;
-
   return (
-    <View
-      ref={hostRef}
-      collapsable={false}
-      pointerEvents="box-none"
-      style={styles.host}
-      onLayout={syncHostOrigin}
-    >
-      <View
-        collapsable={false}
+    <View ref={hostRef} collapsable={false} pointerEvents="auto" style={styles.host}>
+      <Pressable
         style={styles.backdrop}
-        onStartShouldSetResponder={() => true}
-        onMoveShouldSetResponder={() => true}
-        onResponderRelease={dismiss}
-        onResponderTerminate={dismiss}
+        onPress={() => {
+          menu.onClose();
+          closeMenu();
+        }}
       />
       <View
-        pointerEvents="auto"
         style={[
           styles.menu,
-          {
-            top,
-            left,
-            width: entry.width,
-            height: listHeight,
-          },
+          { top: menu.y, left: menu.x, width: menu.width, height },
         ]}
       >
-        <GestureHandlerRootView
-          style={styles.menuInner}
-          onStartShouldSetResponder={() => true}
-          onMoveShouldSetResponder={() => true}
-          onResponderTerminationRequest={() => false}
+        <ScrollView
+          nestedScrollEnabled
+          keyboardShouldPersistTaps="always"
+          showsVerticalScrollIndicator
+          style={{ height }}
         >
-          <ScrollView
-            nestedScrollEnabled
-            scrollEnabled
-            keyboardShouldPersistTaps="always"
-            showsVerticalScrollIndicator
-            persistentScrollbar={Platform.OS === 'android'}
-            indicatorStyle="black"
-            bounces={false}
-            overScrollMode="never"
-            style={{ height: listHeight }}
-            contentContainerStyle={styles.listContent}
-          >
-            {entry.options.map((item, index) => {
-              const isSelected = entry.selectedValues.includes(item);
-              const isLast = index === entry.options.length - 1;
-
-              return (
-                <Pressable
-                  key={item}
-                  style={[
-                    styles.option,
-                    isSelected && styles.optionSelected,
-                    isLast && styles.optionLast,
-                  ]}
-                  onPress={() => {
-                    entry.onSelect(item);
-                    if (entry.closeOnSelect === false) {
-                      return;
-                    }
-                    entry.onClose();
-                    closeDropdown();
-                  }}
-                >
-                  <Text
-                    style={[
-                      styles.optionText,
-                      isSelected && styles.optionTextSelected,
-                    ]}
-                  >
-                    {item}
-                  </Text>
-                  {isSelected ? (
-                    <Icon name="check" size={fs(18)} color={Colors.gold} />
-                  ) : null}
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        </GestureHandlerRootView>
+          {menu.options.map((item, index) => {
+            const selected = menu.selected.includes(item);
+            const last = index === menu.options.length - 1;
+            return (
+              <Pressable
+                key={item}
+                style={[
+                  styles.option,
+                  selected && styles.optionOn,
+                  last && styles.optionLast,
+                ]}
+                onPress={() => {
+                  menu.onSelect(item);
+                  if (menu.closeOnSelect !== false) {
+                    closeMenu();
+                  }
+                }}
+              >
+                <Text style={[styles.optionText, selected && styles.optionTextOn]}>
+                  {item}
+                </Text>
+                {selected ? (
+                  <Icon name="check" size={fs(18)} color={Colors.gold} />
+                ) : null}
+              </Pressable>
+            );
+          })}
+        </ScrollView>
       </View>
     </View>
   );
@@ -289,7 +163,6 @@ type OverlayProps = {
   onClose: () => void;
 };
 
-/** Measures the field and publishes the menu into DropdownOverlayHost. */
 export const DropdownOptionsOverlay = ({
   visible,
   anchorRef,
@@ -299,120 +172,90 @@ export const DropdownOptionsOverlay = ({
   onSelect,
   onClose,
 }: OverlayProps) => {
-  const { openDropdown, closeDropdown } = useDropdownPortal();
+  const { openMenu, closeMenu, hostRef } = useDropdownPortal();
   const onSelectRef = useRef(onSelect);
   const onCloseRef = useRef(onClose);
-  const optionsRef = useRef(options);
-  const selectedValuesRef = useRef(selectedValues);
-  const closeOnSelectRef = useRef(closeOnSelect);
-  const wasVisibleRef = useRef(false);
   onSelectRef.current = onSelect;
   onCloseRef.current = onClose;
-  optionsRef.current = options;
-  selectedValuesRef.current = selectedValues;
-  closeOnSelectRef.current = closeOnSelect;
 
   useEffect(() => {
     if (!visible) {
-      if (wasVisibleRef.current) {
-        closeDropdown();
-      }
-      wasVisibleRef.current = false;
       return;
     }
 
-    wasVisibleRef.current = true;
-    let cancelled = false;
-    let frame = 0;
+    Keyboard.dismiss();
 
-    const publish = () => {
-      anchorRef?.current?.measureInWindow((x, y, width, height) => {
-        if (cancelled || width <= 0 || height <= 0) {
-          return;
-        }
-        openDropdown({
-          x,
-          y: y + height,
-          width,
-          options: optionsRef.current,
-          selectedValues: selectedValuesRef.current,
-          closeOnSelect: closeOnSelectRef.current,
-          onSelect: value => onSelectRef.current(value),
-          onClose: () => onCloseRef.current(),
+    const timer = setTimeout(() => {
+      const field = anchorRef?.current;
+      const overlay = hostRef.current;
+      if (!field) {
+        return;
+      }
+
+      const show = (overlayX: number, overlayY: number) => {
+        field.measureInWindow((x, y, width, height) => {
+          if (width <= 0 || height <= 0) {
+            return;
+          }
+          openMenu({
+            x: x - overlayX,
+            y: y + height - overlayY,
+            width,
+            options,
+            selected: selectedValues,
+            closeOnSelect,
+            onSelect: value => onSelectRef.current(value),
+            onClose: () => onCloseRef.current(),
+          });
         });
-      });
-    };
+      };
 
-    const schedule = () => {
-      publish();
-      frame = requestAnimationFrame(publish);
-    };
-    schedule();
-    const retry = setTimeout(publish, 32);
-    const keyboardShow = Keyboard.addListener('keyboardDidShow', schedule);
-    const keyboardHide = Keyboard.addListener('keyboardDidHide', schedule);
+      if (overlay) {
+        overlay.measureInWindow((ox, oy) => show(ox, oy));
+      } else {
+        show(0, 0);
+      }
+    }, 120);
 
     return () => {
-      cancelled = true;
-      cancelAnimationFrame(frame);
-      clearTimeout(retry);
-      keyboardShow.remove();
-      keyboardHide.remove();
+      clearTimeout(timer);
+      closeMenu();
     };
-  }, [visible, anchorRef, openDropdown, closeDropdown]);
-
-  useEffect(() => {
-    return () => closeDropdown();
-  }, [closeDropdown]);
+  }, [visible]);
 
   return null;
 };
 
 const styles = StyleSheet.create({
   host: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 9999,
     elevation: 9999,
   },
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'transparent',
-    zIndex: 0,
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(0,0,0,0.01)',
   },
   menu: {
     position: 'absolute',
-    zIndex: 1,
-    borderWidth: INPUT_BORDER_WIDTH,
-    borderColor: Colors.dividerPink,
-    borderTopLeftRadius: AuthStyles.inputRadius,
-    borderTopRightRadius: AuthStyles.inputRadius,
-    borderBottomLeftRadius: AuthStyles.inputRadius,
-    borderBottomRightRadius: AuthStyles.inputRadius,
-    backgroundColor: Colors.white,
     overflow: 'hidden',
-    elevation: 48,
-    shadowColor: Colors.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-  },
-  menuInner: {
-    flex: 1,
-  },
-  listContent: {
-    flexGrow: 0,
+    borderWidth: 1.2,
+    borderColor: Colors.dividerPink,
+    borderRadius: AuthStyles.inputRadius,
+    backgroundColor: Colors.white,
+    elevation: 24,
   },
   option: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    minHeight: OPTION_ROW_HEIGHT,
+    minHeight: ROW,
     paddingHorizontal: wp('4%'),
     paddingVertical: hp('1.4%'),
     borderBottomWidth: 1,
     borderBottomColor: Colors.dividerPink,
   },
-  optionSelected: {
+  optionOn: {
     backgroundColor: Colors.inputBg,
   },
   optionLast: {
@@ -424,7 +267,7 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.regular,
     color: Colors.text,
   },
-  optionTextSelected: {
+  optionTextOn: {
     fontFamily: Fonts.semiBold,
     color: Colors.primary,
   },

@@ -22,7 +22,6 @@ import FilterChip from '../../Components/FilterChip';
 import PrimaryButton from '../../Components/PrimaryButton';
 import SetupDropdown from '../../Components/SetupDropdown';
 import {
-  DropdownOverlayHost,
   DropdownSafeScrollView as ScrollView,
 } from '../../Components/DropdownPortal';
 import SetupProgressBar from '../../Components/SetupProgressBar';
@@ -345,7 +344,6 @@ const PhysicalDetailsScreen = ({ navigation }: Props) => {
             showArrow
           />
         </View>
-        <DropdownOverlayHost />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

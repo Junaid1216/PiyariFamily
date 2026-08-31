@@ -102,7 +102,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1.2,
-    borderColor: Colors.border,
+    borderColor: Colors.dividerPink,
     borderRadius: AuthStyles.inputRadius,
     backgroundColor: Colors.inputBg,
     paddingHorizontal: wp('3.7%'),

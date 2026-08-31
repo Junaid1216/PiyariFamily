@@ -17,11 +17,19 @@ import { fs, hp, wp } from '../../Functions/responsive';
 type Props = {
   navigation: {
     replace: (screen: string) => void;
+    reset: (state: { index: number; routes: Array<{ name: string }> }) => void;
   };
 };
 
 const ProfileReadyScreen = ({ navigation }: Props) => {
   const insets = useSafeAreaInsets();
+
+  const goToHome = () => {
+    navigation.reset({
+      index: 0,
+      routes: [{ name: 'Main' }],
+    });
+  };
 
   return (
     <SafeAreaView
@@ -66,7 +74,7 @@ const ProfileReadyScreen = ({ navigation }: Props) => {
         >
           <PrimaryButton
             title={Strings.continueBtn}
-            onPress={() => navigation.replace('Main')}
+            onPress={goToHome}
             showArrow
           />
         </View>

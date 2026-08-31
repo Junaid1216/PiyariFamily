@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
@@ -22,8 +23,8 @@ import BackButton from '../../Components/BackButton';
 import PrimaryButton from '../../Components/PrimaryButton';
 import SetupProgressBar from '../../Components/SetupProgressBar';
 import DropdownOptionsOverlay, {
-  DropdownOverlayHost,
   DropdownSafeScrollView as ScrollView,
+  useGuardedDropdownPress,
 } from '../../Components/DropdownOptionsOverlay';
 import {
   Api,
@@ -143,6 +144,10 @@ const BasicInfoScreen = ({ navigation }: Props) => {
   const [familyInformation, setFamilyInformation] = useState('');
   const [maritalDropdownOpen, setMaritalDropdownOpen] = useState(false);
   const maritalAnchorRef = useRef<View>(null);
+  const handleMaritalPress = useGuardedDropdownPress(() => {
+    Keyboard.dismiss();
+    setMaritalDropdownOpen(prev => !prev);
+  });
   const [saving, setSaving] = useState(false);
 
   const age = useMemo(() => {
@@ -444,7 +449,7 @@ const BasicInfoScreen = ({ navigation }: Props) => {
               <TouchableOpacity
                 style={styles.dropdownRow}
                 activeOpacity={0.85}
-                onPress={() => setMaritalDropdownOpen(prev => !prev)}
+                onPress={handleMaritalPress}
               >
                 <Icon
                   name="heart-outline"
@@ -535,7 +540,6 @@ const BasicInfoScreen = ({ navigation }: Props) => {
             showArrow
           />
         </View>
-        <DropdownOverlayHost />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -632,7 +636,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1.2,
-    borderColor: Colors.border,
+    borderColor: Colors.dividerPink,
     borderRadius: AuthStyles.inputRadius,
     backgroundColor: Colors.inputBg,
     paddingHorizontal: wp('3.7%'),
@@ -670,7 +674,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1.2,
-    borderColor: Colors.border,
+    borderColor: Colors.dividerPink,
     borderRadius: AuthStyles.inputRadius,
     backgroundColor: Colors.inputBg,
     paddingHorizontal: wp('3.7%'),

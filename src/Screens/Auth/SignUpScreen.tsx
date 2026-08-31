@@ -72,62 +72,6 @@ const SignUpScreen = ({ navigation }: Props) => {
     navigation.replace('Login');
   };
 
-  const openVerifyEmail = (registeredEmail: string, autoSend: boolean) => {
-    navigation.navigate('VerifyEmail', {
-      email: registeredEmail.trim(),
-      autoSend,
-      password,
-      name: fullName.trim(),
-    });
-  };
-
-  const continueIfLoggedIn = (response: {
-    token?: string;
-    access_token?: string;
-    requires_verification?: boolean;
-    email?: string;
-    message?: string;
-  }) => {
-    const token = response.token || response.access_token;
-    if (token) {
-      Toast.show(response.message || 'Logged in successfully', Toast.LONG);
-      navigation.replace('SelectCountry');
-      return true;
-    }
-
-    if (response.requires_verification) {
-      openVerifyEmail(response.email || email.trim(), true);
-      return true;
-    }
-
-    return false;
-  };
-
-  const loginWithSignupCredentials = async () => {
-    try {
-      const response = await authService.login({
-        email: email.trim(),
-        password,
-      });
-
-      if (continueIfLoggedIn(response)) {
-        return true;
-      }
-    } catch (loginError) {
-      const errorData = (loginError as any)?.response?.data;
-      if (errorData?.requires_verification) {
-        Toast.show(
-          errorData.message || 'Please verify your email first.',
-          Toast.LONG,
-        );
-        openVerifyEmail(errorData.email || email.trim(), true);
-        return true;
-      }
-    }
-
-    return false;
-  };
-
   const handleSignUp = async () => {
     if (
       !fullName.trim() ||
@@ -161,16 +105,7 @@ const SignUpScreen = ({ navigation }: Props) => {
 
       if (response?.status == 200 || response?.success == 200 || response?.success === true) {
         Toast.show(response.message || 'Account created successfully', Toast.LONG);
-        const registeredEmail =
-          response.data?.email ||
-          response.user?.email ||
-          response.email ||
-          email.trim();
-        openVerifyEmail(registeredEmail, false);
-        return;
-      }
-
-      if (continueIfLoggedIn(response)) {
+        navigation.replace('Login');
         return;
       }
 
@@ -178,13 +113,8 @@ const SignUpScreen = ({ navigation }: Props) => {
     } catch (error) {
 
       if (isEmailAlreadyRegistered(error)) {
-        const loggedIn = await loginWithSignupCredentials();
-        if (loggedIn) {
-          return;
-        }
-
-        Toast.show('Please verify the OTP sent to your email.', Toast.LONG);
-        openVerifyEmail(email.trim(), true);
+        Toast.show('This email is already registered. Please login.', Toast.LONG);
+        navigation.replace('Login');
         return;
       }
 

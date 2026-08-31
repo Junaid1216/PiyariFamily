@@ -19,7 +19,6 @@ import BackButton from '../../Components/BackButton';
 import PrimaryButton from '../../Components/PrimaryButton';
 import SetupDropdown from '../../Components/SetupDropdown';
 import {
-  DropdownOverlayHost,
   DropdownSafeScrollView as ScrollView,
 } from '../../Components/DropdownPortal';
 import SetupProgressBar from '../../Components/SetupProgressBar';
@@ -362,7 +361,6 @@ const CareerScreen = ({ navigation }: Props) => {
             showArrow
           />
         </View>
-        <DropdownOverlayHost />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

@@ -21,8 +21,8 @@ import BackButton from '../../Components/BackButton';
 import PrimaryButton from '../../Components/PrimaryButton';
 import SetupDropdown from '../../Components/SetupDropdown';
 import DropdownOptionsOverlay, {
-  DropdownOverlayHost,
   DropdownSafeScrollView as ScrollView,
+  useGuardedDropdownPress,
 } from '../../Components/DropdownOptionsOverlay';
 import SetupProgressBar from '../../Components/SetupProgressBar';
 import {
@@ -82,6 +82,9 @@ const FaithCommunityScreen = ({ navigation }: Props) => {
   >(null);
   const [saving, setSaving] = useState(false);
   const languagesAnchorRef = useRef<View>(null);
+  const handleLanguagesPress = useGuardedDropdownPress(() =>
+    setOpenDropdown(prev => (prev === 'languages' ? null : 'languages')),
+  );
 
   useEffect(() => {
 
@@ -303,11 +306,7 @@ const FaithCommunityScreen = ({ navigation }: Props) => {
               <TouchableOpacity
                 style={styles.dropdownRow}
                 activeOpacity={0.85}
-                onPress={() =>
-                  setOpenDropdown(prev =>
-                    prev === 'languages' ? null : 'languages',
-                  )
-                }
+                onPress={handleLanguagesPress}
               >
                 <Image
                   source={Images.msgTextIcon}
@@ -386,7 +385,6 @@ const FaithCommunityScreen = ({ navigation }: Props) => {
             showArrow
           />
         </View>
-        <DropdownOverlayHost />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -433,7 +431,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1.2,
-    borderColor: Colors.border,
+    borderColor: Colors.dividerPink,
     borderRadius: AuthStyles.inputRadius,
     backgroundColor: Colors.inputBg,
     paddingHorizontal: wp('3.7%'),

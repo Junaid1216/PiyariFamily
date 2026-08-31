@@ -11,7 +11,7 @@ import { getSafeAreaInitialMetrics } from './src/Functions/safeArea';
 import { AppNavigator } from './src/Navigation';
 import { persistor, store } from './src/Redux';
 import { Colors } from './src/Constant/Colors';
-import { DropdownPortalProvider } from './src/Components/DropdownPortal';
+import { DropdownOverlayHost, DropdownPortalProvider } from './src/Components/DropdownPortal';
 import { usePendingReferralCapture } from './src/Functions';
 
 function AppContent() {
@@ -28,7 +28,10 @@ function AppContent() {
         backgroundColor="transparent"
       />
       <DropdownPortalProvider>
-        <AppNavigator />
+        <View style={{ flex: 1 }}>
+          <AppNavigator />
+          <DropdownOverlayHost />
+        </View>
       </DropdownPortalProvider>
     </SafeAreaProvider>
   );

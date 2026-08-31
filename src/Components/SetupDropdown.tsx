@@ -3,6 +3,7 @@ import {
   Image,
   ImageSourcePropType,
   ImageStyle,
+  Keyboard,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -54,7 +55,10 @@ const SetupDropdown = ({
         <TouchableOpacity
           style={styles.dropdownRow}
           activeOpacity={0.85}
-          onPress={onToggle}
+          onPress={() => {
+            Keyboard.dismiss();
+            onToggle();
+          }}
         >
           {iconSource ? (
             <Image
@@ -96,7 +100,11 @@ const SetupDropdown = ({
           options={options}
           selectedValues={value ? [value] : []}
           onSelect={onSelect}
-          onClose={onToggle}
+          onClose={() => {
+            if (isOpen) {
+              onToggle();
+            }
+          }}
         />
       </View>
     </View>

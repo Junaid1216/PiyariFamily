@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
+  BackHandler,
   ScrollView,
   StyleSheet,
   Text,
@@ -77,6 +78,23 @@ const ChooseYourPlanScreen = () => {
     }, [fetchSubscriptions]),
   );
 
+  const goToHome = useCallback(() => {
+    navigation.popToTop();
+    navigation.getParent()?.navigate('Home');
+  }, [navigation]);
+
+  useFocusEffect(
+    useCallback(() => {
+      const onHardwareBack = () => {
+        goToHome();
+        return true;
+      };
+
+      const sub = BackHandler.addEventListener('hardwareBackPress', onHardwareBack);
+      return () => sub.remove();
+    }, [goToHome]),
+  );
+
   const openPayment = (plan: 'VIP' | 'VVIP') => {
     const selected = plan === 'VIP' ? plans.vipPlan : plans.vvipPlan;
     if (!selected.apiId && !selected.priceLabel) {
@@ -140,7 +158,7 @@ const ChooseYourPlanScreen = () => {
           <TouchableOpacity
             style={styles.heartBtn}
             activeOpacity={0.85}
-            onPress={() => navigation.goBack()}
+            onPress={goToHome}
           >
             <Icon name="heart" size={fs(18)} color={Colors.white} />
           </TouchableOpacity>

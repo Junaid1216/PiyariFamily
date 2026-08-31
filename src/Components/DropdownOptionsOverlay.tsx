@@ -4,5 +4,6 @@ export {
   DropdownPortalProvider,
   DropdownSafeScrollView,
   useDropdownPortal,
+  useGuardedDropdownPress,
 } from './DropdownPortal';
 export { default } from './DropdownPortal';
