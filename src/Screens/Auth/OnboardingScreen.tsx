@@ -27,6 +27,7 @@ import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
 import { getFooterBottomPadding } from '../../Functions/safeArea';
 import { hp, wp } from '../../Functions/responsive';
+import { setHasSeenWelcome, store } from '../../Redux';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -171,7 +172,10 @@ const OnboardingScreen = ({ navigation }: Props) => {
         >
           <PrimaryButton
             title={Strings.getStarted}
-            onPress={() => navigation.navigate('SignUp')}
+            onPress={() => {
+              store.dispatch(setHasSeenWelcome(true));
+              navigation.navigate('SignUp');
+            }}
             showArrow
             style={styles.button}
           />
@@ -179,7 +183,10 @@ const OnboardingScreen = ({ navigation }: Props) => {
           <AuthFooter
             prefix={Strings.alreadyHaveAccount}
             linkText={Strings.logInLink}
-            onPress={() => navigation.navigate('Login')}
+            onPress={() => {
+              store.dispatch(setHasSeenWelcome(true));
+              navigation.navigate('Login');
+            }}
           />
         </View>
       </SafeAreaView>

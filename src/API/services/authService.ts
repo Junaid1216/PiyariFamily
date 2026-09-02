@@ -1,7 +1,13 @@
 import { apiClient } from '../apiClient';
 import { ENDPOINTS } from '../endpoints';
 import { clearSession } from '../../Redux/clearSession';
-import { store, setAuthSession, clearProfile } from '../../Redux';
+import {
+  store,
+  persistor,
+  setAuthSession,
+  clearProfile,
+  setLastAccount,
+} from '../../Redux';
 import { accountStorage } from '../accountStorage';
 import { pendingReferralStorage } from '../pendingReferralStorage';
 import { normalizeReferralLink } from '../mappers/referralMapper';
@@ -76,16 +82,27 @@ const resolveAccountStatus = (
   return 'active' as const;
 };
 
+const firstToken = (...values: unknown[]) => {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim();
+    }
+  }
+
+  return null;
+};
+
 export const pickAuthToken = (response?: AuthResponse | null) =>
-  response?.token ||
-  response?.access_token ||
-  response?.accessToken ||
-  response?.data?.token ||
-  response?.data?.access_token ||
-  response?.data?.accessToken ||
-  (response as { user?: { token?: string } } | undefined)?.user?.token ||
-  response?.data?.user?.token ||
-  null;
+  firstToken(
+    response?.token,
+    response?.access_token,
+    response?.accessToken,
+    response?.data?.token,
+    response?.data?.access_token,
+    response?.data?.accessToken,
+    response?.user?.token,
+    response?.data?.user?.token,
+  );
 
 const pickAuthUser = (response?: AuthResponse | null) =>
   response?.user || response?.data?.user || null;
@@ -103,9 +120,16 @@ const saveAuthSession = (response: AuthResponse) => {
 
   if (user) {
     saveProfileCache(user);
+    store.dispatch(
+      setLastAccount({
+        name: user.name,
+        email: user.email,
+      }),
+    );
   }
 
   accountStorage.setStatus(resolveAccountStatus(response));
+  void persistor.flush();
 };
 
 const shouldSaveAuthSession = (response: AuthResponse) =>

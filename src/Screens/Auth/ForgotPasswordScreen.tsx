@@ -7,7 +7,7 @@ import {
   TouchableWithoutFeedback,
   View,
 } from 'react-native';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import KeyboardScrollView from '../../Components/KeyboardScrollView';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-simple-toast';
 import AuthBackground from '../../Components/AuthBackground';
@@ -19,7 +19,7 @@ import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
-import { authService, ENDPOINTS } from '../../API';
+import { authService, isApiSuccess, isOtpCooldownError } from '../../API';
 import { hp, wp } from '../../Functions/responsive';
 
 type Props = {
@@ -45,13 +45,24 @@ const ForgotPasswordScreen = ({ navigation }: Props) => {
           email: email.trim(),
         });
 
-        if (res?.status == 200) {
-          Toast.show(res?.message || 'Reset code sent to your email', Toast.LONG);
+        if (isApiSuccess(res?.status, res?.success) || isOtpCooldownError(res)) {
+          Toast.show(
+            isApiSuccess(res?.status, res?.success)
+              ? res?.message || 'Reset code sent to your email'
+              : 'Reset code sent to your email',
+            Toast.LONG,
+          );
           navigation.navigate('CheckEmail', { email: email.trim() });
         } else {
           Toast.show(res?.message || 'Failed to send reset code. Please try again.');
         }
       } catch (error: any) {
+        if (isOtpCooldownError(error)) {
+          Toast.show('Reset code sent to your email', Toast.LONG);
+          navigation.navigate('CheckEmail', { email: email.trim() });
+          return;
+        }
+
         Toast.show(
           error?.response?.data?.message ||
             'Failed to send reset code. Please try again.',
@@ -66,13 +77,9 @@ const ForgotPasswordScreen = ({ navigation }: Props) => {
     <AuthBackground variant="white">
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <View style={styles.root}>
-          <KeyboardAwareScrollView
+          <KeyboardScrollView
             style={styles.scrollView}
             contentContainerStyle={styles.scroll}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={true}
-            enableOnAndroid
-            bounces={false}
           >
             <BackButton variant="pink" onPress={() => navigation.goBack()} />
 
@@ -124,7 +131,7 @@ const ForgotPasswordScreen = ({ navigation }: Props) => {
                 </Text>
               </TouchableOpacity>
             </View>
-          </KeyboardAwareScrollView>
+          </KeyboardScrollView>
         </View>
       </TouchableWithoutFeedback>
     </AuthBackground>
@@ -177,7 +184,7 @@ const styles = StyleSheet.create({
   },
   flexSpacer: {
     flex: 1,
-    minHeight: hp('10%'),
+    minHeight: hp('2%'),
   },
   bottomSection: {
     width: '100%',

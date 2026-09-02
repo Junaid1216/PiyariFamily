@@ -24,12 +24,14 @@ import {
   ProfileReadyScreen,
   SelectCountryScreen,
 } from '../Screens/ProfileSetup';
+import { getActiveRouteName } from '../Functions/navigationPersistence';
+import { setNavigationState, store } from '../Redux';
 import MainTabNavigator from './MainTabNavigator';
 
 export type AuthStackParamList = {
   Splash: undefined;
   Onboarding: undefined;
-  Login: undefined;
+  Login: { email?: string };
   SignUp: undefined;
   VerifyEmail: {
     email: string;
@@ -58,7 +60,15 @@ const Stack = createNativeStackNavigator<AuthStackParamList>();
 
 const AuthNavigator = () => {
   return (
-    <NavigationContainer>
+    <NavigationContainer
+      onStateChange={state => {
+        if (getActiveRouteName(state) === 'Splash') {
+          return;
+        }
+
+        store.dispatch(setNavigationState(state ?? null));
+      }}
+    >
       <Stack.Navigator
         initialRouteName="Splash"
         screenOptions={{
@@ -80,7 +90,11 @@ const AuthNavigator = () => {
           component={PasswordResetSuccessScreen}
         />
         <Stack.Screen name="WelcomeBack" component={WelcomeBackScreen} />
-        <Stack.Screen name="SelectCountry" component={SelectCountryScreen} />
+        <Stack.Screen
+          name="SelectCountry"
+          component={SelectCountryScreen}
+          options={{ gestureEnabled: false, animation: 'fade' }}
+        />
         <Stack.Screen name="BasicInfo" component={BasicInfoScreen} />
         <Stack.Screen name="Education" component={EducationScreen} />
         <Stack.Screen name="Career" component={CareerScreen} />

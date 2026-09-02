@@ -5,21 +5,70 @@ import { Images } from '../../Assets';
 import { AuthStyles } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import { hp } from '../../Functions/responsive';
+import { isProfileSetupComplete } from '../../Functions/authNavigation';
+import { store, waitForPersistor } from '../../Redux';
 
 type Props = {
   navigation: {
     replace: (screen: string) => void;
+    reset: (state: {
+      index: number;
+      routes: Array<{ name: string; params?: object; state?: object }>;
+    }) => void;
   };
 };
 
 const SplashScreen = ({ navigation }: Props) => {
   useEffect(() => {
+    let cancelled = false;
+    let delayTimer: ReturnType<typeof setTimeout> | undefined;
 
-    const timer = setTimeout(() => {
+    const openSavedSession = async () => {
+      await waitForPersistor();
+
+      if (cancelled) {
+        return;
+      }
+
+      await new Promise<void>(resolve => {
+        delayTimer = setTimeout(resolve, 3500);
+      });
+
+      if (cancelled) {
+        return;
+      }
+
+      const { auth, profile, app } = store.getState();
+
+      if (auth.accessToken && isProfileSetupComplete(profile.profile)) {
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'Main' }],
+        });
+        return;
+      }
+
+      if (auth.accessToken) {
+        navigation.replace('SelectCountry');
+        return;
+      }
+
+      if (app.hasSeenWelcome) {
+        navigation.replace('Login');
+        return;
+      }
+
       navigation.replace('Onboarding');
-    }, 3500);
+    };
 
-    return () => clearTimeout(timer);
+    void openSavedSession();
+
+    return () => {
+      cancelled = true;
+      if (delayTimer) {
+        clearTimeout(delayTimer);
+      }
+    };
   }, [navigation]);
 
   return (

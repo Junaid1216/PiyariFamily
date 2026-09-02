@@ -2,6 +2,7 @@ import axios, { AxiosError, AxiosRequestConfig } from 'axios';
 import { API_CONFIG } from './config';
 import { ENDPOINTS } from './endpoints';
 import { toFormData, type FormValue } from './formData';
+import { isOtpCooldownError } from './otpCooldown';
 import { tokenStorage } from './tokenStorage';
 import type { ApiErrorResponse, ApiResult } from './types';
 
@@ -14,6 +15,23 @@ const PUBLIC_AUTH_PATHS = [
   ENDPOINTS.AUTH.VERIFY_RESET_OTP,
   ENDPOINTS.AUTH.SET_NEW_PASSWORD,
 ];
+
+const OTP_COOLDOWN_PATHS = [
+  ENDPOINTS.AUTH.FORGOT_PASSWORD,
+  ENDPOINTS.AUTH.RESEND_EMAIL_OTP,
+  ENDPOINTS.VERIFY_PHONE_SEND,
+];
+
+const isOtpCooldownRequest = (url?: string) => {
+  if (!url) {
+    return false;
+  }
+
+  const path = url.split('?')[0];
+  return OTP_COOLDOWN_PATHS.some(
+    endpoint => path === endpoint || path.endsWith(endpoint),
+  );
+};
 
 const isPublicAuthRequest = (url?: string) => {
   if (!url) {
@@ -103,6 +121,19 @@ axiosInstance.interceptors.response.use(
     return response;
   },
   (error: AxiosError<ApiErrorResponse>) => {
+    if (
+      error.response?.status === 429 &&
+      isOtpCooldownRequest(error.config?.url) &&
+      isOtpCooldownError(error)
+    ) {
+      return {
+        ...error.response,
+        config: error.config,
+        data: error.response.data,
+        status: 429,
+      };
+    }
+
     console.log('API Error:', {
       method: error.config?.method?.toUpperCase(),
       url: error.config?.url,
@@ -110,18 +141,6 @@ axiosInstance.interceptors.response.use(
       data: error.response?.data ?? error.message,
     });
     logReduxOnApiError();
-
-    const skipTokenClear = Boolean(
-      (error.config as { skipTokenClear?: boolean } | undefined)?.skipTokenClear,
-    );
-
-    if (
-      error.response?.status === 401 &&
-      !skipTokenClear &&
-      !isPublicAuthRequest(error.config?.url)
-    ) {
-      tokenStorage.clear();
-    }
 
     return Promise.reject(error);
   },

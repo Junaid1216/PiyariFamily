@@ -53,10 +53,19 @@ export type MessageResponse = {
 
 export type OtpActionResponse = MessageResponse & {
   resend_after_seconds?: number;
+  otp_active?: boolean;
+  can_request_new_otp_at?: string;
+  expires_in_minutes?: number;
+  expires_in_seconds?: number;
 };
 
 export type ApiErrorResponse = {
   success?: boolean;
   message?: string;
   errors?: Record<string, string[]>;
+  otp_active?: boolean;
+  can_request_new_otp_at?: string;
+  expires_in_minutes?: number;
+  expires_in_seconds?: number;
+  resend_after_seconds?: number;
 };

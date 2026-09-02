@@ -37,7 +37,7 @@ const MessagesScreen = () => {
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
       <ScreenHeader
         title={Strings.messagesTitle}
-        onBack={() => navigation.goBack()}
+        onBack={() => navigation.getParent()?.navigate('Home')}
         rightElement={
           <TouchableOpacity
             style={styles.notificationBtn}

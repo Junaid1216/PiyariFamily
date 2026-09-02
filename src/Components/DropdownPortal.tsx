@@ -38,6 +38,7 @@ type Menu = {
 
 const Ctx = createContext<{
   openMenu: (menu: Menu) => void;
+  patchMenu: (patch: Partial<Menu>) => void;
   closeMenu: () => void;
   menu: Menu | null;
   hostRef: React.RefObject<View | null>;
@@ -62,10 +63,13 @@ export const DropdownPortalProvider = ({
   const hostRef = useRef<View>(null);
 
   const openMenu = useCallback((next: Menu) => setMenu(next), []);
+  const patchMenu = useCallback((patch: Partial<Menu>) => {
+    setMenu(prev => (prev ? { ...prev, ...patch } : prev));
+  }, []);
   const closeMenu = useCallback(() => setMenu(null), []);
 
   return (
-    <Ctx.Provider value={{ openMenu, closeMenu, menu, hostRef }}>
+    <Ctx.Provider value={{ openMenu, patchMenu, closeMenu, menu, hostRef }}>
       {children}
     </Ctx.Provider>
   );
@@ -88,6 +92,23 @@ export const DropdownSafeScrollView = React.forwardRef<
 
 export const DropdownOverlayHost = () => {
   const { menu, closeMenu, hostRef } = useDropdownPortal();
+  const allowSelectRef = useRef(false);
+  const menuSession = menu
+    ? `${menu.x}:${menu.y}:${menu.width}:${menu.options.join('|')}`
+    : '';
+
+  useEffect(() => {
+    allowSelectRef.current = false;
+    if (!menuSession) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      allowSelectRef.current = true;
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [menuSession]);
 
   if (!menu) {
     return <View ref={hostRef} collapsable={false} style={styles.host} pointerEvents="none" />;
@@ -126,21 +147,18 @@ export const DropdownOverlayHost = () => {
             return (
               <Pressable
                 key={item}
-                style={[
-                  styles.option,
-                  selected && styles.optionOn,
-                  last && styles.optionLast,
-                ]}
+                style={[styles.option, last && styles.optionLast]}
                 onPress={() => {
+                  if (!allowSelectRef.current) {
+                    return;
+                  }
                   menu.onSelect(item);
                   if (menu.closeOnSelect !== false) {
                     closeMenu();
                   }
                 }}
               >
-                <Text style={[styles.optionText, selected && styles.optionTextOn]}>
-                  {item}
-                </Text>
+                <Text style={styles.optionText}>{item}</Text>
                 {selected ? (
                   <Icon name="check" size={fs(18)} color={Colors.gold} />
                 ) : null}
@@ -172,11 +190,21 @@ export const DropdownOptionsOverlay = ({
   onSelect,
   onClose,
 }: OverlayProps) => {
-  const { openMenu, closeMenu, hostRef } = useDropdownPortal();
+  const { openMenu, patchMenu, closeMenu, hostRef } = useDropdownPortal();
   const onSelectRef = useRef(onSelect);
   const onCloseRef = useRef(onClose);
+  const selectedRef = useRef(selectedValues);
   onSelectRef.current = onSelect;
   onCloseRef.current = onClose;
+  selectedRef.current = selectedValues;
+
+  useEffect(() => {
+    if (!visible) {
+      return;
+    }
+
+    patchMenu({ selected: selectedValues, options });
+  }, [visible, selectedValues, options, patchMenu]);
 
   useEffect(() => {
     if (!visible) {
@@ -202,7 +230,7 @@ export const DropdownOptionsOverlay = ({
             y: y + height - overlayY,
             width,
             options,
-            selected: selectedValues,
+            selected: selectedRef.current,
             closeOnSelect,
             onSelect: value => onSelectRef.current(value),
             onClose: () => onCloseRef.current(),
@@ -254,9 +282,7 @@ const styles = StyleSheet.create({
     paddingVertical: hp('1.4%'),
     borderBottomWidth: 1,
     borderBottomColor: Colors.dividerPink,
-  },
-  optionOn: {
-    backgroundColor: Colors.inputBg,
+    backgroundColor: Colors.white,
   },
   optionLast: {
     borderBottomWidth: 0,
@@ -266,10 +292,6 @@ const styles = StyleSheet.create({
     fontSize: FontSizes.body,
     fontFamily: Fonts.regular,
     color: Colors.text,
-  },
-  optionTextOn: {
-    fontFamily: Fonts.semiBold,
-    color: Colors.primary,
   },
 });
 

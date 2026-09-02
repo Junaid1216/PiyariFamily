@@ -1,4 +1,4 @@
-export { store, persistor } from './store';
+export { store, persistor, waitForPersistor } from './store';
 export type { RootState, AppDispatch } from './store';
 export { clearSession } from './clearSession';
 export { useAppDispatch, useAppSelector } from './hooks';
@@ -15,13 +15,26 @@ export {
 } from './slices/authSlice';
 export type { AuthState } from './slices/authSlice';
 export {
+  setHasSeenWelcome,
+  setNavigationState,
+  clearNavigationState,
+  setLastAccount,
+  selectHasSeenWelcome,
+  selectNavigationState,
+  selectLastAccountName,
+  selectLastAccountEmail,
+} from './slices/appSlice';
+export type { AppUiState, PersistedNavigationState } from './slices/appSlice';
+export {
   setProfile,
   setAccountStatus,
+  setSetupComplete,
   clearProfile,
   selectProfile,
   selectAccountStatus,
   selectIsAccountInactive,
   selectProfilePhoto,
+  selectSetupComplete,
 } from './slices/profileSlice';
 export type { ProfileState } from './slices/profileSlice';
 export {

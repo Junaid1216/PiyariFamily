@@ -94,13 +94,13 @@ const matchIncomeRange = (
 
 const CareerScreen = ({ navigation }: Props) => {
   const insets = useSafeAreaInsets();
-  const [employmentType, setEmploymentType] =
-    useState<EmploymentType>('Employed');
+  const [employmentType, setEmploymentType] = useState<EmploymentType | ''>('');
   const [jobTitle, setJobTitle] = useState('');
   const [company, setCompany] = useState('');
   const [incomeRange, setIncomeRange] = useState<IncomeRange | ''>('');
-  const [residenceStatus, setResidenceStatus] =
-    useState<ResidenceStatus>('Owned');
+  const [residenceStatus, setResidenceStatus] = useState<ResidenceStatus | ''>(
+    '',
+  );
   const [openDropdown, setOpenDropdown] = useState<
     'income' | 'residence' | null
   >(null);
@@ -186,6 +186,10 @@ const CareerScreen = ({ navigation }: Props) => {
   }, []);
 
   const handleContinue = async () => {
+    if (!employmentType) {
+      Toast.show('Please select your employment type');
+      return;
+    }
     if (!jobTitle.trim()) {
       Toast.show('Please enter your job title');
       return;
@@ -196,6 +200,10 @@ const CareerScreen = ({ navigation }: Props) => {
     }
     if (!incomeRange) {
       Toast.show('Please select your income range');
+      return;
+    }
+    if (!residenceStatus) {
+      Toast.show('Please select your residence status');
       return;
     }
     if (saving) {

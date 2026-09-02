@@ -13,6 +13,7 @@ import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
 import { getFooterBottomPadding } from '../../Functions/safeArea';
 import { fs, hp, wp } from '../../Functions/responsive';
+import { setSetupComplete, store } from '../../Redux';
 
 type Props = {
   navigation: {
@@ -24,10 +25,11 @@ type Props = {
 const ProfileReadyScreen = ({ navigation }: Props) => {
   const insets = useSafeAreaInsets();
 
-  const goToHome = () => {
+  const goToLogin = () => {
+    store.dispatch(setSetupComplete(true));
     navigation.reset({
       index: 0,
-      routes: [{ name: 'Main' }],
+      routes: [{ name: 'Login' }],
     });
   };
 
@@ -74,7 +76,7 @@ const ProfileReadyScreen = ({ navigation }: Props) => {
         >
           <PrimaryButton
             title={Strings.continueBtn}
-            onPress={goToHome}
+            onPress={goToLogin}
             showArrow
           />
         </View>

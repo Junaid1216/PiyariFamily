@@ -12,6 +12,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import authReducer from './slices/authSlice';
 import profileReducer from './slices/profileSlice';
+import appReducer from './slices/appSlice';
 import homeReducer from './slices/homeSlice';
 import shortlistReducer from './slices/shortlistSlice';
 import referralReducer from './slices/referralSlice';
@@ -25,12 +26,13 @@ const reactotronEnhancer =
 const persistConfig = {
   key: 'root',
   storage: AsyncStorage,
-  whitelist: ['auth', 'profile'],
+  whitelist: ['auth', 'profile', 'app'],
 };
 
 const rootReducer = combineReducers({
   auth: authReducer,
   profile: profileReducer,
+  app: appReducer,
   home: homeReducer,
   shortlist: shortlistReducer,
   referral: referralReducer,
@@ -55,6 +57,21 @@ export const store = configureStore({
 });
 
 export const persistor = persistStore(store);
+
+export const waitForPersistor = () =>
+  new Promise<void>(resolve => {
+    if (persistor.getState().bootstrapped) {
+      resolve();
+      return;
+    }
+
+    const unsubscribe = persistor.subscribe(() => {
+      if (persistor.getState().bootstrapped) {
+        unsubscribe();
+        resolve();
+      }
+    });
+  });
 
 export type RootState = ReturnType<typeof store.getState>;
 export type AppDispatch = typeof store.dispatch;

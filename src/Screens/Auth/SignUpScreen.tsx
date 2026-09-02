@@ -6,7 +6,7 @@ import {
   TouchableWithoutFeedback,
   View,
 } from 'react-native';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import KeyboardScrollView from '../../Components/KeyboardScrollView';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Toast from 'react-native-simple-toast';
 import { Images } from '../../Assets';
@@ -20,14 +20,26 @@ import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
-import { authService, ENDPOINTS, getApiErrorMessage } from '../../API';
-import { fs, hp, wp } from '../../Functions/responsive';
+import {
+  authService,
+  getApiErrorMessage,
+  isApiSuccess,
+} from '../../API';
+import { hp, wp } from '../../Functions/responsive';
 
 type Props = {
   navigation: {
     goBack: () => void;
     canGoBack?: () => boolean;
-    replace: (screen: string) => void;
+    replace: (
+      screen: string,
+      params?: {
+        email?: string;
+        autoSend?: boolean;
+        password?: string;
+        name?: string;
+      },
+    ) => void;
     navigate: (
       screen: string,
       params?: {
@@ -38,19 +50,6 @@ type Props = {
       },
     ) => void;
   };
-};
-
-const isEmailAlreadyRegistered = (error: unknown) => {
-  const data = (error as any)?.response?.data;
-  const fieldErrors = data?.errors
-    ? Object.values(data.errors).flat().join(' ')
-    : '';
-  const text = `${data?.message ?? ''} ${fieldErrors}`.toLowerCase();
-  return (
-    text.includes('already been taken') ||
-    text.includes('already exists') ||
-    text.includes('already registered')
-  );
 };
 
 const SignUpScreen = ({ navigation }: Props) => {
@@ -103,21 +102,21 @@ const SignUpScreen = ({ navigation }: Props) => {
         password_confirmation: confirmPassword,
       });
 
-      if (response?.status == 200 || response?.success == 200 || response?.success === true) {
+      if (
+        isApiSuccess(response.status, response.success) &&
+        response.success !== false
+      ) {
         Toast.show(response.message || 'Account created successfully', Toast.LONG);
-        navigation.replace('Login');
+        navigation.replace('VerifyEmail', {
+          email: email.trim(),
+          password,
+          name: fullName.trim(),
+        });
         return;
       }
 
       Toast.show(response.message || 'Registration failed. Please try again.');
     } catch (error) {
-
-      if (isEmailAlreadyRegistered(error)) {
-        Toast.show('This email is already registered. Please login.', Toast.LONG);
-        navigation.replace('Login');
-        return;
-      }
-
       Toast.show(getApiErrorMessage(error));
     } finally {
       setLoading(false);
@@ -128,16 +127,12 @@ const SignUpScreen = ({ navigation }: Props) => {
     <AuthBackground>
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <View style={styles.root}>
-          <KeyboardAwareScrollView
+          <KeyboardScrollView
             style={styles.scrollView}
             contentContainerStyle={[
               styles.scroll,
               { paddingBottom: Math.max(insets.bottom + hp('2%'), hp('4%')) },
             ]}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={true}
-            enableOnAndroid
-            bounces={false}
           >
             <BackButton onPress={handleBack} />
 
@@ -212,7 +207,7 @@ const SignUpScreen = ({ navigation }: Props) => {
             />
 
             <View style={styles.bottomSpacer} />
-          </KeyboardAwareScrollView>
+          </KeyboardScrollView>
         </View>
       </TouchableWithoutFeedback>
     </AuthBackground>

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  BackHandler,
   FlatList,
   StyleSheet,
   Text,
@@ -15,9 +16,8 @@ import {
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-simple-toast';
 import { AxiosError } from 'axios';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import BackButton from '../../Components/BackButton';
 import PrimaryButton from '../../Components/PrimaryButton';
 import {
   Api,
@@ -91,6 +91,17 @@ const SelectCountryScreen = () => {
   const selectedCountry = useMemo(
     () => countries.find(country => country.id === selectedId),
     [countries, selectedId],
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      const onHardwareBack = () => true;
+      const sub = BackHandler.addEventListener(
+        'hardwareBackPress',
+        onHardwareBack,
+      );
+      return () => sub.remove();
+    }, []),
   );
 
   useEffect(() => {
@@ -237,20 +248,10 @@ const SelectCountryScreen = () => {
     }
   }, [city, navigation, saving, selectedCountry, state]);
 
-  const handleBack = () => {
-    if (navigation.canGoBack()) {
-      navigation.goBack();
-      return;
-    }
-
-    navigation.replace('Login');
-  };
-
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
       <View style={styles.content}>
-        <BackButton variant="pink" onPress={handleBack} />
-
+        <View style={styles.headerSpacer} />
         <Text style={styles.title}>{Strings.selectCountryTitle}</Text>
         <Text style={styles.subtitle}>{Strings.selectCountrySubtitle}</Text>
 
@@ -352,6 +353,11 @@ const styles = StyleSheet.create({
     flex: 1,
     marginTop: wp('2%'),
     paddingHorizontal: AuthStyles.horizontalPadding,
+  },
+  headerSpacer: {
+    width: AuthStyles.backButtonSize,
+    height: AuthStyles.backButtonSize,
+    marginBottom: hp('2.5%'),
   },
   title: {
     fontSize: FontSizes.h2,

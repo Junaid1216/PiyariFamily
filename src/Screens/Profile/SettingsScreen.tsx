@@ -226,7 +226,7 @@ const SettingsScreen = () => {
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
       <ScreenHeader
         title={Strings.settings}
-        onBack={() => navigation.goBack()}
+        onBack={() => navigation.getParent()?.navigate('Home')}
       />
 
       <ScrollView

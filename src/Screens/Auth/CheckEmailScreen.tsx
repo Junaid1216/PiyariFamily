@@ -7,7 +7,7 @@ import {
   View,
 } from 'react-native';
 import { RouteProp, useRoute } from '@react-navigation/native';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import KeyboardScrollView from '../../Components/KeyboardScrollView';
 import Toast from 'react-native-simple-toast';
 import AuthBackground from '../../Components/AuthBackground';
 import AuthFooterHint from '../../Components/AuthFooterHint';
@@ -22,7 +22,12 @@ import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
-import { authService, getApiErrorMessage } from '../../API';
+import {
+  authService,
+  getApiErrorMessage,
+  isApiSuccess,
+  isOtpCooldownError,
+} from '../../API';
 import { AuthStackParamList } from '../../Navigation/AuthNavigator';
 import { hp, wp } from '../../Functions/responsive';
 
@@ -41,8 +46,14 @@ const CheckEmailScreen = ({ navigation }: Props) => {
 
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(RESEND_COOLDOWN_SECONDS);
   const [resendCycle, setResendCycle] = useState(0);
+
+  const startCooldown = () => {
+    setResendCooldown(RESEND_COOLDOWN_SECONDS);
+    setResendCycle(cycle => cycle + 1);
+  };
 
   const handleVerify = async () => {
     if (code.length !== 6) {
@@ -57,7 +68,7 @@ const CheckEmailScreen = ({ navigation }: Props) => {
         otp: code,
       });
 
-      if (response?.status == 200) {
+      if (isApiSuccess(response.status, response.success)) {
         Toast.show(response.message || 'OTP verified successfully');
         navigation.navigate('CodeVerified', { email });
         return;
@@ -72,19 +83,36 @@ const CheckEmailScreen = ({ navigation }: Props) => {
   };
 
   const handleResend = async () => {
+    if (resending) {
+      return;
+    }
+
+    setResending(true);
+
     try {
       const response = await authService.forgotPassword({ email });
 
-      if (response?.status == 200) {
+      if (isApiSuccess(response.status, response.success)) {
         Toast.show(response.message || 'Reset code resent');
-        setResendCooldown(RESEND_COOLDOWN_SECONDS);
-        setResendCycle(cycle => cycle + 1);
+        startCooldown();
+        return;
+      }
+
+      if (isOtpCooldownError(response)) {
+        startCooldown();
         return;
       }
 
       Toast.show(response.message || 'Failed to resend code. Please try again.');
     } catch (error) {
+      if (isOtpCooldownError(error)) {
+        startCooldown();
+        return;
+      }
+
       Toast.show(getApiErrorMessage(error));
+    } finally {
+      setResending(false);
     }
   };
 
@@ -92,13 +120,9 @@ const CheckEmailScreen = ({ navigation }: Props) => {
     <AuthBackground>
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <View style={styles.root}>
-          <KeyboardAwareScrollView
+          <KeyboardScrollView
             style={styles.scrollView}
             contentContainerStyle={styles.scroll}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={true}
-            enableOnAndroid
-            bounces={false}
           >
             <BackButton variant="pink" onPress={() => navigation.goBack()} />
 
@@ -112,6 +136,7 @@ const CheckEmailScreen = ({ navigation }: Props) => {
             <ResendCodeSection
               key={resendCycle}
               cooldownSeconds={resendCooldown}
+              loading={resending}
               onResend={handleResend}
             />
 
@@ -129,7 +154,7 @@ const CheckEmailScreen = ({ navigation }: Props) => {
                 style={styles.footerHint}
               />
             </View>
-          </KeyboardAwareScrollView>
+          </KeyboardScrollView>
         </View>
       </TouchableWithoutFeedback>
     </AuthBackground>
@@ -167,7 +192,7 @@ const styles = StyleSheet.create({
   },
   flexSpacer: {
     flex: 1,
-    minHeight: hp('10%'),
+    minHeight: hp('2%'),
   },
   bottomSection: {
     width: '100%',

@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import KeyboardScrollView from '../../Components/KeyboardScrollView';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-simple-toast';
 import { AxiosError } from 'axios';
@@ -115,13 +115,9 @@ const VerifyProfileScreen = () => {
     <AuthBackground variant="white">
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <View style={styles.root}>
-          <KeyboardAwareScrollView
+          <KeyboardScrollView
             style={styles.scrollView}
             contentContainerStyle={styles.scroll}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={true}
-            enableOnAndroid
-            bounces={false}
           >
             <BackButton variant="pink" onPress={() => navigation.goBack()} />
 
@@ -178,7 +174,7 @@ const VerifyProfileScreen = () => {
                 style={styles.footerHint}
               />
             </View>
-          </KeyboardAwareScrollView>
+          </KeyboardScrollView>
         </View>
       </TouchableWithoutFeedback>
     </AuthBackground>
@@ -256,7 +252,7 @@ const styles = StyleSheet.create({
   },
   flexSpacer: {
     flex: 1,
-    minHeight: hp('8%'),
+    minHeight: hp('2%'),
   },
   bottomSection: {
     width: '100%',

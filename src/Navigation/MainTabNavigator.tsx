@@ -75,6 +75,7 @@ const MainTabNavigator = () => {
 
   return (
     <Tab.Navigator
+      backBehavior="firstRoute"
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarActiveTintColor: Colors.primary,

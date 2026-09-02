@@ -75,7 +75,7 @@ const FaithCommunityScreen = ({ navigation }: Props) => {
   const [religion, setReligion] = useState<Religion | ''>('');
   const [community, setCommunity] = useState('');
   const [sect, setSect] = useState('');
-  const [motherTongue, setMotherTongue] = useState<MotherTongue>('Urdu');
+  const [motherTongue, setMotherTongue] = useState<MotherTongue | ''>('');
   const [otherLanguages, setOtherLanguages] = useState<OtherLanguage[]>([]);
   const [openDropdown, setOpenDropdown] = useState<
     'religion' | 'motherTongue' | 'languages' | null
@@ -143,7 +143,7 @@ const FaithCommunityScreen = ({ navigation }: Props) => {
 
     const payload = {
       religion: RELIGION_TO_API[religion],
-      mother_tongue: motherTongue,
+      ...(motherTongue ? { mother_tongue: motherTongue } : {}),
       community: communityValue,
       sect: sectValue,
       other_languages: otherLanguages,
@@ -157,7 +157,7 @@ const FaithCommunityScreen = ({ navigation }: Props) => {
       if (res?.status == 200) {
         saveProfileCache({
           religion: RELIGION_TO_API[religion],
-          mother_tongue: motherTongue,
+          ...(motherTongue ? { mother_tongue: motherTongue } : {}),
           community: communityValue,
           sect: sectValue,
           other_languages: otherLanguages,

@@ -20,6 +20,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-simple-toast';
 import { Images } from '../../Assets';
+import BackButton from '../../Components/BackButton';
 import {
   Api,
   buildMatchSearchParams,
@@ -239,6 +240,11 @@ const SearchScreen = () => {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.titleRow}>
+          <BackButton
+            variant="pink"
+            compact
+            onPress={() => navigation.getParent()?.navigate('Home')}
+          />
           <Text style={styles.title}>{Strings.findYourMatch}</Text>
           <TouchableOpacity
             style={styles.filterBtn}

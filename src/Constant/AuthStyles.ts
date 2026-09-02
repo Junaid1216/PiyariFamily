@@ -9,7 +9,7 @@ export const AuthStyles = {
   buttonHeight: hp('6.4%'),
   logoSize: wp('17%'),
   logoRadius: wp('4.3%'),
-  bottomSectionPadding: hp('8%'),
+  bottomSectionPadding: hp('2%'),
   bottomLinkTop: hp('2%'),
   footerHintTop: hp('1.8%'),
   backButtonSize: wp('10.7%'),

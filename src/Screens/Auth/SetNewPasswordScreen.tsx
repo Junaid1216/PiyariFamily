@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import KeyboardScrollView from '../../Components/KeyboardScrollView';
 import Toast from 'react-native-simple-toast';
 import AuthBackground from '../../Components/AuthBackground';
 import AuthIconBadge from '../../Components/AuthIconBadge';
@@ -88,13 +88,9 @@ const SetNewPasswordScreen = () => {
     <AuthBackground>
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <View style={styles.root}>
-          <KeyboardAwareScrollView
+          <KeyboardScrollView
             style={styles.scrollView}
             contentContainerStyle={styles.scroll}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={true}
-            enableOnAndroid
-            bounces={false}
           >
             <BackButton variant="pink" onPress={() => navigation.goBack()} />
 
@@ -138,7 +134,7 @@ const SetNewPasswordScreen = () => {
                 showArrow
               />
             </View>
-          </KeyboardAwareScrollView>
+          </KeyboardScrollView>
         </View>
       </TouchableWithoutFeedback>
     </AuthBackground>
@@ -176,7 +172,7 @@ const styles = StyleSheet.create({
   },
   flexSpacer: {
     flex: 1,
-    minHeight: hp('6%'),
+    minHeight: hp('2%'),
   },
   bottomSection: {
     width: '100%',

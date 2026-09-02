@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import KeyboardScrollView from '../../Components/KeyboardScrollView';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-simple-toast';
 import { AxiosError } from 'axios';
@@ -23,8 +23,8 @@ import ResendCodeSection, {
 } from '../../Components/ResendCodeSection';
 import {
   Api,
-  ENDPOINTS,
   getApiErrorMessage,
+  isOtpCooldownError,
   type ApiErrorResponse,
 } from '../../API';
 import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
@@ -47,6 +47,7 @@ const VerifyProfileCodeScreen = () => {
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
   const [resendCycle, setResendCycle] = useState(0);
+  const [resendCooldown, setResendCooldown] = useState(RESEND_COOLDOWN_SECONDS);
 
   const handleVerify = async () => {
     if (code.length !== 6) {
@@ -91,11 +92,21 @@ const VerifyProfileCodeScreen = () => {
 
       if (res?.status == 200) {
         Toast.show(res?.message ?? 'Verification code resent');
+        setResendCooldown(RESEND_COOLDOWN_SECONDS);
+        setResendCycle(cycle => cycle + 1);
+      } else if (isOtpCooldownError(res)) {
+        setResendCooldown(RESEND_COOLDOWN_SECONDS);
         setResendCycle(cycle => cycle + 1);
       } else {
         Toast.show(res?.message ?? 'Failed to resend code', Toast.LONG);
       }
     } catch (error) {
+      if (isOtpCooldownError(error)) {
+        setResendCooldown(RESEND_COOLDOWN_SECONDS);
+        setResendCycle(cycle => cycle + 1);
+        return;
+      }
+
       const axiosError = error as AxiosError<ApiErrorResponse>;
       Toast.show(getApiErrorMessage(axiosError), Toast.LONG);
     } finally {
@@ -107,13 +118,9 @@ const VerifyProfileCodeScreen = () => {
     <AuthBackground variant="white">
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <View style={styles.root}>
-          <KeyboardAwareScrollView
+          <KeyboardScrollView
             style={styles.scrollView}
             contentContainerStyle={styles.scroll}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={true}
-            enableOnAndroid
-            bounces={false}
           >
             <BackButton variant="pink" onPress={() => navigation.goBack()} />
 
@@ -141,7 +148,7 @@ const VerifyProfileCodeScreen = () => {
 
             <ResendCodeSection
               key={resendCycle}
-              cooldownSeconds={RESEND_COOLDOWN_SECONDS}
+              cooldownSeconds={resendCooldown}
               loading={resending}
               onResend={handleResend}
             />
@@ -160,7 +167,7 @@ const VerifyProfileCodeScreen = () => {
                 style={styles.footerHint}
               />
             </View>
-          </KeyboardAwareScrollView>
+          </KeyboardScrollView>
         </View>
       </TouchableWithoutFeedback>
     </AuthBackground>
@@ -221,7 +228,7 @@ const styles = StyleSheet.create({
   },
   flexSpacer: {
     flex: 1,
-    minHeight: hp('8%'),
+    minHeight: hp('2%'),
   },
   bottomSection: {
     width: '100%',

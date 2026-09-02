@@ -11,7 +11,7 @@ import {
 import LinearGradient from 'react-native-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import KeyboardScrollView from '../../Components/KeyboardScrollView';
 import {
   SafeAreaView,
   useSafeAreaInsets,
@@ -151,17 +151,12 @@ const ChangePasswordScreen = () => {
             style={styles.screenHeader}
           />
 
-          <KeyboardAwareScrollView
+          <KeyboardScrollView
             style={styles.flex}
             contentContainerStyle={[
               styles.scrollContent,
               { paddingBottom: getFooterBottomPadding(insets.bottom) },
             ]}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={true}
-            enableOnAndroid
-            extraScrollHeight={hp('2%')}
-            bounces={false}
           >
             <View style={styles.iconBadge}>
               <LinearGradient
@@ -231,7 +226,7 @@ const ChangePasswordScreen = () => {
                 {Strings.forgotYourPassword}
               </Text>
             </TouchableOpacity>
-          </KeyboardAwareScrollView>
+          </KeyboardScrollView>
         </View>
       </TouchableWithoutFeedback>
     </SafeAreaView>

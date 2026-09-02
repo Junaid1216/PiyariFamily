@@ -7,7 +7,7 @@ import {
   View,
 } from 'react-native';
 import { RouteProp, useRoute } from '@react-navigation/native';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import KeyboardScrollView from '../../Components/KeyboardScrollView';
 import Toast from 'react-native-simple-toast';
 import AuthBackground from '../../Components/AuthBackground';
 import AuthFooterHint from '../../Components/AuthFooterHint';
@@ -22,33 +22,31 @@ import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
-import { authService, ENDPOINTS, getApiErrorMessage } from '../../API';
 import {
-  navigateAfterLogin,
-  resolvePostLoginRoute,
-} from '../../Functions/authNavigation';
+  authService,
+  getApiErrorMessage,
+  isApiSuccess,
+  isOtpCooldownError,
+} from '../../API';
 import { AuthStackParamList } from '../../Navigation/AuthNavigator';
+import { navigateAfterLogin } from '../../Functions/authNavigation';
 import { hp, wp } from '../../Functions/responsive';
 import { setAuthSession, store, clearProfile } from '../../Redux';
 
 type Props = {
   navigation: {
     goBack: () => void;
-    replace: (screen: string) => void;
+    replace: (
+      screen: string,
+      params?: {
+        email?: string;
+      },
+    ) => void;
     reset: (state: { index: number; routes: Array<{ name: string }> }) => void;
   };
 };
 
 type VerifyEmailRoute = RouteProp<AuthStackParamList, 'VerifyEmail'>;
-
-const isSelectedEmailInvalid = (error: unknown) => {
-  const data = (error as any)?.response?.data || error;
-  const fieldErrors = data?.errors
-    ? Object.values(data.errors).flat().join(' ')
-    : '';
-  const text = `${data?.message ?? ''} ${fieldErrors}`.toLowerCase();
-  return text.includes('selected email is invalid');
-};
 
 const VerifyEmailScreen = ({ navigation }: Props) => {
   const route = useRoute<VerifyEmailRoute>();
@@ -65,44 +63,6 @@ const VerifyEmailScreen = ({ navigation }: Props) => {
   );
   const [resendCycle, setResendCycle] = useState(0);
   const autoSendStarted = useRef(false);
-
-  const sendOtp = async (showToast = true) => {
-    if (resending) {
-      return;
-    }
-
-    setResending(true);
-
-    try {
-      const response = await authService.resendEmailOtp({ email });
-
-      if (response?.status == 200 || response?.success == 200 || response?.success === true) {
-        if (showToast) {
-          Toast.show(response.message || 'Verification code sent', Toast.LONG);
-        }
-        setResendCooldown(RESEND_COOLDOWN_SECONDS);
-        setResendCycle(cycle => cycle + 1);
-        return;
-      }
-
-      Toast.show(response.message || 'Failed to send code. Please try again.');
-    } catch (error) {
-      Toast.show(getApiErrorMessage(error));
-    } finally {
-      setResending(false);
-    }
-  };
-
-  useEffect(() => {
-    if (!autoSend || autoSendStarted.current) {
-      return;
-    }
-
-    autoSendStarted.current = true;
-    sendOtp(true);
-    // Register already emails an OTP. Auto-send only for login → verify.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoSend, email]);
 
   const goToNextScreen = async (token?: string | null) => {
     let nextToken = token || store.getState().auth.accessToken;
@@ -141,15 +101,58 @@ const VerifyEmailScreen = ({ navigation }: Props) => {
     );
 
     Toast.show('Email verified successfully');
+    navigateAfterLogin(navigation, 'SelectCountry');
+  };
 
-    if (isNewAccount) {
-      navigateAfterLogin(navigation, 'SelectCountry');
+  const sendOtp = async (showToast = true) => {
+    if (resending) {
       return;
     }
 
-    const nextRoute = await resolvePostLoginRoute();
-    navigateAfterLogin(navigation, nextRoute);
+    setResending(true);
+
+    try {
+      const response = await authService.resendEmailOtp({ email });
+
+      if (isApiSuccess(response.status, response.success)) {
+        if (showToast) {
+          Toast.show(response.message || 'Verification code sent', Toast.LONG);
+        }
+        setResendCooldown(RESEND_COOLDOWN_SECONDS);
+        setResendCycle(cycle => cycle + 1);
+        return;
+      }
+
+      if (isOtpCooldownError(response)) {
+        setResendCooldown(RESEND_COOLDOWN_SECONDS);
+        setResendCycle(cycle => cycle + 1);
+        return;
+      }
+
+      Toast.show(response.message || 'Failed to send code. Please try again.');
+    } catch (error) {
+      if (isOtpCooldownError(error)) {
+        setResendCooldown(RESEND_COOLDOWN_SECONDS);
+        setResendCycle(cycle => cycle + 1);
+        return;
+      }
+
+      Toast.show(getApiErrorMessage(error));
+    } finally {
+      setResending(false);
+    }
   };
+
+  useEffect(() => {
+    if (!autoSend || autoSendStarted.current) {
+      return;
+    }
+
+    autoSendStarted.current = true;
+    sendOtp(true);
+    // Register already emails an OTP. Auto-send only for login → verify.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSend, email]);
 
   const handleVerify = async () => {
     const otp = code.replace(/\D/g, '');
@@ -179,19 +182,8 @@ const VerifyEmailScreen = ({ navigation }: Props) => {
         return;
       }
 
-      if (isSelectedEmailInvalid(response)) {
-        await goToNextScreen();
-        return;
-      }
-
       Toast.show(response.message || 'Verification failed. Please try again.');
     } catch (error) {
-
-      if (isSelectedEmailInvalid(error)) {
-        await goToNextScreen();
-        return;
-      }
-
       Toast.show(getApiErrorMessage(error));
     } finally {
       setLoading(false);
@@ -206,13 +198,9 @@ const VerifyEmailScreen = ({ navigation }: Props) => {
     <AuthBackground variant="white">
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <View style={styles.root}>
-          <KeyboardAwareScrollView
+          <KeyboardScrollView
             style={styles.scrollView}
             contentContainerStyle={styles.scroll}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={true}
-            enableOnAndroid
-            bounces={false}
           >
             <BackButton variant="gray" onPress={() => navigation.goBack()} />
 
@@ -244,7 +232,7 @@ const VerifyEmailScreen = ({ navigation }: Props) => {
                 style={styles.footerHint}
               />
             </View>
-          </KeyboardAwareScrollView>
+          </KeyboardScrollView>
         </View>
       </TouchableWithoutFeedback>
     </AuthBackground>
@@ -282,7 +270,7 @@ const styles = StyleSheet.create({
   },
   flexSpacer: {
     flex: 1,
-    minHeight: hp('10%'),
+    minHeight: hp('2%'),
   },
   bottomSection: {
     width: '100%',

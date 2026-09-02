@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { CommonActions, useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
   SafeAreaView,
@@ -79,8 +79,25 @@ const ChooseYourPlanScreen = () => {
   );
 
   const goToHome = useCallback(() => {
-    navigation.popToTop();
-    navigation.getParent()?.navigate('Home');
+    let parent = navigation.getParent();
+
+    while (parent) {
+      const routeNames = parent.getState?.()?.routeNames;
+
+      if (routeNames?.includes('Home')) {
+        parent.navigate('Home', { screen: 'HomeMain' });
+        return;
+      }
+
+      parent = parent.getParent();
+    }
+
+    navigation.dispatch(
+      CommonActions.navigate({
+        name: 'Home',
+        params: { screen: 'HomeMain' },
+      }),
+    );
   }, [navigation]);
 
   useFocusEffect(
@@ -154,15 +171,7 @@ const ChooseYourPlanScreen = () => {
       <ScreenHeader
         title={Strings.chooseYourPlan}
         compact
-        leftElement={
-          <TouchableOpacity
-            style={styles.heartBtn}
-            activeOpacity={0.85}
-            onPress={goToHome}
-          >
-            <Icon name="heart" size={fs(18)} color={Colors.white} />
-          </TouchableOpacity>
-        }
+        onBack={goToHome}
       />
 
       <ScrollView
@@ -298,14 +307,6 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.background },
   loaderWrap: {
     minHeight: hp('50%'),
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  heartBtn: {
-    width: wp('10.5%'),
-    height: wp('10.5%'),
-    borderRadius: wp('2.8%'),
-    backgroundColor: Colors.gold,
     alignItems: 'center',
     justifyContent: 'center',
   },

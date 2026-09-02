@@ -7,7 +7,8 @@ import {
   TouchableWithoutFeedback,
   View,
 } from 'react-native';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import KeyboardScrollView from '../../Components/KeyboardScrollView';
+import { RouteProp, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Toast from 'react-native-simple-toast';
 import AuthBackground from '../../Components/AuthBackground';
@@ -21,31 +22,49 @@ import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
-import { authService, getApiErrorMessage, pickAuthToken } from '../../API';
-import { navigateAfterLogin } from '../../Functions/authNavigation';
+import {
+  authService,
+  getApiErrorMessage,
+  isApiSuccess,
+  pickAuthToken,
+} from '../../API';
+import { AuthStackParamList } from '../../Navigation/AuthNavigator';
+import { finishAuthNavigation } from '../../Functions/authNavigation';
 import { hp, wp } from '../../Functions/responsive';
-import { useAppSelector, selectUser } from '../../Redux';
+import { useAppSelector, selectLastAccountEmail, selectLastAccountName } from '../../Redux';
 
 type Props = {
   navigation: {
     navigate: (screen: string) => void;
-    replace: (screen: string) => void;
-    reset: (state: { index: number; routes: Array<{ name: string }> }) => void;
+    replace: (
+      screen: string,
+      params?: {
+        email?: string;
+        autoSend?: boolean;
+        password?: string;
+      },
+    ) => void;
+    reset: (state: {
+      index: number;
+      routes: Array<{ name: string; params?: object; state?: object }>;
+    }) => void;
   };
 };
 
-const goToHome = (
-  navigation: Props['navigation'],
-  message?: string,
-) => {
-  Toast.show(message || 'Logged in successfully', Toast.LONG);
-  navigateAfterLogin(navigation, 'Main');
-};
+const isLoginSuccess = (response?: {
+  status?: number;
+  success?: boolean | number;
+} | null) =>
+  Boolean(response && isApiSuccess(response.status, response.success) && pickAuthToken(response));
 
 const LoginScreen = ({ navigation }: Props) => {
   const insets = useSafeAreaInsets();
-  const user = useAppSelector(selectUser);
-  const [email, setEmail] = useState('');
+  const route = useRoute<RouteProp<AuthStackParamList, 'Login'>>();
+  const lastAccountName = useAppSelector(selectLastAccountName);
+  const lastAccountEmail = useAppSelector(selectLastAccountEmail);
+  const [email, setEmail] = useState(
+    route.params?.email?.trim() || lastAccountEmail || '',
+  );
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -62,15 +81,9 @@ const LoginScreen = ({ navigation }: Props) => {
         password,
       });
 
-      const token = pickAuthToken(response);
-
-      if (token || response.requires_verification) {
-        goToHome(
-          navigation,
-          response.requires_verification && !token
-            ? 'Logged in successfully'
-            : response.message,
-        );
+      if (isLoginSuccess(response)) {
+        Toast.show(response.message || 'Logged in successfully', Toast.LONG);
+        await finishAuthNavigation(navigation);
         return;
       }
 
@@ -78,15 +91,9 @@ const LoginScreen = ({ navigation }: Props) => {
     } catch (error) {
       const errorData = (error as any)?.response?.data;
 
-      const token = pickAuthToken(errorData);
-
-      if (token || errorData?.requires_verification) {
-        goToHome(
-          navigation,
-          errorData?.requires_verification && !token
-            ? 'Logged in successfully'
-            : errorData?.message,
-        );
+      if (isLoginSuccess(errorData)) {
+        Toast.show(errorData?.message || 'Logged in successfully', Toast.LONG);
+        await finishAuthNavigation(navigation);
         return;
       }
 
@@ -100,23 +107,19 @@ const LoginScreen = ({ navigation }: Props) => {
     <AuthBackground>
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <View style={styles.root}>
-          <KeyboardAwareScrollView
+          <KeyboardScrollView
             style={styles.scrollView}
             contentContainerStyle={[
               styles.scroll,
               { paddingBottom: Math.max(insets.bottom + hp('2%'), hp('4%')) },
             ]}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={true}
-            enableOnAndroid
-            bounces={false}
           >
             <AuthHeader />
 
             <View style={styles.formSection}>
               <Text style={styles.title}>
                 {Strings.welcomeBack}
-                {user?.name ? `, ${user.name.split(' ')[0]} !` : ' !'}
+                {lastAccountName ? `, ${lastAccountName.split(' ')[0]} !` : ' !'}
               </Text>
               <Text style={styles.subtitle}>{Strings.loginSubtitle}</Text>
 
@@ -178,7 +181,7 @@ const LoginScreen = ({ navigation }: Props) => {
             />
 
             <View style={styles.bottomSpacer} />
-          </KeyboardAwareScrollView>
+          </KeyboardScrollView>
         </View>
       </TouchableWithoutFeedback>
     </AuthBackground>
