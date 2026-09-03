@@ -14,32 +14,39 @@ type Props = {
 const AuthFooterHint = ({ text, style }: Props) => {
   return (
     <View style={[styles.container, style]}>
-      <Icon
-        name="information-outline"
-        size={fs(14)}
-        color={Colors.textLight}
-        style={styles.icon}
-      />
-      <Text style={styles.text}>{text}</Text>
+      <View style={styles.row}>
+        <Icon
+          name="information-outline"
+          size={fs(14)}
+          color={Colors.textLight}
+          style={styles.icon}
+        />
+        <Text style={styles.text}>{text}</Text>
+      </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     paddingHorizontal: wp('3.2%'),
   },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    flexShrink: 1,
+    maxWidth: '100%',
+  },
   icon: {
-    marginRight: wp('1.6%'),
+    marginRight: wp('1.2%'),
+    marginTop: fs(1),
   },
   text: {
     fontSize: FontSizes.caption,
     color: Colors.textLight,
     fontFamily: Fonts.regular,
-    textAlign: 'center',
+    textAlign: 'left',
     flexShrink: 1,
   },
 });

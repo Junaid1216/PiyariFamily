@@ -42,6 +42,10 @@ import { Strings } from '../../Constant/Strings';
 import { HomeStackParamList } from '../../Navigation/HomeStackNavigator';
 import { navigateToSubscription } from '../../Functions/subscriptionNavigation';
 import { navigateToProfileScreen } from '../../Functions/profileNavigation';
+import {
+  buildWelcomeGreeting,
+  greetingHasEmail,
+} from '../../Functions/welcomeGreeting';
 import { fs, hp, wp } from '../../Functions/responsive';
 import {
   store,
@@ -115,16 +119,15 @@ const HomeScreen = () => {
   const [loading, setLoading] = useState(true);
   const [reactivating, setReactivating] = useState(false);
   const [liking, setLiking] = useState(false);
+  const [showAllSuggested, setShowAllSuggested] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const sliderRef = useRef<FlatList<FeaturedMatch>>(null);
   const fetchingRef = useRef(false);
   const hasLoadedRef = useRef(false);
 
+  const welcomeGreeting = buildWelcomeGreeting(profile?.name, user?.name);
   const displayGreeting =
-    greeting ||
-    (user?.name
-      ? `Hello, ${user.name.split(' ')[0]}!`
-      : Strings.homeGreeting);
+    greeting && !greetingHasEmail(greeting) ? greeting : welcomeGreeting;
   const displaySubtitle = subtitle || Strings.homeSubtitle;
 
   const fetchHomeMatches = useCallback(async () => {
@@ -145,9 +148,7 @@ const HomeScreen = () => {
       return;
     }
 
-    const fallbackGreeting = user?.name
-      ? `Hello, ${user.name.split(' ')[0]}!`
-      : Strings.homeGreeting;
+    const fallbackGreeting = buildWelcomeGreeting(profile?.name, user?.name);
 
     const applyHomePayload = (
       featured: FeaturedMatch[],
@@ -208,7 +209,10 @@ const HomeScreen = () => {
       }
 
       const greetingParts = mapHomeGreeting(mapped.greeting);
-      const title = greetingParts.title || fallbackGreeting;
+      const title =
+        greetingParts.title && !greetingHasEmail(greetingParts.title)
+          ? greetingParts.title
+          : fallbackGreeting;
       const { arranged, homePayload } = applyHomePayload(
         mapped.featuredMatches,
         mapped.suggestedMatches,
@@ -259,7 +263,15 @@ const HomeScreen = () => {
       fetchingRef.current = false;
       setLoading(false);
     }
-  }, [dispatch, isAccountInactive, profile?.city, profile?.country, profile?.gender, user?.name]);
+  }, [
+    dispatch,
+    isAccountInactive,
+    profile?.city,
+    profile?.country,
+    profile?.gender,
+    profile?.name,
+    user?.name,
+  ]);
 
   const handleReactivate = async () => {
     if (reactivating) {
@@ -431,6 +443,77 @@ const HomeScreen = () => {
       });
     },
     [navigation],
+  );
+
+  const renderSuggestedCard = (match: SuggestedMatch) => (
+    <TouchableOpacity
+      key={match.id}
+      style={styles.suggestedCard}
+      activeOpacity={0.9}
+      onPress={() => openProfileDetail(match)}
+    >
+      <View style={styles.suggestedImageWrap}>
+        <Image
+          key={getImageCacheKey(match.image, match.id)}
+          source={match.image}
+          style={styles.suggestedImage}
+          resizeMode="cover"
+        />
+
+        <View style={styles.suggestedBadgeColumn}>
+          <View style={styles.suggestedTierBadge}>
+            <Icon
+              name={match.tier === 'VIP' ? 'star' : 'crown'}
+              size={fs(10)}
+              color={Colors.white}
+            />
+            <Text style={styles.suggestedTierText}>{match.tier}</Text>
+          </View>
+        </View>
+
+        {match.isVerified ? (
+          <View style={styles.suggestedVerifiedRow}>
+            <Image
+              source={Images.verifiedIcon}
+              style={styles.suggestedVerifiedIcon}
+              resizeMode="contain"
+            />
+            <Text style={styles.suggestedVerifiedText}>
+              {Strings.verifiedBadge}
+            </Text>
+          </View>
+        ) : null}
+      </View>
+
+      <View style={styles.suggestedBody}>
+        <Text style={styles.suggestedName}>
+          {match.name}, {match.age}
+        </Text>
+        <View style={styles.suggestedLocationRow}>
+          <Icon
+            name="map-marker-outline"
+            size={fs(11)}
+            color={Colors.textLight}
+          />
+          <Text style={styles.suggestedLocation}>{match.location}</Text>
+        </View>
+        <View style={styles.suggestedBottomRow}>
+          <View style={styles.professionTag}>
+            <Text style={styles.professionText}>{match.profession}</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.suggestedLikeBtn}
+            activeOpacity={0.85}
+          >
+            <Icon
+              name="heart-outline"
+              size={fs(16)}
+              color={Colors.primary}
+            />
+          </TouchableOpacity>
+        </View>
+      </View>
+    </TouchableOpacity>
   );
 
   const renderFeaturedCard = ({ item }: { item: FeaturedMatch }) => (
@@ -690,93 +773,25 @@ const HomeScreen = () => {
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>{Strings.suggestedMatches}</Text>
-          <TouchableOpacity activeOpacity={0.8}>
-            <Text style={styles.seeAll}>{Strings.seeAll} →</Text>
-          </TouchableOpacity>
+          {displaySuggested.length > 0 ? (
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => setShowAllSuggested(prev => !prev)}
+            >
+              <Text style={styles.seeAll}>
+                {showAllSuggested ? Strings.hide : `${Strings.seeAll} →`}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.suggestedList}
-        >
-          {displaySuggested.length > 0 ? (
-          displaySuggested.map(match => (
-            <TouchableOpacity
-              key={match.id}
-              style={styles.suggestedCard}
-              activeOpacity={0.9}
-              onPress={() => openProfileDetail(match)}
-            >
-              <View style={styles.suggestedImageWrap}>
-                <Image
-                  key={getImageCacheKey(match.image, match.id)}
-                  source={match.image}
-                  style={styles.suggestedImage}
-                  resizeMode="cover"
-                />
-
-                <View style={styles.suggestedBadgeColumn}>
-                  <View style={styles.suggestedTierBadge}>
-                    <Icon
-                      name={match.tier === 'VIP' ? 'star' : 'crown'}
-                      size={fs(10)}
-                      color={Colors.white}
-                    />
-                    <Text style={styles.suggestedTierText}>{match.tier}</Text>
-                  </View>
-
-                  {match.isVerified ? (
-                    <View style={styles.suggestedVerifiedRow}>
-                      <Image
-                        source={Images.verifiedIcon}
-                        style={styles.suggestedVerifiedIcon}
-                        resizeMode="contain"
-                      />
-                      <Text style={styles.suggestedVerifiedText}>
-                        {Strings.verifiedBadge}
-                      </Text>
-                    </View>
-                  ) : null}
-                </View>
-              </View>
-
-              <View style={styles.suggestedBody}>
-                <Text style={styles.suggestedName}>
-                  {match.name}, {match.age}
-                </Text>
-                <View style={styles.suggestedLocationRow}>
-                  <Icon
-                    name="map-marker-outline"
-                    size={fs(11)}
-                    color={Colors.textLight}
-                  />
-                  <Text style={styles.suggestedLocation}>{match.location}</Text>
-                </View>
-                <View style={styles.suggestedBottomRow}>
-                  <View style={styles.professionTag}>
-                    <Text style={styles.professionText}>
-                      {match.profession}
-                    </Text>
-                  </View>
-                  <TouchableOpacity
-                    style={styles.suggestedLikeBtn}
-                    activeOpacity={0.85}
-                  >
-                    <Icon
-                      name="heart-outline"
-                      size={fs(16)}
-                      color={Colors.primary}
-                    />
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </TouchableOpacity>
-          ))
-          ) : (
-            <Text style={styles.emptyText}>No suggested matches found</Text>
-          )}
-        </ScrollView>
+        {displaySuggested.length > 0 ? (
+          <View style={styles.suggestedGrid}>
+            {(showAllSuggested ? displaySuggested : displaySuggested.slice(0, 2)).map(renderSuggestedCard)}
+          </View>
+        ) : (
+          <Text style={styles.emptyText}>No suggested matches found</Text>
+        )}
           </>
         )}
 
@@ -1190,6 +1205,11 @@ const styles = StyleSheet.create({
     gap: wp('3%'),
     paddingRight: wp('2%'),
   },
+  suggestedGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: wp('3%'),
+  },
   suggestedCard: {
     width: wp('43%'),
     backgroundColor: Colors.white,
@@ -1241,6 +1261,9 @@ const styles = StyleSheet.create({
     gap: hp('0.35%'),
   },
   suggestedVerifiedRow: {
+    position: 'absolute',
+    left: wp('2%'),
+    bottom: hp('0.8%'),
     flexDirection: 'row',
     alignItems: 'center',
     gap: wp('1%'),

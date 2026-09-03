@@ -1,5 +1,6 @@
 import { NavigationProp, ParamListBase } from '@react-navigation/native';
 import { ProfileStackParamList } from '../Navigation/ProfileStackNavigator';
+import { getTabNavigation } from './tabNavigation';
 
 type ProfileScreen = keyof ProfileStackParamList;
 
@@ -8,5 +9,12 @@ export const navigateToProfileScreen = <T extends ProfileScreen>(
   screen: T,
   params?: ProfileStackParamList[T],
 ) => {
+  const tabNavigation = getTabNavigation(navigation);
+
+  if (tabNavigation) {
+    tabNavigation.navigate('Profile', { screen, params });
+    return;
+  }
+
   navigation.getParent()?.navigate('Profile', { screen, params });
 };

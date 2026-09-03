@@ -36,7 +36,7 @@ export type ApiResult<T> = {
 };
 
 export const isSuccessStatus = (status: number) =>
-  status === 200 || status === 201;
+  status === 200 || status === 201 || status === 204;
 
 export const isApiSuccess = (
   httpStatus?: number,
@@ -53,10 +53,12 @@ export type MessageResponse = {
 
 export type OtpActionResponse = MessageResponse & {
   resend_after_seconds?: number;
+  resend_after?: string;
   otp_active?: boolean;
   can_request_new_otp_at?: string;
   expires_in_minutes?: number;
   expires_in_seconds?: number;
+  expires_in?: string;
 };
 
 export type ApiErrorResponse = {

@@ -25,13 +25,13 @@ import { Strings } from '../../Constant/Strings';
 import {
   authService,
   getApiErrorMessage,
-  isApiSuccess,
-  isOtpCooldownError,
+  resolveOtpResendResult,
 } from '../../API';
 import { AuthStackParamList } from '../../Navigation/AuthNavigator';
 import { navigateAfterLogin } from '../../Functions/authNavigation';
 import { hp, wp } from '../../Functions/responsive';
 import { setAuthSession, store, clearProfile } from '../../Redux';
+import { pickPersonName } from '../../Functions/welcomeGreeting';
 
 type Props = {
   navigation: {
@@ -58,10 +58,9 @@ const VerifyEmailScreen = ({ navigation }: Props) => {
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
-  const [resendCooldown, setResendCooldown] = useState(
-    autoSend ? 0 : RESEND_COOLDOWN_SECONDS,
-  );
+  const [resendCooldown, setResendCooldown] = useState(RESEND_COOLDOWN_SECONDS);
   const [resendCycle, setResendCycle] = useState(0);
+  const [otpExpired, setOtpExpired] = useState(false);
   const autoSendStarted = useRef(false);
 
   const goToNextScreen = async (token?: string | null) => {
@@ -87,13 +86,17 @@ const VerifyEmailScreen = ({ navigation }: Props) => {
       store.dispatch(clearProfile());
     }
 
+    const existingUser = store.getState().auth.user;
+    const accountName =
+      pickPersonName(signupName, existingUser?.name) || signupName;
+
     store.dispatch(
       setAuthSession({
-        user: store.getState().auth.user ?? {
-          id: 0,
-          name: signupName,
-          email,
-          phone: '',
+        user: {
+          id: existingUser?.id ?? 0,
+          name: accountName,
+          email: existingUser?.email || email,
+          phone: existingUser?.phone || '',
           is_verified: true,
         },
         accessToken: nextToken || store.getState().auth.accessToken,
@@ -104,7 +107,42 @@ const VerifyEmailScreen = ({ navigation }: Props) => {
     navigateAfterLogin(navigation, 'SelectCountry');
   };
 
-  const sendOtp = async (showToast = true) => {
+  const applyResendResult = (source: unknown, showToast: boolean) => {
+    const result = resolveOtpResendResult(source);
+
+    if (result.sent) {
+      setOtpExpired(false);
+      setCode('');
+      setResendCooldown(result.seconds || RESEND_COOLDOWN_SECONDS);
+      setResendCycle(cycle => cycle + 1);
+
+      if (showToast) {
+        Toast.show(result.message, Toast.LONG);
+      }
+
+      return result;
+    }
+
+    if (result.cooldown) {
+      setResendCooldown(result.seconds || RESEND_COOLDOWN_SECONDS);
+      setResendCycle(cycle => cycle + 1);
+    }
+
+    return result;
+  };
+
+  const requestResend = async (force: boolean) => {
+    try {
+      return await authService.resendEmailOtp({
+        email,
+        resend: force,
+      });
+    } catch (error) {
+      return error;
+    }
+  };
+
+  const sendOtp = async (showToast = true, userRequested = false) => {
     if (resending) {
       return;
     }
@@ -112,31 +150,13 @@ const VerifyEmailScreen = ({ navigation }: Props) => {
     setResending(true);
 
     try {
-      const response = await authService.resendEmailOtp({ email });
+      const source = await requestResend(userRequested);
+      const result = applyResendResult(source, showToast);
 
-      if (isApiSuccess(response.status, response.success)) {
-        if (showToast) {
-          Toast.show(response.message || 'Verification code sent', Toast.LONG);
-        }
-        setResendCooldown(RESEND_COOLDOWN_SECONDS);
-        setResendCycle(cycle => cycle + 1);
-        return;
+      if (!result.sent && !result.cooldown && result.message) {
+        Toast.show(result.message, Toast.LONG);
       }
-
-      if (isOtpCooldownError(response)) {
-        setResendCooldown(RESEND_COOLDOWN_SECONDS);
-        setResendCycle(cycle => cycle + 1);
-        return;
-      }
-
-      Toast.show(response.message || 'Failed to send code. Please try again.');
     } catch (error) {
-      if (isOtpCooldownError(error)) {
-        setResendCooldown(RESEND_COOLDOWN_SECONDS);
-        setResendCycle(cycle => cycle + 1);
-        return;
-      }
-
       Toast.show(getApiErrorMessage(error));
     } finally {
       setResending(false);
@@ -159,6 +179,11 @@ const VerifyEmailScreen = ({ navigation }: Props) => {
 
     if (otp.length !== 6) {
       Toast.show('Please enter the 6-digit code');
+      return;
+    }
+
+    if (otpExpired) {
+      Toast.show('OTP expired. Please resend a new code.');
       return;
     }
 
@@ -191,7 +216,7 @@ const VerifyEmailScreen = ({ navigation }: Props) => {
   };
 
   const handleResend = () => {
-    sendOtp(true);
+    sendOtp(true, true);
   };
 
   return (
@@ -216,6 +241,10 @@ const VerifyEmailScreen = ({ navigation }: Props) => {
               cooldownSeconds={resendCooldown}
               loading={resending}
               onResend={handleResend}
+              onCooldownEnd={() => {
+                setOtpExpired(true);
+                setCode('');
+              }}
             />
 
             <View style={styles.flexSpacer} />

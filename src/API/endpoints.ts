@@ -5,6 +5,7 @@ export const ENDPOINTS = {
     VERIFY_EMAIL_OTP: '/verify-email-otp',
     RESEND_EMAIL_OTP: '/resend-email-otp',
     FORGOT_PASSWORD: '/forgot-password',
+    FORGOT_RESEND_OTP: '/forgot-resend-otp',
     VERIFY_RESET_OTP: '/verify-reset-otp',
     SET_NEW_PASSWORD: '/set-new-password',
     CHANGE_PASSWORD: '/change-password',

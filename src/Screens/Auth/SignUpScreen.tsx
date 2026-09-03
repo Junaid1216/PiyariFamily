@@ -38,6 +38,7 @@ type Props = {
         autoSend?: boolean;
         password?: string;
         name?: string;
+        resendAfterSeconds?: number;
       },
     ) => void;
     navigate: (
@@ -47,6 +48,7 @@ type Props = {
         autoSend?: boolean;
         password?: string;
         name?: string;
+        resendAfterSeconds?: number;
       },
     ) => void;
   };

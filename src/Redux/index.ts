@@ -19,6 +19,7 @@ export {
   setNavigationState,
   clearNavigationState,
   setLastAccount,
+  clearLastAccount,
   selectHasSeenWelcome,
   selectNavigationState,
   selectLastAccountName,

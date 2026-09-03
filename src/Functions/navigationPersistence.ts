@@ -88,7 +88,26 @@ export const resolveSessionNavigationState = ():
   }
 
   if (saved && isProfileSetupRoute(routeName)) {
-    return saved;
+    const setupRoutes = (saved.routes ?? []).filter(
+      route => route.name && route.name !== 'Main' && route.name !== 'Splash',
+    );
+
+    if (!setupRoutes.length) {
+      return stackState('SelectCountry');
+    }
+
+    const nextIndex = Math.min(
+      'index' in saved && typeof saved.index === 'number'
+        ? saved.index
+        : setupRoutes.length - 1,
+      setupRoutes.length - 1,
+    );
+
+    return {
+      ...saved,
+      index: nextIndex,
+      routes: setupRoutes,
+    };
   }
 
   return stackState('SelectCountry');

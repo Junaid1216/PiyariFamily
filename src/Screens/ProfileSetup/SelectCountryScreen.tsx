@@ -18,6 +18,7 @@ import Toast from 'react-native-simple-toast';
 import { AxiosError } from 'axios';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import BackButton from '../../Components/BackButton';
 import PrimaryButton from '../../Components/PrimaryButton';
 import {
   Api,
@@ -35,6 +36,7 @@ import { CountryOption, PROFILE_COUNTRIES } from '../../Constant/ProfileSetup';
 import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
 import { AuthStackParamList } from '../../Navigation/AuthNavigator';
+import { resetToLogin } from '../../Functions/authNavigation';
 import { getFooterBottomPadding } from '../../Functions/safeArea';
 import { fs, hp, wp } from '../../Functions/responsive';
 import { store } from '../../Redux';
@@ -93,15 +95,39 @@ const SelectCountryScreen = () => {
     [countries, selectedId],
   );
 
+  const goToLogin = useCallback(() => {
+    resetToLogin(navigation, { forgetAccount: false });
+  }, [navigation]);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', event => {
+      const actionType = event.data.action.type;
+
+      if (
+        actionType === 'GO_BACK' ||
+        actionType === 'POP' ||
+        actionType === 'POP_TO_TOP'
+      ) {
+        event.preventDefault();
+        goToLogin();
+      }
+    });
+
+    return unsubscribe;
+  }, [goToLogin, navigation]);
+
   useFocusEffect(
     useCallback(() => {
-      const onHardwareBack = () => true;
+      const onHardwareBack = () => {
+        goToLogin();
+        return true;
+      };
       const sub = BackHandler.addEventListener(
         'hardwareBackPress',
         onHardwareBack,
       );
       return () => sub.remove();
-    }, []),
+    }, [goToLogin]),
   );
 
   useEffect(() => {
@@ -251,7 +277,7 @@ const SelectCountryScreen = () => {
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
       <View style={styles.content}>
-        <View style={styles.headerSpacer} />
+        <BackButton variant="pink" onPress={goToLogin} />
         <Text style={styles.title}>{Strings.selectCountryTitle}</Text>
         <Text style={styles.subtitle}>{Strings.selectCountrySubtitle}</Text>
 
@@ -353,11 +379,6 @@ const styles = StyleSheet.create({
     flex: 1,
     marginTop: wp('2%'),
     paddingHorizontal: AuthStyles.horizontalPadding,
-  },
-  headerSpacer: {
-    width: AuthStyles.backButtonSize,
-    height: AuthStyles.backButtonSize,
-    marginBottom: hp('2.5%'),
   },
   title: {
     fontSize: FontSizes.h2,

@@ -38,9 +38,10 @@ export type AuthStackParamList = {
     autoSend?: boolean;
     password?: string;
     name?: string;
+    resendAfterSeconds?: number;
   };
   ForgotPassword: undefined;
-  CheckEmail: { email: string };
+  CheckEmail: { email: string; resendAfterSeconds?: number };
   CodeVerified: { email: string };
   SetNewPassword: { email: string };
   PasswordResetSuccess: undefined;

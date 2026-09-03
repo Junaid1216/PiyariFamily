@@ -20,7 +20,7 @@ import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
 import {
   Api,
-  ENDPOINTS,
+  isApiSuccess,
 } from '../../API';
 import { ProfileStackParamList } from '../../Navigation/ProfileStackNavigator';
 import { resetToLogin } from '../../Functions/authNavigation';
@@ -53,7 +53,7 @@ const AccountOptionsScreen = () => {
   const [deleting, setDeleting] = useState(false);
 
   const goToLogin = () => {
-    resetToLogin(navigation);
+    resetToLogin(navigation, { forgetAccount: true });
   };
 
   const handleDeactivate = async () => {
@@ -99,8 +99,8 @@ const AccountOptionsScreen = () => {
         const res = await Api.deleteAccount();
 
 
-        if (res?.status == 200) {
-          clearSession();
+        if (isApiSuccess(res?.status, res?.success)) {
+          await clearSession({ rememberAccount: false });
           Toast.show(res?.message || 'Account deleted successfully', Toast.LONG);
           goToLogin();
         } else {

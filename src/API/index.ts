@@ -10,6 +10,7 @@ export {
   getOtpCooldownMessage,
   isOtpCooldownError,
   pickOtpCooldownSeconds,
+  resolveOtpResendResult,
 } from './otpCooldown';
 export { findCountryMatch, mapCountries, toFlagCountryCode } from './mappers/countryMapper';
 export type {
@@ -94,12 +95,14 @@ export type {
   ReferralStatsResponse,
 } from './mappers/referralMapper';
 export {
+  applyAllNotificationsRead,
   applyNotificationRead,
   extractReadNotification,
   isViewProfileRequestNotification,
   mapNotifications,
   mapNotificationItem,
   pickUnreadCount,
+  unwrapNotificationAction,
 } from './mappers/notificationMapper';
 export type {
   AppNotification,

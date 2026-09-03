@@ -6,7 +6,7 @@ import { AuthStyles } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import { hp } from '../../Functions/responsive';
 import { isProfileSetupComplete } from '../../Functions/authNavigation';
-import { store, waitForPersistor } from '../../Redux';
+import { clearSession, store, waitForPersistor } from '../../Redux';
 
 type Props = {
   navigation: {
@@ -39,8 +39,10 @@ const SplashScreen = ({ navigation }: Props) => {
       }
 
       const { auth, profile, app } = store.getState();
+      const hasToken = Boolean(auth.accessToken);
+      const setupComplete = isProfileSetupComplete(profile.profile);
 
-      if (auth.accessToken && isProfileSetupComplete(profile.profile)) {
+      if (hasToken && setupComplete) {
         navigation.reset({
           index: 0,
           routes: [{ name: 'Main' }],
@@ -48,12 +50,11 @@ const SplashScreen = ({ navigation }: Props) => {
         return;
       }
 
-      if (auth.accessToken) {
-        navigation.replace('SelectCountry');
-        return;
+      if (hasToken && !setupComplete) {
+        await clearSession({ rememberAccount: true });
       }
 
-      if (app.hasSeenWelcome) {
+      if (store.getState().app.hasSeenWelcome || app.hasSeenWelcome) {
         navigation.replace('Login');
         return;
       }

@@ -1,5 +1,11 @@
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { FontSizes } from '../Constant/AuthStyles';
 import { Colors } from '../Constant/Colors';
@@ -12,6 +18,7 @@ type Props = {
   cooldownSeconds?: number;
   loading?: boolean;
   onResend?: () => void;
+  onCooldownEnd?: () => void;
 };
 
 const formatTime = (seconds: number) => {
@@ -24,14 +31,18 @@ const ResendCodeSection = ({
   cooldownSeconds = RESEND_COOLDOWN_SECONDS,
   loading = false,
   onResend,
+  onCooldownEnd,
 }: Props) => {
   const [seconds, setSeconds] = useState(cooldownSeconds);
   const canResend = seconds === 0;
+  const onCooldownEndRef = useRef(onCooldownEnd);
+  onCooldownEndRef.current = onCooldownEnd;
 
   useEffect(() => {
     setSeconds(cooldownSeconds);
 
     if (cooldownSeconds <= 0) {
+      setTimeout(() => onCooldownEndRef.current?.(), 0);
       return;
     }
 
@@ -39,6 +50,7 @@ const ResendCodeSection = ({
       setSeconds(prev => {
         if (prev <= 1) {
           clearInterval(timer);
+          setTimeout(() => onCooldownEndRef.current?.(), 0);
           return 0;
         }
 
@@ -71,13 +83,19 @@ const ResendCodeSection = ({
         {loading ? (
           <ActivityIndicator size="small" color={Colors.gold} />
         ) : (
-          <Text
-            style={[styles.resendLink, !canResend && styles.resendDisabled]}
+          <TouchableOpacity
             onPress={handleResend}
-            suppressHighlighting
+            disabled={!canResend}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !canResend }}
           >
-            Resend
-          </Text>
+            <Text
+              style={[styles.resendLink, !canResend && styles.resendDisabled]}
+            >
+              Resend
+            </Text>
+          </TouchableOpacity>
         )}
       </View>
     </View>

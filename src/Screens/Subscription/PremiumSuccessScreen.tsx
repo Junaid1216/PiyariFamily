@@ -24,6 +24,7 @@ import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
 import { ProfileStackParamList } from '../../Navigation/ProfileStackNavigator';
 import { getFooterBottomPadding } from '../../Functions/safeArea';
+import { navigateToHomeTab } from '../../Functions/tabNavigation';
 import { useHideTabBar } from '../../Functions/useHideTabBar';
 import { fs, hp, wp } from '../../Functions/responsive';
 
@@ -178,12 +179,7 @@ const PremiumSuccessScreen = () => {
         >
           <PrimaryButton
             title={Strings.startExploringMatches}
-            onPress={() =>
-              navigation.reset({
-                index: 0,
-                routes: [{ name: 'Settings' }],
-              })
-            }
+            onPress={() => navigateToHomeTab(navigation)}
             showArrow
           />
           <TouchableOpacity

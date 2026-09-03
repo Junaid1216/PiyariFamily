@@ -20,7 +20,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-simple-toast';
 import { Images } from '../../Assets';
-import BackButton from '../../Components/BackButton';
 import {
   Api,
   buildMatchSearchParams,
@@ -39,6 +38,7 @@ import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
 import { SearchStackParamList } from '../../Navigation/SearchStackNavigator';
 import { fs, hp, wp } from '../../Functions/responsive';
+import { useTabRootBackToHome } from '../../Functions/tabNavigation';
 import {
   clearFilterResults,
   selectFilterApplied,
@@ -78,6 +78,7 @@ const iconForQuickFilter = (id: string) => {
 
 const SearchScreen = () => {
   const navigation = useNavigation<NavigationProp>();
+  useTabRootBackToHome(navigation);
   const route = useRoute<SearchRouteProp>();
   const profile = useAppSelector(selectProfile);
   const dispatch = useAppDispatch();
@@ -93,6 +94,7 @@ const SearchScreen = () => {
     [],
   );
   const [loading, setLoading] = useState(true);
+  const [showAllMatches, setShowAllMatches] = useState(false);
   const skipNextSearchRef = useRef(filterApplied);
   const skipFilterSearchRef = useRef(true);
   const activeQuickFilterRef = useRef(activeQuickFilter);
@@ -232,6 +234,10 @@ const SearchScreen = () => {
     setRecentSearches(prev => prev.filter(search => search !== item));
   };
 
+  const clearRecentSearches = () => {
+    setRecentSearches([]);
+  };
+
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
       <ScrollView
@@ -240,19 +246,7 @@ const SearchScreen = () => {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.titleRow}>
-          <BackButton
-            variant="pink"
-            compact
-            onPress={() => navigation.getParent()?.navigate('Home')}
-          />
           <Text style={styles.title}>{Strings.findYourMatch}</Text>
-          <TouchableOpacity
-            style={styles.filterBtn}
-            activeOpacity={0.85}
-            onPress={() => navigation.navigate('FilterMatches')}
-          >
-            <Icon name="filter-variant" size={fs(20)} color={Colors.primary} />
-          </TouchableOpacity>
         </View>
 
         <View style={styles.searchRow}>
@@ -309,7 +303,16 @@ const SearchScreen = () => {
 
         {recentSearches.length > 0 ? (
           <>
-            <Text style={styles.recentLabel}>{Strings.recentSearches}</Text>
+            <View style={styles.recentHeader}>
+              <Text style={styles.recentLabel}>{Strings.recentSearches}</Text>
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={clearRecentSearches}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={styles.clearAll}>{Strings.clearAll}</Text>
+              </TouchableOpacity>
+            </View>
             {recentSearches.map(item => (
               <TouchableOpacity
                 key={item}
@@ -338,9 +341,11 @@ const SearchScreen = () => {
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>{Strings.suggestedMatches}</Text>
-          <TouchableOpacity activeOpacity={0.8}>
-            <Text style={styles.seeAll}>{Strings.seeAll} →</Text>
-          </TouchableOpacity>
+          {suggestedMatches.length > 4 ? (
+            <TouchableOpacity activeOpacity={0.8} onPress={() => setShowAllMatches(prev => !prev)}>
+              <Text style={styles.seeAll}>{showAllMatches ? Strings.hide : `${Strings.seeAll} →`}</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
 
         {loading ? (
@@ -348,12 +353,8 @@ const SearchScreen = () => {
             <ActivityIndicator size="large" color={Colors.primary} />
           </View>
         ) : suggestedMatches.length > 0 ? (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.suggestedList}
-          >
-            {suggestedMatches.map(match => (
+          <View style={styles.suggestedGrid}>
+            {(showAllMatches ? suggestedMatches : suggestedMatches.slice(0, 4)).map(match => (
               <TouchableOpacity
                 key={match.id}
                 style={styles.suggestedCard}
@@ -386,20 +387,20 @@ const SearchScreen = () => {
                       />
                       <Text style={styles.suggestedTierText}>{match.tier}</Text>
                     </View>
-
-                    {match.isVerified ? (
-                      <View style={styles.suggestedVerifiedRow}>
-                        <Image
-                          source={Images.verifiedIcon}
-                          style={styles.suggestedVerifiedIcon}
-                          resizeMode="contain"
-                        />
-                        <Text style={styles.suggestedVerifiedText}>
-                          {Strings.verifiedBadge}
-                        </Text>
-                      </View>
-                    ) : null}
                   </View>
+
+                  {match.isVerified ? (
+                    <View style={styles.suggestedVerifiedRow}>
+                      <Image
+                        source={Images.verifiedIcon}
+                        style={styles.suggestedVerifiedIcon}
+                        resizeMode="contain"
+                      />
+                      <Text style={styles.suggestedVerifiedText}>
+                        {Strings.verifiedBadge}
+                      </Text>
+                    </View>
+                  ) : null}
                 </View>
 
                 <View style={styles.suggestedBody}>
@@ -434,7 +435,7 @@ const SearchScreen = () => {
                 </View>
               </TouchableOpacity>
             ))}
-          </ScrollView>
+          </View>
         ) : (
           <Text style={styles.emptyText}>No matches found</Text>
         )}
@@ -456,7 +457,7 @@ const styles = StyleSheet.create({
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     marginBottom: hp('2%'),
   },
   title: {
@@ -464,13 +465,10 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.bold,
     color: Colors.primary,
     letterSpacing: -0.3,
-    flex: 1,
+    textAlign: 'left',
   },
-  filterBtn: {
-    width: wp('11%'),
-    height: wp('11%'),
-    borderRadius: wp('3%'),
-    backgroundColor: Colors.tabActiveBg,
+  loaderWrap: {
+    minHeight: hp('18%'),
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -526,11 +524,21 @@ const styles = StyleSheet.create({
   quickFilterTextSelected: {
     color: Colors.white,
   },
+  recentHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: hp('1%'),
+  },
   recentLabel: {
     fontSize: fs(13),
     fontFamily: Fonts.regular,
     color: Colors.textLight,
-    marginBottom: hp('1%'),
+  },
+  clearAll: {
+    fontSize: fs(13),
+    fontFamily: Fonts.semiBold,
+    color: Colors.gold,
   },
   recentRow: {
     flexDirection: 'row',
@@ -565,11 +573,6 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.semiBold,
     color: Colors.gold,
   },
-  loaderWrap: {
-    minHeight: hp('18%'),
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   emptyText: {
     fontSize: FontSizes.bodySmall,
     fontFamily: Fonts.regular,
@@ -577,12 +580,15 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingVertical: hp('4%'),
   },
-  suggestedList: {
-    gap: wp('3%'),
-    paddingRight: wp('2%'),
+  suggestedGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    width: '100%',
   },
   suggestedCard: {
-    width: wp('43%'),
+    width: '48%',
+    marginBottom: wp('3%'),
     backgroundColor: Colors.white,
     borderRadius: wp('4.5%'),
     overflow: 'hidden',
@@ -632,6 +638,9 @@ const styles = StyleSheet.create({
     gap: hp('0.35%'),
   },
   suggestedVerifiedRow: {
+    position: 'absolute',
+    left: wp('2%'),
+    bottom: hp('0.8%'),
     flexDirection: 'row',
     alignItems: 'center',
     gap: wp('1%'),

@@ -8,7 +8,6 @@ import {
   View,
 } from 'react-native';
 import KeyboardScrollView from '../../Components/KeyboardScrollView';
-import { RouteProp, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Toast from 'react-native-simple-toast';
 import AuthBackground from '../../Components/AuthBackground';
@@ -28,10 +27,15 @@ import {
   isApiSuccess,
   pickAuthToken,
 } from '../../API';
-import { AuthStackParamList } from '../../Navigation/AuthNavigator';
 import { finishAuthNavigation } from '../../Functions/authNavigation';
+import { pickDisplayFirstName } from '../../Functions/welcomeGreeting';
 import { hp, wp } from '../../Functions/responsive';
-import { useAppSelector, selectLastAccountEmail, selectLastAccountName } from '../../Redux';
+import {
+  useAppSelector,
+  selectLastAccountName,
+  selectProfile,
+  selectUser,
+} from '../../Redux';
 
 type Props = {
   navigation: {
@@ -59,12 +63,15 @@ const isLoginSuccess = (response?: {
 
 const LoginScreen = ({ navigation }: Props) => {
   const insets = useSafeAreaInsets();
-  const route = useRoute<RouteProp<AuthStackParamList, 'Login'>>();
   const lastAccountName = useAppSelector(selectLastAccountName);
-  const lastAccountEmail = useAppSelector(selectLastAccountEmail);
-  const [email, setEmail] = useState(
-    route.params?.email?.trim() || lastAccountEmail || '',
+  const user = useAppSelector(selectUser);
+  const profile = useAppSelector(selectProfile);
+  const welcomeName = pickDisplayFirstName(
+    lastAccountName,
+    profile?.name,
+    user?.name,
   );
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -119,7 +126,7 @@ const LoginScreen = ({ navigation }: Props) => {
             <View style={styles.formSection}>
               <Text style={styles.title}>
                 {Strings.welcomeBack}
-                {lastAccountName ? `, ${lastAccountName.split(' ')[0]} !` : ' !'}
+                {welcomeName ? `, ${welcomeName} !` : ' !'}
               </Text>
               <Text style={styles.subtitle}>{Strings.loginSubtitle}</Text>
 

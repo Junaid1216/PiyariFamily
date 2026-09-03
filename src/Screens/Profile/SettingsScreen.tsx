@@ -23,6 +23,7 @@ import { Strings } from '../../Constant/Strings';
 import { Api, authService, getApiErrorMessage, isApiSuccess, mapProfileToSettings, parseVisibilityFlag, saveProfileCache, type ApiErrorResponse } from '../../API';
 import { ProfileStackParamList } from '../../Navigation/ProfileStackNavigator';
 import { resetToLogin } from '../../Functions/authNavigation';
+import { navigateToHomeTab, useTabRootBackToHome } from '../../Functions/tabNavigation';
 import { fs, hp, wp } from '../../Functions/responsive';
 import { useAppSelector, selectProfilePhoto, selectUser, store } from '../../Redux';
 
@@ -70,6 +71,7 @@ const SettingItem = ({
 
 const SettingsScreen = () => {
   const navigation = useNavigation<NavigationProp>();
+  useTabRootBackToHome(navigation);
   const user = useAppSelector(selectUser);
   const profilePhoto = useAppSelector(selectProfilePhoto);
   const [profileName, setProfileName] = useState(user?.name ?? '');
@@ -218,7 +220,7 @@ const SettingsScreen = () => {
       Toast.show('Logged out successfully', Toast.LONG);
     } finally {
       setLoggingOut(false);
-      resetToLogin(navigation);
+      resetToLogin(navigation, { forgetAccount: true });
     }
   };
 
@@ -226,7 +228,7 @@ const SettingsScreen = () => {
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
       <ScreenHeader
         title={Strings.settings}
-        onBack={() => navigation.getParent()?.navigate('Home')}
+        onBack={() => navigateToHomeTab(navigation)}
       />
 
       <ScrollView

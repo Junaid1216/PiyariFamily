@@ -7,19 +7,25 @@ import { clearReferral } from './slices/referralSlice';
 import { clearFilter } from './slices/filterSlice';
 import {
   clearNavigationState,
+  clearLastAccount,
   setHasSeenWelcome,
   setLastAccount,
 } from './slices/appSlice';
 
-export const clearSession = () => {
+export const clearSession = (options?: { rememberAccount?: boolean }) => {
+  const rememberAccount = options?.rememberAccount === true;
   const { auth, profile } = store.getState();
 
-  store.dispatch(
-    setLastAccount({
-      name: auth.user?.name || profile.profile?.name,
-      email: auth.user?.email || profile.profile?.email,
-    }),
-  );
+  if (rememberAccount) {
+    store.dispatch(
+      setLastAccount({
+        name: auth.user?.name || profile.profile?.name,
+        email: auth.user?.email || profile.profile?.email,
+      }),
+    );
+  } else {
+    store.dispatch(clearLastAccount());
+  }
 
   store.dispatch(clearAuth());
   store.dispatch(clearProfile());
@@ -29,5 +35,5 @@ export const clearSession = () => {
   store.dispatch(clearFilter());
   store.dispatch(clearNavigationState());
   store.dispatch(setHasSeenWelcome(true));
-  void persistor.flush();
+  return persistor.flush();
 };

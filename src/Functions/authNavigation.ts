@@ -4,7 +4,7 @@ import {
   ParamListBase,
 } from '@react-navigation/native';
 import { Api, pickImageUrl, saveProfileCache, type ProfileApiData } from '../API';
-import { clearNavigationState, setHasSeenWelcome, setSetupComplete, store } from '../Redux';
+import { clearNavigationState, clearSession, setHasSeenWelcome, setSetupComplete, store } from '../Redux';
 import { resolveSessionNavigationState } from './navigationPersistence';
 
 export type PostLoginRoute = 'Main' | 'SelectCountry';
@@ -111,21 +111,25 @@ export const navigateAfterLogin = (
   navigation.replace('SelectCountry');
 };
 
-export const resetToLogin = (navigation: NavigationProp<ParamListBase>) => {
+export const resetToLogin = (
+  navigation: NavigationProp<ParamListBase>,
+  options?: { forgetAccount?: boolean },
+) => {
   store.dispatch(setHasSeenWelcome(true));
   store.dispatch(clearNavigationState());
+  void clearSession({
+    rememberAccount: options?.forgetAccount === false,
+  });
 
   const loginReset = {
     index: 0,
     routes: [{ name: 'Login' }],
   };
 
-  const authNavigation = navigation.getParent()?.getParent();
-
-  if (authNavigation) {
-    authNavigation.dispatch(CommonActions.reset(loginReset));
-    return;
+  let rootNavigation: NavigationProp<ParamListBase> = navigation;
+  while (rootNavigation.getParent()) {
+    rootNavigation = rootNavigation.getParent() as NavigationProp<ParamListBase>;
   }
 
-  navigation.dispatch(CommonActions.reset(loginReset));
+  rootNavigation.dispatch(CommonActions.reset(loginReset));
 };

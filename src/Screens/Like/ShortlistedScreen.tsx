@@ -33,6 +33,7 @@ import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
 import { LikeStackParamList } from '../../Navigation/LikeStackNavigator';
 import { fs, hp, wp } from '../../Functions/responsive';
+import { navigateToHomeTab, useTabRootBackToHome } from '../../Functions/tabNavigation';
 import {
   selectShortlistLiked,
   selectShortlistLikedMe,
@@ -51,6 +52,7 @@ const AVATAR_SIZE = wp('27%');
 
 const ShortlistedScreen = () => {
   const navigation = useNavigation<NavigationProp>();
+  useTabRootBackToHome(navigation);
   const dispatch = useAppDispatch();
   const [activeTab, setActiveTab] = useState<TabKey>('liked');
   const cachedLiked = useAppSelector(selectShortlistLiked);
@@ -228,7 +230,7 @@ const ShortlistedScreen = () => {
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
       <ScreenHeader
         title={Strings.shortlisted}
-        onBack={() => navigation.getParent()?.navigate('Home')}
+        onBack={() => navigateToHomeTab(navigation)}
         rightElement={
           <TouchableOpacity
             style={styles.filterBtn}

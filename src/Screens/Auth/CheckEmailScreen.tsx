@@ -26,7 +26,7 @@ import {
   authService,
   getApiErrorMessage,
   isApiSuccess,
-  isOtpCooldownError,
+  resolveOtpResendResult,
 } from '../../API';
 import { AuthStackParamList } from '../../Navigation/AuthNavigator';
 import { hp, wp } from '../../Functions/responsive';
@@ -34,7 +34,10 @@ import { hp, wp } from '../../Functions/responsive';
 type Props = {
   navigation: {
     goBack: () => void;
-    navigate: (screen: string, params?: { email: string }) => void;
+    navigate: (
+      screen: string,
+      params?: { email: string; resendAfterSeconds?: number },
+    ) => void;
   };
 };
 
@@ -43,21 +46,46 @@ type CheckEmailRoute = RouteProp<AuthStackParamList, 'CheckEmail'>;
 const CheckEmailScreen = ({ navigation }: Props) => {
   const route = useRoute<CheckEmailRoute>();
   const email = route.params.email;
+  const initialCooldown =
+    route.params.resendAfterSeconds && route.params.resendAfterSeconds > 0
+      ? Math.min(route.params.resendAfterSeconds, RESEND_COOLDOWN_SECONDS)
+      : RESEND_COOLDOWN_SECONDS;
 
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
-  const [resendCooldown, setResendCooldown] = useState(RESEND_COOLDOWN_SECONDS);
+  const [resendCooldown, setResendCooldown] = useState(initialCooldown);
   const [resendCycle, setResendCycle] = useState(0);
+  const [otpExpired, setOtpExpired] = useState(false);
 
-  const startCooldown = () => {
-    setResendCooldown(RESEND_COOLDOWN_SECONDS);
-    setResendCycle(cycle => cycle + 1);
+  const applyResendResult = (source: unknown) => {
+    const result = resolveOtpResendResult(source);
+
+    if (result.sent) {
+      setOtpExpired(false);
+      setCode('');
+      setResendCooldown(result.seconds || RESEND_COOLDOWN_SECONDS);
+      setResendCycle(cycle => cycle + 1);
+      Toast.show(result.message, Toast.LONG);
+      return result;
+    }
+
+    if (result.cooldown) {
+      setResendCooldown(result.seconds || RESEND_COOLDOWN_SECONDS);
+      setResendCycle(cycle => cycle + 1);
+    }
+
+    return result;
   };
 
   const handleVerify = async () => {
     if (code.length !== 6) {
       Toast.show('Please enter the 6-digit code');
+      return;
+    }
+
+    if (otpExpired) {
+      Toast.show('OTP expired. Please resend a new code.');
       return;
     }
 
@@ -90,27 +118,20 @@ const CheckEmailScreen = ({ navigation }: Props) => {
     setResending(true);
 
     try {
-      const response = await authService.forgotPassword({ email });
+      const source = await authService.forgotResendOtp({ email });
+      const result = applyResendResult(source);
 
-      if (isApiSuccess(response.status, response.success)) {
-        Toast.show(response.message || 'Reset code resent');
-        startCooldown();
-        return;
+      if (!result.sent && result.message) {
+        Toast.show(result.message, Toast.LONG);
       }
-
-      if (isOtpCooldownError(response)) {
-        startCooldown();
-        return;
-      }
-
-      Toast.show(response.message || 'Failed to resend code. Please try again.');
     } catch (error) {
-      if (isOtpCooldownError(error)) {
-        startCooldown();
-        return;
-      }
+      const result = applyResendResult(error);
 
-      Toast.show(getApiErrorMessage(error));
+      if (!result.sent && result.message) {
+        Toast.show(result.message, Toast.LONG);
+      } else if (!result.sent) {
+        Toast.show(getApiErrorMessage(error));
+      }
     } finally {
       setResending(false);
     }
@@ -138,6 +159,10 @@ const CheckEmailScreen = ({ navigation }: Props) => {
               cooldownSeconds={resendCooldown}
               loading={resending}
               onResend={handleResend}
+              onCooldownEnd={() => {
+                setOtpExpired(true);
+                setCode('');
+              }}
             />
 
             <View style={styles.flexSpacer} />

@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
-import { CommonActions, useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
   SafeAreaView,
@@ -34,6 +34,7 @@ import { Strings } from '../../Constant/Strings';
 import { ProfileStackParamList } from '../../Navigation/ProfileStackNavigator';
 import { getFooterBottomPadding } from '../../Functions/safeArea';
 import { useHideTabBar } from '../../Functions/useHideTabBar';
+import { popStackOrGoHome } from '../../Functions/tabNavigation';
 import { fs, hp, wp } from '../../Functions/responsive';
 
 type NavigationProp = NativeStackNavigationProp<
@@ -78,38 +79,16 @@ const ChooseYourPlanScreen = () => {
     }, [fetchSubscriptions]),
   );
 
-  const goToHome = useCallback(() => {
-    let parent = navigation.getParent();
-
-    while (parent) {
-      const routeNames = parent.getState?.()?.routeNames;
-
-      if (routeNames?.includes('Home')) {
-        parent.navigate('Home', { screen: 'HomeMain' });
-        return;
-      }
-
-      parent = parent.getParent();
-    }
-
-    navigation.dispatch(
-      CommonActions.navigate({
-        name: 'Home',
-        params: { screen: 'HomeMain' },
-      }),
-    );
-  }, [navigation]);
-
   useFocusEffect(
     useCallback(() => {
       const onHardwareBack = () => {
-        goToHome();
+        popStackOrGoHome(navigation);
         return true;
       };
 
       const sub = BackHandler.addEventListener('hardwareBackPress', onHardwareBack);
       return () => sub.remove();
-    }, [goToHome]),
+    }, [navigation]),
   );
 
   const openPayment = (plan: 'VIP' | 'VVIP') => {
@@ -171,7 +150,7 @@ const ChooseYourPlanScreen = () => {
       <ScreenHeader
         title={Strings.chooseYourPlan}
         compact
-        onBack={goToHome}
+        onBack={() => popStackOrGoHome(navigation)}
       />
 
       <ScrollView

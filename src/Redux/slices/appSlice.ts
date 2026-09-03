@@ -43,13 +43,17 @@ const appSlice = createSlice({
       const name = action.payload.name?.trim();
       const email = action.payload.email?.trim();
 
-      if (name) {
+      if (name && !name.includes('@')) {
         state.lastAccountName = name;
       }
 
       if (email) {
         state.lastAccountEmail = email;
       }
+    },
+    clearLastAccount: state => {
+      state.lastAccountName = null;
+      state.lastAccountEmail = null;
     },
   },
 });
@@ -59,6 +63,7 @@ export const {
   setNavigationState,
   clearNavigationState,
   setLastAccount,
+  clearLastAccount,
 } = appSlice.actions;
 
 export const selectHasSeenWelcome = (state: { app: AppUiState }) =>

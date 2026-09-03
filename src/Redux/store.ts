@@ -25,8 +25,23 @@ const reactotronEnhancer =
 
 const persistConfig = {
   key: 'root',
+  version: 2,
   storage: AsyncStorage,
   whitelist: ['auth', 'profile', 'app'],
+  migrate: async (state: any) => {
+    if (!state?.app) {
+      return state;
+    }
+
+    return {
+      ...state,
+      app: {
+        ...state.app,
+        lastAccountName: null,
+        lastAccountEmail: null,
+      },
+    };
+  },
 };
 
 const rootReducer = combineReducers({

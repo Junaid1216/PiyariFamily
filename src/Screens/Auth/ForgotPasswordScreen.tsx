@@ -19,13 +19,16 @@ import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
-import { authService, isApiSuccess, isOtpCooldownError } from '../../API';
+import { authService, isApiSuccess, isOtpCooldownError, pickOtpCooldownSeconds } from '../../API';
 import { hp, wp } from '../../Functions/responsive';
 
 type Props = {
   navigation: {
     goBack: () => void;
-    navigate: (screen: string, params?: { email: string }) => void;
+    navigate: (
+      screen: string,
+      params?: { email: string; resendAfterSeconds?: number },
+    ) => void;
   };
 };
 
@@ -52,14 +55,20 @@ const ForgotPasswordScreen = ({ navigation }: Props) => {
               : 'Reset code sent to your email',
             Toast.LONG,
           );
-          navigation.navigate('CheckEmail', { email: email.trim() });
+          navigation.navigate('CheckEmail', {
+            email: email.trim(),
+            resendAfterSeconds: pickOtpCooldownSeconds(res),
+          });
         } else {
           Toast.show(res?.message || 'Failed to send reset code. Please try again.');
         }
       } catch (error: any) {
         if (isOtpCooldownError(error)) {
           Toast.show('Reset code sent to your email', Toast.LONG);
-          navigation.navigate('CheckEmail', { email: email.trim() });
+          navigation.navigate('CheckEmail', {
+            email: email.trim(),
+            resendAfterSeconds: pickOtpCooldownSeconds(error),
+          });
           return;
         }
 

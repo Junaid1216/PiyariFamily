@@ -374,6 +374,23 @@ export const isViewProfileRequestNotification = (item: AppNotification) => {
   );
 };
 
+export const unwrapNotificationAction = <T extends object>(
+  status: number,
+  data?: T | null,
+) => {
+  const payload = (data ?? {}) as T & { data?: T };
+  const nested =
+    payload.data && typeof payload.data === 'object' && !Array.isArray(payload.data)
+      ? payload.data
+      : null;
+
+  return {
+    status,
+    ...payload,
+    ...(nested ?? {}),
+  };
+};
+
 export const applyNotificationRead = (
   items: AppNotification[],
   notificationId: string,
@@ -382,6 +399,9 @@ export const applyNotificationRead = (
   items.map(item =>
     item.id === String(notificationId) ? { ...item, unread: false } : item,
   );
+
+export const applyAllNotificationsRead = (items: AppNotification[]) =>
+  items.map(item => ({ ...item, unread: false }));
 
 export const extractReadNotification = (
   response?: NotificationReadResponse | null,

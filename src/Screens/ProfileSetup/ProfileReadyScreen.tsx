@@ -13,7 +13,8 @@ import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
 import { getFooterBottomPadding } from '../../Functions/safeArea';
 import { fs, hp, wp } from '../../Functions/responsive';
-import { setSetupComplete, store } from '../../Redux';
+import { setLastAccount, setSetupComplete, store } from '../../Redux';
+import { pickPersonName } from '../../Functions/welcomeGreeting';
 
 type Props = {
   navigation: {
@@ -26,7 +27,14 @@ const ProfileReadyScreen = ({ navigation }: Props) => {
   const insets = useSafeAreaInsets();
 
   const goToLogin = () => {
+    const { auth, profile } = store.getState();
     store.dispatch(setSetupComplete(true));
+    store.dispatch(
+      setLastAccount({
+        name: pickPersonName(profile.profile?.name, auth.user?.name),
+        email: auth.user?.email || profile.profile?.email,
+      }),
+    );
     navigation.reset({
       index: 0,
       routes: [{ name: 'Login' }],

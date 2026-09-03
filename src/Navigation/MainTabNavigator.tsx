@@ -106,20 +106,24 @@ const MainTabNavigator = () => {
         component={HomeStackNavigator}
         options={{ tabBarLabel: Strings.tabHome }}
       />
-      <Tab.Screen name="Search" options={{ tabBarLabel: Strings.tabSearch }}>
-        {() => <SearchStackNavigator />}
-      </Tab.Screen>
+      <Tab.Screen
+        name="Search"
+        component={SearchStackNavigator}
+        options={{ tabBarLabel: Strings.tabSearch }}
+      />
       <Tab.Screen
         name="Messages"
+        component={MessagesStackNavigator}
         options={{ tabBarLabel: Strings.tabMessages }}
-      >
-        {() => <MessagesStackNavigator />}
-      </Tab.Screen>
-      <Tab.Screen name="Like" options={{ tabBarLabel: Strings.tabLike }}>
-        {() => <LikeStackNavigator />}
-      </Tab.Screen>
+      />
+      <Tab.Screen
+        name="Like"
+        component={LikeStackNavigator}
+        options={{ tabBarLabel: Strings.tabLike }}
+      />
       <Tab.Screen
         name="Profile"
+        component={ProfileStackNavigator}
         options={{ tabBarLabel: Strings.tabProfile }}
         listeners={({ navigation }) => ({
           tabPress: e => {
@@ -127,9 +131,7 @@ const MainTabNavigator = () => {
             navigation.navigate('Profile', { screen: 'Settings' });
           },
         })}
-      >
-        {() => <ProfileStackNavigator />}
-      </Tab.Screen>
+      />
     </Tab.Navigator>
   );
 };

@@ -1,4 +1,4 @@
-import { AxiosRequestConfig } from 'axios';
+import { AxiosError, AxiosRequestConfig } from 'axios';
 import { apiClient } from './apiClient';
 import { ENDPOINTS } from './endpoints';
 import { toProfileUpdateFormData, type FormValue, type UploadFile } from './formData';
@@ -26,11 +26,12 @@ import type {
   ReferralRewardsResponse,
   ReferralStatsResponse,
 } from './mappers/referralMapper';
-import type {
-  NotificationReadResponse,
-  NotificationsClearAllResponse,
-  NotificationsReadAllResponse,
-  NotificationsResponse,
+import {
+  unwrapNotificationAction,
+  type NotificationReadResponse,
+  type NotificationsClearAllResponse,
+  type NotificationsReadAllResponse,
+  type NotificationsResponse,
 } from './mappers/notificationMapper';
 import type { CountriesResponse } from './mappers/countryMapper';
 import type { SubscriptionsResponse } from './mappers/subscriptionMapper';
@@ -45,6 +46,20 @@ type ProfileResponse = {
 type MessageResponse = {
   success?: boolean;
   message?: string;
+};
+
+const isMethodNotAllowed = (error: unknown) => {
+  if (!(error instanceof AxiosError)) {
+    return false;
+  }
+
+  const message = String(
+    (error.response?.data as { message?: string } | undefined)?.message ??
+      error.message ??
+      '',
+  ).toLowerCase();
+
+  return error.response?.status === 405 || message.includes('method not allowed');
 };
 
 type UpdateProfileResponse = MessageResponse & {
@@ -346,7 +361,7 @@ export const Api = {
       `${ENDPOINTS.NOTIFICATIONS}/${notificationId}/read`,
     );
 
-    return { status, ...data };
+    return unwrapNotificationAction(status, data);
   },
 
   markAllNotificationsRead: async () => {
@@ -354,15 +369,27 @@ export const Api = {
       ENDPOINTS.NOTIFICATIONS_READ_ALL,
     );
 
-    return { status, ...data };
+    return unwrapNotificationAction(status, data);
   },
 
   clearAllNotifications: async () => {
-    const { status, data } = await apiClient.delete<NotificationsClearAllResponse>(
-      ENDPOINTS.NOTIFICATIONS_CLEAR_ALL,
-    );
+    try {
+      const { status, data } = await apiClient.delete<NotificationsClearAllResponse>(
+        ENDPOINTS.NOTIFICATIONS_CLEAR_ALL,
+      );
 
-    return { status, ...data };
+      return unwrapNotificationAction(status, data);
+    } catch (error) {
+      if (!isMethodNotAllowed(error)) {
+        throw error;
+      }
+
+      const { status, data } = await apiClient.postEmpty<NotificationsClearAllResponse>(
+        ENDPOINTS.NOTIFICATIONS_CLEAR_ALL,
+      );
+
+      return unwrapNotificationAction(status, data);
+    }
   },
 
   getHomeMatches: () =>

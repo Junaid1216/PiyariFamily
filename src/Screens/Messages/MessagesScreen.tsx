@@ -20,6 +20,7 @@ import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
 import { MessagesStackParamList } from '../../Navigation/MessagesStackNavigator';
 import { navigateToProfileScreen } from '../../Functions/profileNavigation';
+import { navigateToHomeTab, useTabRootBackToHome } from '../../Functions/tabNavigation';
 import { fs, hp, wp } from '../../Functions/responsive';
 
 type NavigationProp = NativeStackNavigationProp<
@@ -30,6 +31,7 @@ type NavigationProp = NativeStackNavigationProp<
 const MessagesScreen = () => {
   const navigation = useNavigation<NavigationProp>();
   const [searchQuery, setSearchQuery] = useState('');
+  useTabRootBackToHome(navigation);
 
   const messagesCount = CONVERSATIONS.length;
 
@@ -37,7 +39,7 @@ const MessagesScreen = () => {
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
       <ScreenHeader
         title={Strings.messagesTitle}
-        onBack={() => navigation.getParent()?.navigate('Home')}
+        onBack={() => navigateToHomeTab(navigation)}
         rightElement={
           <TouchableOpacity
             style={styles.notificationBtn}

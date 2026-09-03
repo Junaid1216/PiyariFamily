@@ -34,6 +34,7 @@ import { Strings } from '../../Constant/Strings';
 import { HomeStackParamList } from '../../Navigation/HomeStackNavigator';
 import { getFooterBottomPadding } from '../../Functions/safeArea';
 import { navigateToMatchSuccess } from '../../Functions/matchNavigation';
+import { popStackOrGoHome } from '../../Functions/tabNavigation';
 import { fs, hp, wp } from '../../Functions/responsive';
 import {
   selectIsAccountInactive,
@@ -111,7 +112,7 @@ const ProfileDetailScreen = () => {
         <TouchableOpacity
           style={styles.backBtn}
           activeOpacity={0.85}
-          onPress={() => navigation.goBack()}
+          onPress={() => popStackOrGoHome(navigation)}
         >
           <Icon name="chevron-left" size={fs(26)} color={Colors.primary} />
         </TouchableOpacity>
@@ -186,7 +187,7 @@ const ProfileDetailScreen = () => {
             <TouchableOpacity
               style={styles.heroIconBtn}
               activeOpacity={0.85}
-              onPress={() => navigation.goBack()}
+              onPress={() => popStackOrGoHome(navigation)}
             >
               <Icon name="chevron-left" size={fs(26)} color={Colors.white} />
             </TouchableOpacity>
@@ -323,7 +324,7 @@ const ProfileDetailScreen = () => {
         <TouchableOpacity
           style={styles.nextBtn}
           activeOpacity={0.85}
-          onPress={() => navigation.goBack()}
+          onPress={() => popStackOrGoHome(navigation)}
         >
           <Icon name="close" size={fs(18)} color={Colors.primary} />
           <Text style={styles.nextBtnText}>{Strings.nextBtn}</Text>

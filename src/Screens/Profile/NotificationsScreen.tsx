@@ -18,6 +18,7 @@ import Toast from 'react-native-simple-toast';
 import ScreenHeader from '../../Components/ScreenHeader';
 import {
   Api,
+  applyAllNotificationsRead,
   applyNotificationRead,
   getApiErrorMessage,
   isApiSuccess,
@@ -53,8 +54,10 @@ const NotificationsScreen = () => {
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0, width: 0 });
   const bellRef = useRef<View>(null);
 
-  const fetchNotifications = useCallback(async () => {
-    setLoading(true);
+  const fetchNotifications = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) {
+      setLoading(true);
+    }
     setError(null);
 
     try {
@@ -150,9 +153,14 @@ const NotificationsScreen = () => {
     });
   };
 
+  const isActionSuccess = (
+    status?: number,
+    success?: boolean | number | null,
+  ) => isApiSuccess(status, success) && success !== false;
+
   const handleMarkAllRead = async () => {
     closeMenu();
-    if (markingAll || clearing || !notifications.some(item => item.unread)) {
+    if (markingAll || clearing || notifications.length === 0) {
       return;
     }
 
@@ -161,10 +169,8 @@ const NotificationsScreen = () => {
     try {
       const res = await Api.markAllNotificationsRead();
 
-      if (isApiSuccess(res?.status, res?.success)) {
-        setNotifications(current =>
-          current.map(item => ({ ...item, unread: false })),
-        );
+      if (isActionSuccess(res?.status, res?.success)) {
+        setNotifications(applyAllNotificationsRead);
         if (res?.message) {
           Toast.show(res.message, Toast.LONG);
         }
@@ -192,7 +198,7 @@ const NotificationsScreen = () => {
     try {
       const res = await Api.clearAllNotifications();
 
-      if (isApiSuccess(res?.status, res?.success)) {
+      if (isActionSuccess(res?.status, res?.success)) {
         setNotifications([]);
         if (res?.message) {
           Toast.show(res.message, Toast.LONG);
@@ -346,7 +352,7 @@ const NotificationsScreen = () => {
         onRequestClose={closeMenu}
       >
         <Pressable style={styles.menuBackdrop} onPress={closeMenu}>
-          <Pressable
+          <View
             style={[
               styles.menu,
               {
@@ -355,10 +361,12 @@ const NotificationsScreen = () => {
                 width: menuPos.width,
               },
             ]}
+            onStartShouldSetResponder={() => true}
           >
             <TouchableOpacity
               style={styles.menuOption}
               activeOpacity={0.85}
+              disabled={markingAll || clearing}
               onPress={handleMarkAllRead}
             >
               <Text style={styles.menuOptionText}>{Strings.markAllRead}</Text>
@@ -366,11 +374,12 @@ const NotificationsScreen = () => {
             <TouchableOpacity
               style={[styles.menuOption, styles.menuOptionLast]}
               activeOpacity={0.85}
+              disabled={markingAll || clearing}
               onPress={handleClearAll}
             >
               <Text style={styles.menuOptionText}>{Strings.clearAll}</Text>
             </TouchableOpacity>
-          </Pressable>
+          </View>
         </Pressable>
       </Modal>
     </SafeAreaView>

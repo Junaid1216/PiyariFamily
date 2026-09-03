@@ -12,6 +12,7 @@ import { accountStorage } from '../accountStorage';
 import { pendingReferralStorage } from '../pendingReferralStorage';
 import { normalizeReferralLink } from '../mappers/referralMapper';
 import { saveProfileCache } from '../mappers/profileMapper';
+import { pickPersonName } from '../../Functions/welcomeGreeting';
 import {
   isApiSuccess,
   type AuthResponse,
@@ -42,6 +43,7 @@ const normalizeEmail = (email: string) => email.trim();
 
 export type EmailPayload = {
   email: string;
+  resend?: boolean;
 };
 
 export type VerifyResetOtpPayload = {
@@ -110,19 +112,37 @@ const pickAuthUser = (response?: AuthResponse | null) =>
 const saveAuthSession = (response: AuthResponse) => {
   const token = pickAuthToken(response);
   const user = pickAuthUser(response);
+  const existingUser = store.getState().auth.user;
 
   store.dispatch(
     setAuthSession({
-      ...(user ? { user } : {}),
+      ...(user
+        ? {
+            user: {
+              ...user,
+              name:
+                pickPersonName(
+                  user.name,
+                  existingUser?.name,
+                  store.getState().profile.profile?.name,
+                ) || '',
+            },
+          }
+        : {}),
       ...(token ? { accessToken: token } : {}),
     }),
   );
 
   if (user) {
-    saveProfileCache(user);
+    const resolvedName = pickPersonName(
+      user.name,
+      existingUser?.name,
+      store.getState().profile.profile?.name,
+    );
+    saveProfileCache({ ...user, ...(resolvedName ? { name: resolvedName } : {}) });
     store.dispatch(
       setLastAccount({
-        name: user.name,
+        name: resolvedName,
         email: user.email,
       }),
     );
@@ -201,10 +221,6 @@ export const authService = {
       await pendingReferralStorage.clear();
     }
 
-    if (shouldSaveAuthSession(response)) {
-      saveAuthSession(response);
-    }
-
     return response;
   },
 
@@ -228,10 +244,17 @@ export const authService = {
   resendEmailOtp: (payload: EmailPayload) =>
     postAuth<OtpActionResponse>(ENDPOINTS.AUTH.RESEND_EMAIL_OTP, {
       email: normalizeEmail(payload.email),
+      ...(payload.resend ? { resend: 1 } : {}),
     }),
 
-  forgotPassword: (payload: EmailPayload) =>
+  forgotPassword: (payload: EmailPayload & { resend?: boolean }) =>
     postAuth<OtpActionResponse>(ENDPOINTS.AUTH.FORGOT_PASSWORD, {
+      email: normalizeEmail(payload.email),
+      ...(payload.resend ? { resend: 1 } : {}),
+    }),
+
+  forgotResendOtp: (payload: EmailPayload) =>
+    postAuth<OtpActionResponse>(ENDPOINTS.AUTH.FORGOT_RESEND_OTP, {
       email: normalizeEmail(payload.email),
     }),
 
