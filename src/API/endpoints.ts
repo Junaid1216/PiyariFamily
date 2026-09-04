@@ -30,6 +30,7 @@ export const ENDPOINTS = {
   REFERRALS_LINK: '/referrals/link',
   REFERRALS_REWARDS: '/referrals/rewards',
   REFERRALS_REDEEM: '/referrals/redeem',
+  PHOTO_ACCESS: '/photo-access',
   PHOTO_ACCESS_REQUESTS: '/photo-access-requests',
   NOTIFICATIONS: '/notifications',
   NOTIFICATIONS_READ_ALL: '/notifications/read-all',

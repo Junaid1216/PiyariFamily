@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
+  Keyboard,
   ScrollView,
   StyleSheet,
   Text,
@@ -27,8 +28,9 @@ import {
   getImageCacheKey,
   hydrateMatchImages,
   isApiSuccess,
+  mapFilterMatchGroups,
   mapFilterSetup,
-  mapMatchList,
+  profileMatchesSearchQuery,
   type FilterQuickOption,
   type SuggestedMatch,
 } from '../../API';
@@ -42,6 +44,8 @@ import { useTabRootBackToHome } from '../../Functions/tabNavigation';
 import {
   clearFilterResults,
   selectFilterApplied,
+  selectFilterForm,
+  selectFilterHasExactMatches,
   selectFilterResults,
   selectProfile,
   useAppDispatch,
@@ -55,8 +59,8 @@ type NavigationProp = NativeStackNavigationProp<
 
 type SearchRouteProp = RouteProp<SearchStackParamList, 'SearchMain'>;
 
-const SEARCH_DEBOUNCE_MS = 600;
 const MIN_SEARCH_LENGTH = 2;
+const DUPLICATE_SEARCH_WINDOW_MS = 1500;
 
 const iconForQuickFilter = (id: string) => {
   const key = id.toLowerCase();
@@ -84,151 +88,233 @@ const SearchScreen = () => {
   const dispatch = useAppDispatch();
   const filterResults = useAppSelector(selectFilterResults);
   const filterApplied = useAppSelector(selectFilterApplied);
+  const filterForm = useAppSelector(selectFilterForm);
+  const filterHasExactMatches = useAppSelector(selectFilterHasExactMatches);
   const [searchQuery, setSearchQuery] = useState('');
+  const [submittedQuery, setSubmittedQuery] = useState('');
   const [activeQuickFilter, setActiveQuickFilter] = useState<string | null>(
     null,
   );
   const [quickFilters, setQuickFilters] = useState<FilterQuickOption[]>([]);
+  const [searchCatalogs, setSearchCatalogs] = useState<{
+    cities: string[];
+    professions: string[];
+  }>({ cities: [], professions: [] });
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [suggestedMatches, setSuggestedMatches] = useState<SuggestedMatch[]>(
     [],
   );
+  const [emptyMessage, setEmptyMessage] = useState(Strings.noMatchesFound);
   const [loading, setLoading] = useState(true);
-  const [showAllMatches, setShowAllMatches] = useState(false);
-  const skipNextSearchRef = useRef(filterApplied);
-  const skipFilterSearchRef = useRef(true);
-  const activeQuickFilterRef = useRef(activeQuickFilter);
-  const searchQueryRef = useRef(searchQuery);
   const loadedQuickFiltersRef = useRef(false);
+  const searchGenerationRef = useRef(0);
+  const lastSearchKeyRef = useRef('');
+  const lastSearchAtRef = useRef(0);
+  const catalogsRef = useRef(searchCatalogs);
 
-  activeQuickFilterRef.current = activeQuickFilter;
-  searchQueryRef.current = searchQuery;
+  catalogsRef.current = searchCatalogs;
 
-  const fetchMatchSearch = useCallback(async (query: string) => {
-    setLoading(true);
+  const comingFromFilter = Boolean(route.params?.fromFilter);
+  const appliedQuickFilterIds = Object.entries(
+    filterForm?.activeQuickFilters ?? {},
+  )
+    .filter(([, enabled]) => Boolean(enabled))
+    .map(([id]) => id);
+  const showingFilterResults =
+    filterApplied &&
+    !submittedQuery.trim() &&
+    (comingFromFilter || !activeQuickFilter);
 
-    try {
-      const profileGender = profile?.gender;
-      const trimmedQuery = query.trim();
-      const params = buildMatchSearchParams({
-        searchQuery: query,
-        quickFilter: activeQuickFilterRef.current,
-        profileGender,
-      });
-      const res = await Api.getMatchSearch(params);
+  const applySearchMeta = useCallback((payload: unknown) => {
+    const setup = mapFilterSetup(payload as Parameters<typeof mapFilterSetup>[0]);
 
-      if (isApiSuccess(res?.status, res?.data?.success)) {
-        const mapped = mapMatchList(res?.data);
-        let chips = mapFilterSetup(res?.data).quickFilters;
-
-        if (!chips.length && !loadedQuickFiltersRef.current) {
-          const meta = await Api.getMatchFilter();
-          if (isApiSuccess(meta?.status, meta?.data?.success)) {
-            chips = mapFilterSetup(meta?.data).quickFilters;
-          }
-        }
-
-        if (chips.length) {
-          setQuickFilters(chips);
-          loadedQuickFiltersRef.current = true;
-        }
-
-        setSuggestedMatches(await hydrateMatchImages(mapped));
-        if (
-          trimmedQuery.length >= MIN_SEARCH_LENGTH ||
-          activeQuickFilterRef.current
-        ) {
-          dispatch(clearFilterResults());
-        }
-        if (trimmedQuery.length >= MIN_SEARCH_LENGTH) {
-          setRecentSearches(current =>
-            [trimmedQuery, ...current.filter(item => item !== trimmedQuery)].slice(
-              0,
-              8,
-            ),
-          );
-        }
-      } else {
-        setSuggestedMatches([]);
-        Toast.show(
-          res?.data?.message ?? 'Failed to load search results',
-          Toast.LONG,
-        );
-      }
-    } catch (error) {
-      setSuggestedMatches([]);
-      Toast.show(
-        getApiErrorMessage(error, 'Failed to load search results'),
-        Toast.LONG,
-      );
-    } finally {
-      setLoading(false);
+    if (setup.quickFilters.length) {
+      setQuickFilters(setup.quickFilters);
+      loadedQuickFiltersRef.current = true;
     }
-  }, [dispatch, profile?.gender]);
 
-  useFocusEffect(
-    useCallback(() => {
-      if (!route.params?.fromFilter && !filterApplied) {
+    if (setup.options.cities.length || setup.options.professions.length) {
+      setSearchCatalogs({
+        cities: setup.options.cities,
+        professions: setup.options.professions,
+      });
+    }
+  }, []);
+
+  const fetchMatchSearch = useCallback(
+    async (query: string, quickFilter: string | null) => {
+      const trimmedQuery = query.trim();
+      const requestKey = JSON.stringify({
+        query: trimmedQuery,
+        quickFilter,
+        gender: profile?.gender ?? '',
+      });
+      const now = Date.now();
+
+      if (
+        lastSearchKeyRef.current === requestKey &&
+        now - lastSearchAtRef.current < DUPLICATE_SEARCH_WINDOW_MS
+      ) {
         return;
       }
 
-      setSuggestedMatches(filterResults);
-      setLoading(false);
-      skipNextSearchRef.current = true;
-      skipFilterSearchRef.current = true;
-      if (route.params?.fromFilter) {
-        navigation.setParams({
-          fromFilter: undefined,
-          filterMatches: undefined,
-          filterTotal: undefined,
+      const generation = ++searchGenerationRef.current;
+      lastSearchKeyRef.current = requestKey;
+      lastSearchAtRef.current = now;
+      setLoading(true);
+
+      try {
+        const params = buildMatchSearchParams({
+          searchQuery: trimmedQuery,
+          quickFilter,
+          profileGender: profile?.gender,
+          searchCatalogs: catalogsRef.current,
         });
+        console.log('[Search] GET /matches/search params:', params);
+
+        const res = await Api.getMatchSearch(params);
+
+        if (generation !== searchGenerationRef.current) {
+          return;
+        }
+
+        if (isApiSuccess(res?.status, res?.data?.success)) {
+          const groups = mapFilterMatchGroups(res?.data);
+          const isUserSearch = trimmedQuery.length >= MIN_SEARCH_LENGTH;
+          applySearchMeta(res?.data);
+
+          if (
+            trimmedQuery.length >= MIN_SEARCH_LENGTH &&
+            !catalogsRef.current.cities.length &&
+            !catalogsRef.current.professions.length
+          ) {
+            const meta = await Api.getMatchFilter();
+            if (
+              generation === searchGenerationRef.current &&
+              isApiSuccess(meta?.status, meta?.data?.success)
+            ) {
+              applySearchMeta(meta?.data);
+            }
+          }
+
+          if (generation !== searchGenerationRef.current) {
+            return;
+          }
+
+          if (isUserSearch) {
+            const exactMatches =
+              groups.fallbackUsed || !groups.exact.length
+                ? []
+                : groups.exact.filter(match =>
+                    profileMatchesSearchQuery(
+                      match,
+                      trimmedQuery,
+                      catalogsRef.current,
+                    ),
+                  );
+
+            setSuggestedMatches(await hydrateMatchImages(exactMatches));
+            setEmptyMessage(Strings.noExactMatchesFound);
+          } else {
+            const mapped = groups.exact.length
+              ? groups.exact
+              : groups.suggested;
+            setSuggestedMatches(await hydrateMatchImages(mapped));
+            setEmptyMessage(
+              res?.data?.message?.trim() || Strings.noMatchesFound,
+            );
+          }
+
+          if (trimmedQuery.length >= MIN_SEARCH_LENGTH || quickFilter) {
+            dispatch(clearFilterResults());
+          }
+          if (trimmedQuery.length >= MIN_SEARCH_LENGTH) {
+            setRecentSearches(current =>
+              [
+                trimmedQuery,
+                ...current.filter(item => item !== trimmedQuery),
+              ].slice(0, 8),
+            );
+          }
+        } else {
+          setSuggestedMatches([]);
+          setEmptyMessage(
+            res?.data?.message ?? Strings.noMatchesFound,
+          );
+          Toast.show(
+            res?.data?.message ?? 'Failed to load search results',
+            Toast.LONG,
+          );
+        }
+      } catch (error) {
+        if (generation !== searchGenerationRef.current) {
+          return;
+        }
+
+        setSuggestedMatches([]);
+        const message = getApiErrorMessage(
+          error,
+          'Failed to load search results',
+        );
+        setEmptyMessage(message);
+        Toast.show(message, Toast.LONG);
+      } finally {
+        if (generation === searchGenerationRef.current) {
+          setLoading(false);
+        }
       }
-    }, [
-      filterApplied,
-      filterResults,
-      navigation,
-      route.params?.fromFilter,
-    ]),
+    },
+    [applySearchMeta, dispatch, profile?.gender],
+  );
+
+  const submitSearch = useCallback(
+    (query: string) => {
+      const trimmed = query.trim();
+
+      if (trimmed.length > 0 && trimmed.length < MIN_SEARCH_LENGTH) {
+        Toast.show('Enter at least 2 characters to search', Toast.LONG);
+        return;
+      }
+
+      Keyboard.dismiss();
+      setSubmittedQuery(trimmed);
+    },
+    [],
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!route.params?.fromFilter) {
+        return;
+      }
+
+      setSearchQuery('');
+      setSubmittedQuery('');
+      setActiveQuickFilter(null);
+      navigation.setParams({
+        fromFilter: undefined,
+        filterMatches: undefined,
+        filterTotal: undefined,
+      });
+    }, [navigation, route.params?.fromFilter]),
   );
 
   useEffect(() => {
-    if (skipFilterSearchRef.current) {
-      skipFilterSearchRef.current = false;
+    if (!showingFilterResults) {
       return;
     }
 
-    if (skipNextSearchRef.current) {
-      skipNextSearchRef.current = false;
-      return;
-    }
-
-    const trimmed = searchQueryRef.current.trim();
-
-    if (trimmed.length > 0 && trimmed.length < MIN_SEARCH_LENGTH) {
-      return;
-    }
-
-    fetchMatchSearch(trimmed);
-  }, [activeQuickFilter, fetchMatchSearch]);
+    setSuggestedMatches(filterResults);
+    setLoading(false);
+  }, [filterResults, showingFilterResults]);
 
   useEffect(() => {
-    if (skipNextSearchRef.current) {
-      skipNextSearchRef.current = false;
+    if (showingFilterResults) {
       return;
     }
 
-    const trimmed = searchQuery.trim();
-
-    if (trimmed.length > 0 && trimmed.length < MIN_SEARCH_LENGTH) {
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      fetchMatchSearch(trimmed);
-    }, trimmed ? SEARCH_DEBOUNCE_MS : 0);
-
-    return () => clearTimeout(timer);
-  }, [fetchMatchSearch, searchQuery]);
+    fetchMatchSearch(submittedQuery, activeQuickFilter);
+  }, [activeQuickFilter, fetchMatchSearch, showingFilterResults, submittedQuery]);
 
   const removeRecentSearch = (item: string) => {
     setRecentSearches(prev => prev.filter(search => search !== item));
@@ -237,6 +323,13 @@ const SearchScreen = () => {
   const clearRecentSearches = () => {
     setRecentSearches([]);
   };
+
+  const matchesTitle =
+    (showingFilterResults && filterHasExactMatches) ||
+    submittedQuery.trim().length >= MIN_SEARCH_LENGTH
+      ? Strings.exactMatches
+      : Strings.suggestedMatches;
+  const hasSubmittedSearch = submittedQuery.trim().length >= MIN_SEARCH_LENGTH;
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
@@ -247,6 +340,17 @@ const SearchScreen = () => {
       >
         <View style={styles.titleRow}>
           <Text style={styles.title}>{Strings.findYourMatch}</Text>
+          <TouchableOpacity
+            style={styles.filterBtn}
+            activeOpacity={0.85}
+            onPress={() => navigation.navigate('FilterMatches')}
+          >
+            <Image
+              source={Images.filterIcon}
+              style={styles.filterIcon}
+              resizeMode="contain"
+            />
+          </TouchableOpacity>
         </View>
 
         <View style={styles.searchRow}>
@@ -256,7 +360,15 @@ const SearchScreen = () => {
             placeholder={Strings.searchPlaceholder}
             placeholderTextColor={Colors.placeholder}
             value={searchQuery}
-            onChangeText={setSearchQuery}
+            returnKeyType="search"
+            onChangeText={text => {
+              setSearchQuery(text);
+              if (!text.trim() && submittedQuery) {
+                setSubmittedQuery('');
+              }
+            }}
+            onSubmitEditing={() => submitSearch(searchQuery)}
+            blurOnSubmit
           />
         </View>
 
@@ -265,7 +377,9 @@ const SearchScreen = () => {
             <Text style={styles.sectionLabel}>{Strings.quickFilters}</Text>
             <View style={styles.quickFilterRow}>
               {quickFilters.map(filter => {
-                const selected = activeQuickFilter === filter.id;
+                const selected = showingFilterResults
+                  ? appliedQuickFilterIds.includes(filter.id)
+                  : activeQuickFilter === filter.id;
 
                 return (
                   <TouchableOpacity
@@ -275,11 +389,18 @@ const SearchScreen = () => {
                       selected && styles.quickFilterChipSelected,
                     ]}
                     activeOpacity={0.85}
-                    onPress={() =>
+                    onPress={() => {
+                      if (
+                        showingFilterResults &&
+                        appliedQuickFilterIds.includes(filter.id)
+                      ) {
+                        return;
+                      }
+
                       setActiveQuickFilter(prev =>
                         prev === filter.id ? null : filter.id,
-                      )
-                    }
+                      );
+                    }}
                   >
                     <Icon
                       name={iconForQuickFilter(filter.id)}
@@ -318,7 +439,10 @@ const SearchScreen = () => {
                 key={item}
                 style={styles.recentRow}
                 activeOpacity={0.85}
-                onPress={() => setSearchQuery(item)}
+                onPress={() => {
+                  setSearchQuery(item);
+                  submitSearch(item);
+                }}
               >
                 <Icon
                   name="clock-outline"
@@ -339,14 +463,12 @@ const SearchScreen = () => {
           </>
         ) : null}
 
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>{Strings.suggestedMatches}</Text>
-          {suggestedMatches.length > 4 ? (
-            <TouchableOpacity activeOpacity={0.8} onPress={() => setShowAllMatches(prev => !prev)}>
-              <Text style={styles.seeAll}>{showAllMatches ? Strings.hide : `${Strings.seeAll} →`}</Text>
-            </TouchableOpacity>
-          ) : null}
-        </View>
+        {!loading &&
+        (suggestedMatches.length > 0 || hasSubmittedSearch) ? (
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>{matchesTitle}</Text>
+          </View>
+        ) : null}
 
         {loading ? (
           <View style={styles.loaderWrap}>
@@ -354,7 +476,7 @@ const SearchScreen = () => {
           </View>
         ) : suggestedMatches.length > 0 ? (
           <View style={styles.suggestedGrid}>
-            {(showAllMatches ? suggestedMatches : suggestedMatches.slice(0, 4)).map(match => (
+            {suggestedMatches.map(match => (
               <TouchableOpacity
                 key={match.id}
                 style={styles.suggestedCard}
@@ -437,7 +559,41 @@ const SearchScreen = () => {
             ))}
           </View>
         ) : (
-          <Text style={styles.emptyText}>No matches found</Text>
+          <View style={styles.emptyState}>
+            <View style={styles.emptyIconWrap}>
+              <Icon
+                name="account-search-outline"
+                size={fs(32)}
+                color={Colors.primary}
+              />
+            </View>
+            <Text style={styles.emptyTitle}>
+              {hasSubmittedSearch
+                ? Strings.noExactMatchesFound
+                : emptyMessage}
+            </Text>
+            {hasSubmittedSearch ? (
+              <>
+                <View style={styles.emptyQueryChip}>
+                  <Icon
+                    name="magnify"
+                    size={fs(14)}
+                    color={Colors.gold}
+                  />
+                  <Text style={styles.emptyQueryText} numberOfLines={1}>
+                    {submittedQuery}
+                  </Text>
+                </View>
+                <Text style={styles.emptyHint}>
+                  {Strings.noExactMatchesHint}
+                </Text>
+              </>
+            ) : (
+              <Text style={styles.emptyHint}>
+                {Strings.noExactMatchesHint}
+              </Text>
+            )}
+          </View>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -457,7 +613,7 @@ const styles = StyleSheet.create({
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-start',
+    justifyContent: 'space-between',
     marginBottom: hp('2%'),
   },
   title: {
@@ -466,6 +622,19 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     letterSpacing: -0.3,
     textAlign: 'left',
+  },
+  filterBtn: {
+    width: wp('10.7%'),
+    height: wp('10.7%'),
+    borderRadius: wp('5.35%'),
+    backgroundColor: Colors.tabActiveBg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterIcon: {
+    width: fs(18),
+    height: fs(18),
+    tintColor: Colors.primary,
   },
   loaderWrap: {
     minHeight: hp('18%'),
@@ -568,17 +737,60 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.bold,
     color: Colors.primary,
   },
-  seeAll: {
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: hp('2%'),
+    paddingHorizontal: wp('6%'),
+    paddingVertical: hp('4.5%'),
+    backgroundColor: Colors.tabActiveBg,
+    borderRadius: wp('5%'),
+    borderWidth: 1,
+    borderColor: Colors.focusBorder,
+  },
+  emptyIconWrap: {
+    width: wp('16%'),
+    height: wp('16%'),
+    borderRadius: wp('8%'),
+    backgroundColor: Colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: hp('1.8%'),
+    borderWidth: 1,
+    borderColor: Colors.focusBorder,
+  },
+  emptyTitle: {
+    fontSize: fs(16),
+    fontFamily: Fonts.bold,
+    color: Colors.primary,
+    textAlign: 'center',
+    marginBottom: hp('1.2%'),
+  },
+  emptyQueryChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: wp('1.5%'),
+    maxWidth: '100%',
+    backgroundColor: Colors.white,
+    borderRadius: wp('5%'),
+    paddingHorizontal: wp('3.5%'),
+    paddingVertical: hp('0.7%'),
+    marginBottom: hp('1.2%'),
+    borderWidth: 1,
+    borderColor: Colors.goldLight,
+  },
+  emptyQueryText: {
+    flexShrink: 1,
     fontSize: fs(13),
     fontFamily: Fonts.semiBold,
     color: Colors.gold,
   },
-  emptyText: {
-    fontSize: FontSizes.bodySmall,
+  emptyHint: {
+    fontSize: fs(13),
     fontFamily: Fonts.regular,
     color: Colors.textLight,
     textAlign: 'center',
-    paddingVertical: hp('4%'),
+    lineHeight: fs(20),
   },
   suggestedGrid: {
     flexDirection: 'row',

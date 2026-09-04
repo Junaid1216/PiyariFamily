@@ -28,6 +28,7 @@ export type ProfileDetail = {
   basicDetails: BasicDetail[];
   languages: string[];
   interests: string[];
+  photosNeedAccess?: boolean;
 };
 
 export const PROFILE_DETAILS: Record<string, ProfileDetail> = {

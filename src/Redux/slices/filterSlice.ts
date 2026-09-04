@@ -11,6 +11,9 @@ export type FilterFormState = {
   ageMin: number;
   ageMax: number;
   incomeRange: string;
+  incomeMin?: number;
+  incomeMax?: number;
+  extraValues: Record<string, string>;
   activeQuickFilters: Record<string, boolean>;
 };
 
@@ -19,6 +22,8 @@ export type FilterState = {
   results: SuggestedMatch[];
   total: number;
   applied: boolean;
+  fallbackUsed: boolean;
+  hasExactMatches: boolean;
 };
 
 export const EMPTY_FILTER_FORM: FilterFormState = {
@@ -31,6 +36,9 @@ export const EMPTY_FILTER_FORM: FilterFormState = {
   ageMin: 18,
   ageMax: 60,
   incomeRange: 'Any',
+  incomeMin: 0,
+  incomeMax: 200000,
+  extraValues: {},
   activeQuickFilters: {},
 };
 
@@ -39,6 +47,8 @@ const initialState: FilterState = {
   results: [],
   total: 0,
   applied: false,
+  fallbackUsed: false,
+  hasExactMatches: false,
 };
 
 const filterSlice = createSlice({
@@ -50,16 +60,25 @@ const filterSlice = createSlice({
     },
     setFilterResults: (
       state,
-      action: PayloadAction<{ results: SuggestedMatch[]; total: number }>,
+      action: PayloadAction<{
+        results: SuggestedMatch[];
+        total: number;
+        fallbackUsed?: boolean;
+        hasExactMatches?: boolean;
+      }>,
     ) => {
       state.results = action.payload.results;
       state.total = action.payload.total;
       state.applied = true;
+      state.fallbackUsed = Boolean(action.payload.fallbackUsed);
+      state.hasExactMatches = Boolean(action.payload.hasExactMatches);
     },
     clearFilterResults: state => {
       state.results = [];
       state.total = 0;
       state.applied = false;
+      state.fallbackUsed = false;
+      state.hasExactMatches = false;
     },
     clearFilter: () => initialState,
   },
@@ -80,5 +99,9 @@ export const selectFilterTotal = (state: { filter: FilterState }) =>
   state.filter.total;
 export const selectFilterApplied = (state: { filter: FilterState }) =>
   state.filter.applied;
+export const selectFilterHasExactMatches = (state: { filter: FilterState }) =>
+  state.filter.hasExactMatches;
+export const selectFilterFallbackUsed = (state: { filter: FilterState }) =>
+  state.filter.fallbackUsed;
 
 export default filterSlice.reducer;

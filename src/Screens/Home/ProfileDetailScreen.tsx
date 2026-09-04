@@ -75,7 +75,8 @@ const ProfileDetailScreen = () => {
       const res = await Api.getMatchProfile(profileId);
 
       if (isApiSuccess(res?.status, res?.data?.success)) {
-        setProfile(mapMatchProfileDetail(res?.data, profileId, preview));
+        const mapped = mapMatchProfileDetail(res?.data, profileId, preview);
+        setProfile(mapped);
       } else {
         if (!name) {
           setProfile(null);
@@ -344,7 +345,9 @@ const ProfileDetailScreen = () => {
           ) : (
             <>
               <Icon name="heart" size={fs(18)} color={Colors.white} />
-              <Text style={styles.interestBtnText}>{Strings.sendInterest}</Text>
+              <Text style={styles.interestBtnText}>
+                {Strings.sendInterest}
+              </Text>
             </>
           )}
         </TouchableOpacity>

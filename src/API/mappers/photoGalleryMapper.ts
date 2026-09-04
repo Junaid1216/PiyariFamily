@@ -1,5 +1,6 @@
 import { ImageSourcePropType } from 'react-native';
 import { resolveMediaUrl } from '../mediaUrl';
+import { parseVisibilityFlag } from './profileMapper';
 
 export type PhotoGalleryPhotoApi = {
   index?: number | string | null;
@@ -131,7 +132,17 @@ export const mapPhotoGallery = (
     )
     .filter(Boolean)
     .map(uri => ({ uri }));
-  const accessGranted = photos.length > 0;
+  const grantedFlag =
+    parseVisibilityFlag(data?.access_granted) ??
+    parseVisibilityFlag(data?.visibility?.access_granted);
+  const additionalVisible = parseVisibilityFlag(
+    data?.visibility?.additional_photos_visible,
+  );
+  const accessGranted =
+    grantedFlag === true ||
+    (grantedFlag !== false &&
+      additionalVisible !== false &&
+      photos.length > 0);
 
   return {
     userId: pickString(

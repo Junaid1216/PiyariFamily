@@ -20,6 +20,7 @@ import {
   Api,
   applyAllNotificationsRead,
   applyNotificationRead,
+  formatNotificationTime,
   getApiErrorMessage,
   isApiSuccess,
   isViewProfileRequestNotification,
@@ -239,7 +240,11 @@ const NotificationsScreen = () => {
         <View style={styles.cardTopRow}>
           <Text style={styles.cardTitle}>{item.title}</Text>
           <View style={styles.timeWrap}>
-            {item.time ? <Text style={styles.timeText}>{item.time}</Text> : null}
+            {item.createdAt || item.time ? (
+              <Text style={styles.timeText}>
+                {formatNotificationTime(item.createdAt) || item.time}
+              </Text>
+            ) : null}
             {item.count ? (
               <View style={styles.countBadge}>
                 <Text style={styles.countBadgeText}>{item.count}</Text>

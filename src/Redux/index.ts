@@ -72,5 +72,7 @@ export {
   selectFilterResults,
   selectFilterTotal,
   selectFilterApplied,
+  selectFilterHasExactMatches,
+  selectFilterFallbackUsed,
 } from './slices/filterSlice';
 export type { FilterFormState, FilterState } from './slices/filterSlice';

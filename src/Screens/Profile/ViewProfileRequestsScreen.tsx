@@ -374,9 +374,21 @@ const ViewProfileRequestsScreen = () => {
           {requests.length > 0 ? (
             requests.map(renderRequest)
           ) : (
-            <Text style={styles.emptyText}>
-              {Strings.viewProfileRequestsEmpty}
-            </Text>
+            <View style={styles.emptyState}>
+              <View style={styles.emptyIconWrap}>
+                <Icon
+                  name="account-eye-outline"
+                  size={fs(32)}
+                  color={Colors.primary}
+                />
+              </View>
+              <Text style={styles.emptyTitle}>
+                {Strings.viewProfileRequestsEmpty}
+              </Text>
+              <Text style={styles.emptyHint}>
+                {Strings.viewProfileRequestsEmptyHint}
+              </Text>
+            </View>
           )}
         </ScrollView>
       )}
@@ -603,6 +615,41 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.regular,
     color: Colors.textLight,
     textAlign: 'center',
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: wp('6%'),
+    paddingVertical: hp('5%'),
+    backgroundColor: Colors.tabActiveBg,
+    borderRadius: wp('5%'),
+    borderWidth: 1,
+    borderColor: Colors.focusBorder,
+  },
+  emptyIconWrap: {
+    width: wp('16%'),
+    height: wp('16%'),
+    borderRadius: wp('8%'),
+    backgroundColor: Colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: hp('1.8%'),
+    borderWidth: 1,
+    borderColor: Colors.focusBorder,
+  },
+  emptyTitle: {
+    fontSize: fs(16),
+    fontFamily: Fonts.bold,
+    color: Colors.primary,
+    textAlign: 'center',
+    marginBottom: hp('1%'),
+  },
+  emptyHint: {
+    fontSize: fs(13),
+    fontFamily: Fonts.regular,
+    color: Colors.textLight,
+    textAlign: 'center',
+    lineHeight: fs(20),
   },
   retryBtn: {
     backgroundColor: Colors.primary,

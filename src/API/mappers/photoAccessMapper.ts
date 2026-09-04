@@ -97,6 +97,8 @@ export type PhotoAccessRespondResponse = {
   data?: PhotoAccessRespondResponse;
 };
 
+export type PhotoAccessUserRequestResponse = PhotoAccessRespondResponse;
+
 export type PhotoAccessAction = 'approve' | 'reject';
 
 const pickString = (...values: Array<string | null | undefined>) => {
@@ -228,27 +230,15 @@ const isRequestItem = (value: unknown): value is PhotoAccessRequestApiItem => {
 const hasRequestCollections = (value: Record<string, unknown>) =>
   value.requests != null ||
   value.incoming != null ||
-  value.outgoing != null;
-
-const unwrapPayload = (
-  response?: PhotoAccessRequestsResponse | null,
-): PhotoAccessRequestsResponse | null => {
-  if (!response || typeof response !== 'object') {
-    return null;
-  }
-
-  let current: Record<string, unknown> = { ...response };
-
-  for (let depth = 0; depth < 3; depth += 1) {
-    const nested = current.data;
-    if (!isPlainObject(nested) || Array.isArray(nested)) {
-      break;
-    }
-    current = { ...current, ...nested };
-  }
-
-  return current as PhotoAccessRequestsResponse;
-};
+  value.outgoing != null ||
+  value.received != null ||
+  value.sent != null ||
+  value.items != null ||
+  value.list != null ||
+  value.records != null ||
+  value.photo_access_requests != null ||
+  value.view_profile_requests != null ||
+  value.view_requests != null;
 
 const collectItems = (value: unknown, depth = 0): PhotoAccessRequestApiItem[] => {
   if (depth > 4 || value == null) {
@@ -268,6 +258,14 @@ const collectItems = (value: unknown, depth = 0): PhotoAccessRequestApiItem[] =>
       ...collectItems(value.requests, depth + 1),
       ...collectItems(value.incoming, depth + 1),
       ...collectItems(value.outgoing, depth + 1),
+      ...collectItems(value.received, depth + 1),
+      ...collectItems(value.sent, depth + 1),
+      ...collectItems(value.items, depth + 1),
+      ...collectItems(value.list, depth + 1),
+      ...collectItems(value.records, depth + 1),
+      ...collectItems(value.photo_access_requests, depth + 1),
+      ...collectItems(value.view_profile_requests, depth + 1),
+      ...collectItems(value.view_requests, depth + 1),
       ...collectItems(value.data, depth + 1),
     ];
   }
@@ -277,6 +275,26 @@ const collectItems = (value: unknown, depth = 0): PhotoAccessRequestApiItem[] =>
   }
 
   return collectItems(value.data, depth + 1);
+};
+
+const unwrapPayload = (
+  response?: PhotoAccessRequestsResponse | null,
+): PhotoAccessRequestsResponse | null => {
+  if (!response || typeof response !== 'object') {
+    return null;
+  }
+
+  let current: Record<string, unknown> = { ...response };
+
+  for (let depth = 0; depth < 3; depth += 1) {
+    const nested = current.data;
+    if (!isPlainObject(nested) || Array.isArray(nested)) {
+      break;
+    }
+    current = { ...current, ...nested };
+  }
+
+  return current as PhotoAccessRequestsResponse;
 };
 
 const mergeProfile = (

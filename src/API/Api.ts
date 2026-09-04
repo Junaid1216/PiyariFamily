@@ -17,6 +17,7 @@ import type {
   PhotoAccessAction,
   PhotoAccessRequestsResponse,
   PhotoAccessRespondResponse,
+  PhotoAccessUserRequestResponse,
 } from './mappers/photoAccessMapper';
 import type { PhotoGalleryResponse } from './mappers/photoGalleryMapper';
 import type {
@@ -61,6 +62,24 @@ const isMethodNotAllowed = (error: unknown) => {
 
   return error.response?.status === 405 || message.includes('method not allowed');
 };
+
+const isMissingEndpoint = (error: unknown) => {
+  if (!(error instanceof AxiosError)) {
+    return false;
+  }
+
+  const message = String(
+    (error.response?.data as { message?: string } | undefined)?.message ??
+      '',
+  ).toLowerCase();
+
+  return (
+    error.response?.status === 404 || message.includes('endpoint not found')
+  );
+};
+
+const isRetryablePhotoAccessRequest = (error: unknown) =>
+  isMethodNotAllowed(error) || isMissingEndpoint(error);
 
 type UpdateProfileResponse = MessageResponse & {
   user?: ProfileApiData;
@@ -333,7 +352,40 @@ export const Api = {
     }),
 
   getPhotoAccessRequests: () =>
-    apiClient.get<PhotoAccessRequestsResponse>(ENDPOINTS.PHOTO_ACCESS_REQUESTS),
+    apiClient.get<PhotoAccessRequestsResponse>(ENDPOINTS.PHOTO_ACCESS_REQUESTS, {
+      params: { type: 'incoming' },
+    }),
+
+  requestPhotoAccess: async (userId: string) => {
+    const payload = { user_id: userId };
+
+    try {
+      return await apiClient.postForm<PhotoAccessUserRequestResponse>(
+        ENDPOINTS.PHOTO_ACCESS_REQUESTS,
+        payload,
+      );
+    } catch (error) {
+      if (!isRetryablePhotoAccessRequest(error)) {
+        throw error;
+      }
+    }
+
+    try {
+      return await apiClient.postForm<PhotoAccessUserRequestResponse>(
+        ENDPOINTS.PHOTO_ACCESS_REQUESTS,
+        { to_user_id: userId },
+      );
+    } catch (error) {
+      if (!isRetryablePhotoAccessRequest(error)) {
+        throw error;
+      }
+    }
+
+    return apiClient.postForm<PhotoAccessUserRequestResponse>(
+      `${ENDPOINTS.PHOTO_ACCESS}/${userId}/request`,
+      payload,
+    );
+  },
 
   respondToPhotoAccessRequest: (
     requestId: string,

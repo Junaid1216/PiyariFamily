@@ -38,6 +38,16 @@ describe('GET /photo-access-requests', () => {
     expect(item.photos).toHaveLength(1);
   });
 
+  it('keeps incoming requests empty until another user sends one', () => {
+    const items = mapPhotoAccessRequests({
+      success: 200,
+      type: 'incoming',
+      requests: [],
+    });
+
+    expect(items).toHaveLength(0);
+  });
+
   it('maps nested request profiles even when the wrapper has a status string', () => {
     const [item] = mapPhotoAccessRequests({
       success: 200,
@@ -102,6 +112,26 @@ describe('GET /photo-access-requests', () => {
     });
 
     expect(items).toHaveLength(0);
+  });
+
+  it('merges outgoing requests when the incoming list is empty', () => {
+    const items = mergePhotoAccessResponses([
+      { success: 200, type: 'incoming', requests: [] },
+      {
+        success: 200,
+        type: 'outgoing',
+        requests: [
+          {
+            id: 7,
+            status: 'pending',
+            profile: { id: 9, name: 'Hina' },
+          },
+        ],
+      },
+    ]);
+
+    expect(items).toHaveLength(1);
+    expect(mapPhotoAccessRequests({ requests: items })[0].name).toBe('Hina');
   });
 
   it('merges root profile location onto sparse nested requests', () => {

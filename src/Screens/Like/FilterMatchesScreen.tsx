@@ -25,11 +25,15 @@ import PrimaryButton from '../../Components/PrimaryButton';
 import {
   Api,
   buildMatchFilterParams,
+  DEFAULT_AGE_MAX,
+  DEFAULT_AGE_MIN,
+  DEFAULT_INCOME_MAX,
+  DEFAULT_INCOME_MIN,
   FILTER_ANY,
   getApiErrorMessage,
   isApiSuccess,
   mapFilterSetup,
-  mapMatchList,
+  mapFilterMatchGroups,
   pickMatchListTotal,
   hydrateMatchImages,
   withAnyOption,
@@ -56,8 +60,36 @@ type FilterNavigationProp = NativeStackNavigationProp<
   'FilterMatches'
 >;
 
+const logFilterBackendResponse = (source: string, payload: unknown) => {
+  const data = (payload ?? {}) as Record<string, unknown>;
+  const nested =
+    data.data && typeof data.data === 'object' && !Array.isArray(data.data)
+      ? (data.data as Record<string, unknown>)
+      : null;
+  const filterOptions = (data.filter_options ?? nested?.filter_options) as
+    | Record<string, unknown>
+    | undefined;
+  const applied = (data.filters_applied ?? nested?.filters_applied) as
+    | Record<string, unknown>
+    | undefined;
+
+  console.log(`[Filter] ${source} full backend response:`, payload);
+  console.log(`[Filter] ${source} PKR income range from backend:`, {
+    hasFilterOptions: Boolean(filterOptions),
+    income_ranges: filterOptions?.income_ranges ?? null,
+    incomeRanges: filterOptions?.incomeRanges ?? null,
+    monthly_income_ranges: filterOptions?.monthly_income_ranges ?? null,
+    pkr_income_ranges: filterOptions?.pkr_income_ranges ?? null,
+    incomes: filterOptions?.incomes ?? null,
+    monthly_incomes: filterOptions?.monthly_incomes ?? null,
+    filters_applied_income_range: applied?.income_range ?? null,
+    filters_applied_monthly_income: applied?.monthly_income ?? null,
+  });
+};
+
 const EMPTY_SETUP: FilterSetupData = {
   quickFilters: [],
+  extraSections: [],
   options: {
     cities: [],
     qualifications: [],
@@ -67,15 +99,25 @@ const EMPTY_SETUP: FilterSetupData = {
     incomeRanges: [],
   },
   defaults: {
-    ageMin: 18,
-    ageMax: 60,
+    ageMin: DEFAULT_AGE_MIN,
+    ageMax: DEFAULT_AGE_MAX,
     city: '',
     qualification: FILTER_ANY,
     profession: FILTER_ANY,
     religion: FILTER_ANY,
     maritalStatus: '',
     incomeRange: FILTER_ANY,
+    incomeMin: DEFAULT_INCOME_MIN,
+    incomeMax: DEFAULT_INCOME_MAX,
   },
+  bounds: {
+    ageMin: DEFAULT_AGE_MIN,
+    ageMax: DEFAULT_AGE_MAX,
+    incomeMin: DEFAULT_INCOME_MIN,
+    incomeMax: DEFAULT_INCOME_MAX,
+    incomeStep: 1000,
+  },
+  incomeRangeMeta: {},
 };
 
 const applyDefaults = (setup: FilterSetupData) => {
@@ -91,6 +133,11 @@ const applyDefaults = (setup: FilterSetupData) => {
     ageMin: defaults.ageMin,
     ageMax: defaults.ageMax,
     incomeRange: defaults.incomeRange,
+    incomeMin: defaults.incomeMin,
+    incomeMax: defaults.incomeMax,
+    extraValues: Object.fromEntries(
+      setup.extraSections.map(section => [section.id, FILTER_ANY]),
+    ),
     activeQuickFilters: Object.fromEntries(
       setup.quickFilters.map(filter => [filter.id, false]),
     ),
@@ -110,12 +157,16 @@ const FilterMatchesScreen = () => {
   const [religion, setReligion] = useState(FILTER_ANY);
   const [marital, setMarital] = useState('');
   const [citySearch, setCitySearch] = useState('');
-  const [ageMin, setAgeMin] = useState(18);
-  const [ageMax, setAgeMax] = useState(60);
+  const [ageMin, setAgeMin] = useState(DEFAULT_AGE_MIN);
+  const [ageMax, setAgeMax] = useState(DEFAULT_AGE_MAX);
   const [incomeRange, setIncomeRange] = useState(FILTER_ANY);
+  const [incomeMin, setIncomeMin] = useState(DEFAULT_INCOME_MIN);
+  const [incomeMax, setIncomeMax] = useState(DEFAULT_INCOME_MAX);
   const [activeQuickFilters, setActiveQuickFilters] = useState<
     Record<string, boolean>
   >({});
+  const [extraValues, setExtraValues] = useState<Record<string, string>>({});
+  const [scrollEnabled, setScrollEnabled] = useState(true);
   const [metaLoading, setMetaLoading] = useState(true);
   const [loading, setLoading] = useState(false);
 
@@ -124,14 +175,20 @@ const FilterMatchesScreen = () => {
 
     try {
       const res = await Api.getMatchFilter();
+      logFilterBackendResponse('meta (open Filter screen)', res?.data);
 
       if (isApiSuccess(res?.status, res?.data?.success)) {
         const setup = mapFilterSetup(res?.data);
+        console.log('[Filter] mapped PKR incomeRanges for UI:', setup.options.incomeRanges);
         const defaults = applyDefaults(setup);
         const restored = savedForm
           ? {
               ...defaults,
               ...savedForm,
+              extraValues: {
+                ...defaults.extraValues,
+                ...savedForm.extraValues,
+              },
               activeQuickFilters: {
                 ...defaults.activeQuickFilters,
                 ...savedForm.activeQuickFilters,
@@ -145,10 +202,43 @@ const FilterMatchesScreen = () => {
         setProfession(restored.profession);
         setReligion(restored.religion);
         setMarital(restored.marital);
-        setAgeMin(restored.ageMin);
-        setAgeMax(restored.ageMax);
+        setAgeMin(
+          Math.min(
+            setup.bounds.ageMax - 1,
+            Math.max(setup.bounds.ageMin, restored.ageMin),
+          ),
+        );
+        setAgeMax(
+          Math.max(
+            setup.bounds.ageMin + 1,
+            Math.min(setup.bounds.ageMax, restored.ageMax),
+          ),
+        );
         setIncomeRange(restored.incomeRange);
+        const restoredIncomeMin =
+          restored.incomeMin ?? setup.defaults.incomeMin;
+        const restoredIncomeMax =
+          restored.incomeMax ?? setup.defaults.incomeMax;
+        const nextIncomeMin = Math.min(
+          setup.bounds.incomeMax - setup.bounds.incomeStep,
+          Math.max(setup.bounds.incomeMin, restoredIncomeMin),
+        );
+        const nextIncomeMax = Math.max(
+          setup.bounds.incomeMin + setup.bounds.incomeStep,
+          Math.min(setup.bounds.incomeMax, restoredIncomeMax),
+        );
+        setIncomeMin(
+          nextIncomeMax > nextIncomeMin
+            ? nextIncomeMin
+            : setup.defaults.incomeMin,
+        );
+        setIncomeMax(
+          nextIncomeMax > nextIncomeMin
+            ? nextIncomeMax
+            : setup.defaults.incomeMax,
+        );
         setActiveQuickFilters(restored.activeQuickFilters);
+        setExtraValues(restored.extraValues);
       } else {
         setFilterSetup(EMPTY_SETUP);
         Toast.show(
@@ -183,6 +273,9 @@ const FilterMatchesScreen = () => {
     ageMin,
     ageMax,
     incomeRange,
+    incomeMin,
+    incomeMax,
+    extraValues,
     activeQuickFilters,
   });
 
@@ -197,6 +290,9 @@ const FilterMatchesScreen = () => {
     setAgeMin(defaults.ageMin);
     setAgeMax(defaults.ageMax);
     setIncomeRange(defaults.incomeRange);
+    setIncomeMin(defaults.incomeMin);
+    setIncomeMax(defaults.incomeMax);
+    setExtraValues(defaults.extraValues);
     setActiveQuickFilters(defaults.activeQuickFilters);
     dispatch(setFilterForm(defaults));
   };
@@ -209,9 +305,14 @@ const FilterMatchesScreen = () => {
       religion: FILTER_ANY,
       marital: '',
       citySearch: '',
-      ageMin: 18,
-      ageMax: 60,
+      ageMin: filterSetup.bounds.ageMin,
+      ageMax: filterSetup.bounds.ageMax,
       incomeRange: FILTER_ANY,
+      incomeMin: filterSetup.bounds.incomeMin,
+      incomeMax: filterSetup.bounds.incomeMax,
+      extraValues: Object.fromEntries(
+        filterSetup.extraSections.map(section => [section.id, FILTER_ANY]),
+      ),
       activeQuickFilters: Object.fromEntries(
         filterSetup.quickFilters.map(filter => [filter.id, false]),
       ),
@@ -225,6 +326,9 @@ const FilterMatchesScreen = () => {
     setAgeMin(cleared.ageMin);
     setAgeMax(cleared.ageMax);
     setIncomeRange(cleared.incomeRange);
+    setIncomeMin(cleared.incomeMin);
+    setIncomeMax(cleared.incomeMax);
+    setExtraValues(cleared.extraValues);
     setActiveQuickFilters(cleared.activeQuickFilters);
     dispatch(setFilterForm(cleared));
   };
@@ -253,22 +357,44 @@ const FilterMatchesScreen = () => {
         marital,
         ageMin,
         ageMax,
+        ageBoundMin: filterSetup.bounds.ageMin,
+        ageBoundMax: filterSetup.bounds.ageMax,
         incomeRange,
+        incomeMin,
+        incomeMax,
+        incomeBoundMin: filterSetup.bounds.incomeMin,
+        incomeBoundMax: filterSetup.bounds.incomeMax,
+        incomeRangeMeta: filterSetup.incomeRangeMeta,
+        extraValues,
         activeQuickFilters,
       });
 
       const res = await Api.getMatchFilter(params);
+      logFilterBackendResponse('apply filters', res?.data);
+      console.log('[Filter] apply query params:', params);
+      console.log('[Filter] selected quick filters:', activeQuickFilters);
 
       if (isApiSuccess(res?.status, res?.data?.success)) {
         Toast.show(res?.data?.message ?? 'Filters applied', Toast.LONG);
-        const matches = await hydrateMatchImages(mapMatchList(res?.data));
+        const groups = mapFilterMatchGroups(res?.data);
+        const matches = groups.exact.length
+          ? groups.exact
+          : groups.suggested;
+        const hydrated = await hydrateMatchImages(matches);
         dispatch(setFilterForm(currentForm()));
         dispatch(
           setFilterResults({
-            results: matches,
-            total: pickMatchListTotal(res?.data, matches.length),
+            results: hydrated,
+            total: pickMatchListTotal(res?.data, hydrated.length),
+            fallbackUsed: groups.fallbackUsed,
+            hasExactMatches: groups.exact.length > 0,
           }),
         );
+        console.log('[Filter] navigating to Search with filtered results:', {
+          count: hydrated.length,
+          hasExactMatches: groups.exact.length > 0,
+          fallbackUsed: groups.fallbackUsed,
+        });
         navigateToSearchFilterResults(navigation);
       } else {
         Toast.show(
@@ -291,7 +417,15 @@ const FilterMatchesScreen = () => {
     citySearch,
     education,
     incomeRange,
+    incomeMin,
+    incomeMax,
+    extraValues,
     dispatch,
+    filterSetup.bounds.ageMax,
+    filterSetup.bounds.ageMin,
+    filterSetup.bounds.incomeMax,
+    filterSetup.bounds.incomeMin,
+    filterSetup.incomeRangeMeta,
     loading,
     location,
     marital,
@@ -301,11 +435,28 @@ const FilterMatchesScreen = () => {
   ]);
 
   const cityOptions = filterSetup.options.cities;
+  const visibleCityOptions = (() => {
+    if (location) {
+      const selected = cityOptions.find(
+        city => city.toLowerCase() === location.toLowerCase(),
+      );
+      return selected ? [selected] : [location];
+    }
+
+    const query = citySearch.trim().toLowerCase();
+
+    if (!query) {
+      return [];
+    }
+
+    return cityOptions.filter(city => city.toLowerCase().includes(query));
+  })();
   const educationOptions = withAnyOption(filterSetup.options.qualifications);
   const professionOptions = withAnyOption(filterSetup.options.professions);
   const religionOptions = withAnyOption(filterSetup.options.religions);
   const maritalOptions = filterSetup.options.maritalStatuses;
-  const incomeOptions = withAnyOption(filterSetup.options.incomeRanges);
+  const formatPkr = (value: number) =>
+    `PKR ${value.toLocaleString('en-US')}`;
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
@@ -330,6 +481,8 @@ const FilterMatchesScreen = () => {
           showsVerticalScrollIndicator={true}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
+          scrollEnabled={scrollEnabled}
+          nestedScrollEnabled
         >
           {filterSetup.quickFilters.length > 0 ? (
             <View style={styles.section}>
@@ -357,15 +510,17 @@ const FilterMatchesScreen = () => {
           <FilterRangeSlider
             title={Strings.ageRange}
             iconName="calendar-outline"
-            min={18}
-            max={60}
+            min={filterSetup.bounds.ageMin}
+            max={filterSetup.bounds.ageMax}
             lowValue={ageMin}
             highValue={ageMax}
-            minLabel="18 yrs"
+            minLabel={`${filterSetup.bounds.ageMin} yrs`}
             centerLabel={`${ageMin} – ${ageMax} ${Strings.ageYears}`}
-            maxLabel="60 yrs"
+            maxLabel={`${filterSetup.bounds.ageMax} yrs`}
             onLowValueChange={setAgeMin}
             onHighValueChange={setAgeMax}
+            onDragStart={() => setScrollEnabled(false)}
+            onDragEnd={() => setScrollEnabled(true)}
           />
 
           <View style={styles.section}>
@@ -388,17 +543,32 @@ const FilterMatchesScreen = () => {
                 placeholder={Strings.cityOrState}
                 placeholderTextColor={Colors.placeholder}
                 value={citySearch}
-                onChangeText={setCitySearch}
+                onChangeText={text => {
+                  setCitySearch(text);
+                  const match = cityOptions.find(
+                    city => city.toLowerCase() === text.trim().toLowerCase(),
+                  );
+                  setLocation(match ?? '');
+                }}
               />
             </View>
-            {cityOptions.length > 0 ? (
+            {visibleCityOptions.length > 0 ? (
               <View style={styles.chipRow}>
-                {cityOptions.map(city => (
+                {visibleCityOptions.map(city => (
                   <FilterChip
                     key={city}
                     label={city}
                     selected={location === city}
-                    onPress={() => setLocation(city)}
+                    onPress={() => {
+                      if (location === city) {
+                        setLocation('');
+                        setCitySearch('');
+                        return;
+                      }
+
+                      setLocation(city);
+                      setCitySearch(city);
+                    }}
                   />
                 ))}
               </View>
@@ -484,31 +654,66 @@ const FilterMatchesScreen = () => {
                     key={option}
                     label={option}
                     selected={marital === option}
-                    onPress={() => setMarital(option)}
+                    onPress={() =>
+                      setMarital(current => (current === option ? '' : option))
+                    }
                   />
                 ))}
               </View>
             </View>
           ) : null}
 
-          {incomeOptions.length > 1 ? (
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Icon name="wallet-outline" size={fs(18)} color={Colors.primary} />
-                <Text style={styles.sectionTitle}>{Strings.incomeRange}</Text>
-              </View>
-              <View style={styles.chipRow}>
-                {incomeOptions.map(option => (
-                  <FilterChip
-                    key={option}
-                    label={option}
-                    selected={incomeRange === option}
-                    onPress={() => setIncomeRange(option)}
+          {filterSetup.extraSections.map(section => {
+            const options = withAnyOption(section.options);
+
+            return (
+              <View key={section.id} style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Icon
+                    name="filter-variant"
+                    size={fs(18)}
+                    color={Colors.primary}
                   />
-                ))}
+                  <Text style={styles.sectionTitle}>{section.label}</Text>
+                </View>
+                <View style={styles.chipRow}>
+                  {options.map(option => (
+                    <FilterChip
+                      key={`${section.id}-${option}`}
+                      label={option}
+                      selected={(extraValues[section.id] || FILTER_ANY) === option}
+                      onPress={() =>
+                        setExtraValues(current => ({
+                          ...current,
+                          [section.id]: option,
+                        }))
+                      }
+                    />
+                  ))}
+                </View>
               </View>
-            </View>
-          ) : null}
+            );
+          })}
+
+          <FilterRangeSlider
+            title={Strings.incomeRange}
+            iconSource={Images.incomeIcon}
+            min={filterSetup.bounds.incomeMin}
+            max={filterSetup.bounds.incomeMax}
+            lowValue={incomeMin}
+            highValue={incomeMax}
+            step={filterSetup.bounds.incomeStep}
+            showControls={false}
+            thumbVariant="outline"
+            titleColor={Colors.black}
+            minLabel={formatPkr(filterSetup.bounds.incomeMin)}
+            centerLabel={`${formatPkr(incomeMin)} – ${formatPkr(incomeMax)}`}
+            maxLabel={formatPkr(filterSetup.bounds.incomeMax)}
+            onLowValueChange={setIncomeMin}
+            onHighValueChange={setIncomeMax}
+            onDragStart={() => setScrollEnabled(false)}
+            onDragEnd={() => setScrollEnabled(true)}
+          />
         </ScrollView>
       )}
 
@@ -551,7 +756,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: AuthStyles.horizontalPadding,
-    paddingBottom: hp('2%'),
+    paddingBottom: hp('4%'),
   },
   section: {
     marginBottom: hp('2.2%'),

@@ -83,6 +83,14 @@ export type MatchApiItem = {
   photos?: Array<Record<string, unknown> | string> | null;
   profile_photo_visible?: boolean | number | string | null;
   additional_photos_visible?: boolean | number | string | null;
+  visibility?: {
+    profile_photo_visible?: boolean | number | string | null;
+    additional_photos_visible?: boolean | number | string | null;
+  } | null;
+  photo_visibility?: {
+    profile_photo_visible?: boolean | number | string | null;
+    additional_photos_visible?: boolean | number | string | null;
+  } | null;
   gender?: string | null;
   is_verified?: boolean | number | null;
   is_new?: boolean | number | null;
@@ -138,6 +146,8 @@ export type MatchSearchParams = {
   education?: string;
   profession?: string;
   name?: string;
+  search?: string;
+  q?: string;
   near_me?: boolean | string | number;
   verified?: boolean | string | number;
   new_profiles?: boolean | string | number;
@@ -160,6 +170,7 @@ export type MatchFilterParams = {
   near_me?: string | number | boolean;
   verified?: string | number | boolean;
   new_profiles?: string | number | boolean;
+  [key: string]: string | number | boolean | undefined;
 };
 
 export type MatchListPagination = {
@@ -170,14 +181,20 @@ export type MatchListPagination = {
 };
 
 export type MatchFilterOptions = {
-  cities?: string[];
-  qualifications?: string[];
-  professions?: string[];
-  religions?: string[];
-  marital_statuses?: string[];
-  income_ranges?: string[];
+  cities?: unknown;
+  city?: unknown;
+  qualifications?: unknown;
+  education?: unknown;
+  educations?: unknown;
+  professions?: unknown;
+  religions?: unknown;
+  marital_statuses?: unknown;
+  maritalStatuses?: unknown;
+  income_ranges?: unknown;
+  incomeRanges?: unknown;
   age_min?: number | string | null;
   age_max?: number | string | null;
+  [key: string]: unknown;
 };
 
 export type MatchListResponse = {
@@ -189,10 +206,12 @@ export type MatchListResponse = {
   pagination?: MatchListPagination | null;
   filters_applied?: Record<string, string | number | null>;
   quick_filters?:
-    | Record<string, string | number | null>
+    | Record<string, string | number | boolean | null>
     | Array<string | Record<string, unknown>>;
   filter_options?: MatchFilterOptions | null;
-  fallback_used?: boolean;
+  fallback_used?: boolean | number | string | null;
+  exact_matches?: MatchApiItem[] | null;
+  suggested_matches?: MatchApiItem[] | null;
   total?: number | string | null;
   message?: string;
 };
@@ -247,25 +266,96 @@ const stripEmptyMedia = (item: MatchApiItem): MatchApiItem => {
   return next;
 };
 
-const withVisibleMedia = (item: MatchApiItem): MatchApiItem => {
-  const pictureVisible =
-    parseVisibilityFlag(item.profile_photo_visible) ?? true;
-  const additionalVisible =
-    parseVisibilityFlag(item.additional_photos_visible) ?? true;
+const PICTURE_VISIBILITY_KEYS = [
+  'profile_photo_visible',
+  'profilePhotoVisible',
+  'profile_picture_visible',
+];
+const ADDITIONAL_VISIBILITY_KEYS = [
+  'additional_photos_visible',
+  'additionalPhotosVisible',
+];
 
-  if (pictureVisible && additionalVisible) {
-    return item;
+const pickVisibilityFromSource = (
+  source: unknown,
+  keys: string[],
+): boolean | undefined => {
+  if (!isPlainObject(source)) {
+    return undefined;
   }
 
-  const next = { ...item };
-  const photos = Array.isArray(item.photos) ? [...item.photos] : [];
+  for (const key of keys) {
+    const parsed = parseVisibilityFlag(source[key]);
+    if (parsed !== undefined) {
+      return parsed;
+    }
+  }
 
-  if (!pictureVisible) {
+  return undefined;
+};
+
+export const resolveMatchPhotoVisibility = (item?: MatchApiItem | null) => {
+  if (!item) {
+    return { pictureVisible: undefined, additionalVisible: undefined };
+  }
+
+  const sources: unknown[] = [
+    item,
+    item.visibility,
+    item.photo_visibility,
+    item.user,
+    item.user?.visibility,
+    item.user?.photo_visibility,
+    item.profile,
+    item.profile?.visibility,
+    item.profile?.photo_visibility,
+  ];
+
+  let pictureVisible: boolean | undefined;
+  let additionalVisible: boolean | undefined;
+
+  sources.forEach(source => {
+    if (pictureVisible === undefined) {
+      pictureVisible = pickVisibilityFromSource(source, PICTURE_VISIBILITY_KEYS);
+    }
+    if (additionalVisible === undefined) {
+      additionalVisible = pickVisibilityFromSource(
+        source,
+        ADDITIONAL_VISIBILITY_KEYS,
+      );
+    }
+  });
+
+  return { pictureVisible, additionalVisible };
+};
+
+const withVisibleMedia = (item: MatchApiItem): MatchApiItem => {
+  const { pictureVisible, additionalVisible } = resolveMatchPhotoVisibility(item);
+  const next: MatchApiItem = {
+    ...item,
+    ...(pictureVisible !== undefined
+      ? { profile_photo_visible: pictureVisible }
+      : {}),
+    ...(additionalVisible !== undefined
+      ? { additional_photos_visible: additionalVisible }
+      : {}),
+  };
+
+  const showPicture = pictureVisible ?? true;
+  const showAdditional = additionalVisible ?? true;
+
+  if (showPicture && showAdditional) {
+    return next;
+  }
+
+  const photos = Array.isArray(next.photos) ? [...next.photos] : [];
+
+  if (!showPicture) {
     next.profile_photo = null;
     next.image = null;
     next.photo = null;
     next.avatar = null;
-    next.photos = additionalVisible ? photos.slice(1) : [];
+    next.photos = showAdditional ? photos.slice(1) : [];
     return next;
   }
 
@@ -289,8 +379,22 @@ const normalizeItem = (item: MatchApiItem): MatchApiItem => {
 const resolveProfileImage = (
   ...items: MatchApiItem[]
 ): ImageSourcePropType => {
+  const pictureHidden = items.some(
+    item => resolveMatchPhotoVisibility(item).pictureVisible === false,
+  );
+
+  const gender = items
+    .map(item => item.gender?.toLowerCase())
+    .find(value => value === 'male' || value === 'female');
+  const placeholder =
+    gender === 'male' ? Images.maleProfile : Images.femaleProfile;
+
+  if (pictureHidden) {
+    return placeholder;
+  }
+
   for (const item of items) {
-    if (parseVisibilityFlag(item.profile_photo_visible) === false) {
+    if (resolveMatchPhotoVisibility(item).pictureVisible === false) {
       continue;
     }
 
@@ -300,15 +404,7 @@ const resolveProfileImage = (
     }
   }
 
-  const gender = items
-    .map(item => item.gender?.toLowerCase())
-    .find(value => value === 'male' || value === 'female');
-
-  if (gender === 'male') {
-    return Images.maleProfile;
-  }
-
-  return Images.femaleProfile;
+  return placeholder;
 };
 
 const locationPart = (value: unknown): string => {
@@ -411,7 +507,7 @@ export const mapFeaturedMatch = (
     name: pickString(profile.name) || 'Profile',
     age: pickNumber(profile.age),
     location: resolveLocation(profile) || '-',
-    image: resolveProfileImage(item, profile),
+    image: resolveProfileImage(profile),
     tags: buildTags(profile),
     isNew: Boolean(profile.is_new ?? profile.is_new_profile),
     isVerified: Boolean(profile.is_verified),
@@ -436,7 +532,7 @@ export const mapSuggestedMatch = (
         profile.profession,
         profile.employment_type,
       ) || '-',
-    image: resolveProfileImage(item, profile),
+    image: resolveProfileImage(profile),
     tier: resolveTier(
       profile.tier ?? profile.plan ?? profile.subscription_plan,
     ),
@@ -504,11 +600,78 @@ export const resolveOppositeGender = (gender?: string | null) => {
   return 'female';
 };
 
-export const parseSearchQuery = (searchQuery: string) => {
+export type SearchQueryCatalogs = {
+  cities?: string[];
+  professions?: string[];
+};
+
+const matchCatalogValue = (list: string[] | undefined, query: string) => {
+  if (!list?.length || !query) {
+    return undefined;
+  }
+
+  const lower = query.toLowerCase();
+  const exact = list.find(item => item.toLowerCase() === lower);
+
+  if (exact) {
+    return exact;
+  }
+
+  const partial = list.filter(
+    item =>
+      item.toLowerCase().includes(lower) || lower.includes(item.toLowerCase()),
+  );
+
+  return partial.length === 1 ? partial[0] : undefined;
+};
+
+export const parseSearchQuery = (
+  searchQuery: string,
+  catalogs?: SearchQueryCatalogs,
+) => {
   const trimmed = searchQuery.trim();
 
   if (!trimmed) {
-    return { name: undefined, profession: undefined, city: undefined };
+    return {
+      name: undefined,
+      profession: undefined,
+      city: undefined,
+      search: undefined,
+    };
+  }
+
+  const prefixMatch = trimmed.match(
+    /^(name|profession|job|city|location)\s*[:=]\s*(.+)$/i,
+  );
+
+  if (prefixMatch) {
+    const key = prefixMatch[1].toLowerCase();
+    const value = prefixMatch[2].trim();
+
+    if (key === 'profession' || key === 'job') {
+      return {
+        name: undefined,
+        profession: value,
+        city: undefined,
+        search: undefined,
+      };
+    }
+
+    if (key === 'city' || key === 'location') {
+      return {
+        name: undefined,
+        profession: undefined,
+        city: value,
+        search: undefined,
+      };
+    }
+
+    return {
+      name: value,
+      profession: undefined,
+      city: undefined,
+      search: undefined,
+    };
   }
 
   const commaIndex = trimmed.indexOf(',');
@@ -521,20 +684,84 @@ export const parseSearchQuery = (searchQuery: string) => {
       name: undefined,
       profession: profession || undefined,
       city: city || undefined,
+      search: undefined,
     };
   }
 
-  return { name: trimmed, profession: undefined, city: undefined };
+  const city = matchCatalogValue(catalogs?.cities, trimmed);
+  if (city) {
+    return {
+      name: undefined,
+      profession: undefined,
+      city,
+      search: undefined,
+    };
+  }
+
+  const profession = matchCatalogValue(catalogs?.professions, trimmed);
+  if (profession) {
+    return {
+      name: undefined,
+      profession,
+      city: undefined,
+      search: undefined,
+    };
+  }
+
+  return {
+    name: trimmed,
+    profession: undefined,
+    city: undefined,
+    search: trimmed,
+  };
+};
+
+export const profileMatchesSearchQuery = (
+  match: Pick<SuggestedMatch, 'name' | 'profession' | 'location'>,
+  searchQuery: string,
+  catalogs?: SearchQueryCatalogs,
+) => {
+  const trimmed = searchQuery.trim();
+
+  if (!trimmed) {
+    return true;
+  }
+
+  const parsed = parseSearchQuery(trimmed, catalogs);
+  const name = match.name.toLowerCase();
+  const profession = match.profession.toLowerCase();
+  const location = match.location.toLowerCase();
+
+  if (parsed.profession && parsed.city) {
+    return (
+      profession.includes(parsed.profession.toLowerCase()) &&
+      location.toLowerCase().includes(parsed.city.toLowerCase())
+    );
+  }
+
+  if (parsed.profession) {
+    return profession.includes(parsed.profession.toLowerCase());
+  }
+
+  if (parsed.city) {
+    return location.includes(parsed.city.toLowerCase());
+  }
+
+  const needle = (parsed.name || parsed.search || trimmed).toLowerCase();
+  const haystack = `${name} ${profession} ${location}`;
+
+  if (haystack.includes(needle)) {
+    return true;
+  }
+
+  const tokens = needle.split(/\s+/).filter(token => token.length >= 2);
+  return tokens.length > 0 && tokens.every(token => haystack.includes(token));
 };
 
 export type BuildSearchParamsInput = {
   searchQuery?: string;
   quickFilter?: string | null;
-  quickFilters?: {
-    near_me?: boolean;
-    verified?: boolean;
-    new_profiles?: boolean;
-  };
+  quickFilters?: Record<string, boolean | undefined>;
   profileGender?: string | null;
   ageMin?: number;
   ageMax?: number;
@@ -546,6 +773,7 @@ export type BuildSearchParamsInput = {
   profession?: string;
   heightMin?: number;
   heightMax?: number;
+  searchCatalogs?: SearchQueryCatalogs;
 };
 
 export const buildMatchSearchParams = ({
@@ -563,6 +791,7 @@ export const buildMatchSearchParams = ({
   profession,
   heightMin,
   heightMax,
+  searchCatalogs,
 }: BuildSearchParamsInput): MatchSearchParams => {
   const params: MatchSearchParams = {};
 
@@ -610,7 +839,11 @@ export const buildMatchSearchParams = ({
     params.height_max = heightMax;
   }
 
-  const parsedSearch = parseSearchQuery(searchQuery);
+  const parsedSearch = parseSearchQuery(searchQuery, searchCatalogs);
+
+  if (parsedSearch.search) {
+    params.search = parsedSearch.search;
+  }
 
   if (parsedSearch.name) {
     params.name = parsedSearch.name;
@@ -625,28 +858,36 @@ export const buildMatchSearchParams = ({
   }
 
   if (quickFilters) {
-    if (quickFilters.near_me) {
-      params.near_me = true;
-    }
-    if (quickFilters.verified) {
-      params.verified = true;
-    }
-    if (quickFilters.new_profiles) {
-      params.new_profiles = true;
-    }
+    Object.entries(quickFilters).forEach(([key, enabled]) => {
+      if (enabled) {
+        params[toSearchQueryKey(key)] = true;
+      }
+    });
   } else if (quickFilter) {
-    if (quickFilter === 'nearMe' || quickFilter === 'near_me') {
-      params.near_me = true;
-    } else if (quickFilter === 'verified') {
-      params.verified = true;
-    } else if (quickFilter === 'newProfiles' || quickFilter === 'new_profiles') {
-      params.new_profiles = true;
-    } else {
-      params[quickFilter] = true;
-    }
+    params[toSearchQueryKey(quickFilter)] = true;
   }
 
   return params;
+};
+
+const toSearchQueryKey = (key: string) =>
+  key
+    .trim()
+    .replace(/([a-z])([A-Z])/g, '$1_$2')
+    .replace(/[-\s]+/g, '_')
+    .toLowerCase() || key;
+
+const isFallbackUsed = (value?: boolean | number | string | null) => {
+  if (value === true || value === 1) {
+    return true;
+  }
+
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    return normalized === 'true' || normalized === '1';
+  }
+
+  return false;
 };
 
 export const mapMatchList = (
@@ -682,6 +923,40 @@ const pickMatchArray = (...lists: Array<MatchApiItem[] | null | undefined>) => {
   }
 
   return [];
+};
+
+export const mapFilterMatchGroups = (
+  response?: MatchListResponse | null,
+) => {
+  const normalized = normalizeMatchListResponse(response);
+  const fallbackUsed = isFallbackUsed(normalized.fallback_used);
+  const exactItems = pickMatchArray(normalized.exact_matches);
+  const suggestedItems = pickMatchArray(normalized.suggested_matches);
+  const general = extractMatchList(normalized);
+
+  if (exactItems.length) {
+    return {
+      exact: exactItems.map(mapSuggestedMatch),
+      suggested: [] as SuggestedMatch[],
+      fallbackUsed: false,
+    };
+  }
+
+  if (fallbackUsed) {
+    const pool = suggestedItems.length ? suggestedItems : general;
+
+    return {
+      exact: [] as SuggestedMatch[],
+      suggested: pool.map(mapSuggestedMatch),
+      fallbackUsed: true,
+    };
+  }
+
+  return {
+    exact: general.map(mapSuggestedMatch),
+    suggested: [] as SuggestedMatch[],
+    fallbackUsed: false,
+  };
 };
 
 const normalizeHomeResponse = (
@@ -772,11 +1047,6 @@ export const mapHomeMatches = (
     suggestedItems = suggestedItems.filter(
       item => !featuredIds.has(String(item.id ?? item.user_id ?? '')),
     );
-  }
-
-  if (!featuredItems.length && suggestedItems.length) {
-    featuredItems = [suggestedItems[0]];
-    suggestedItems = suggestedItems.slice(1);
   }
 
   const mapped = {
@@ -911,11 +1181,6 @@ export const mapBestMatch = (
   }
 
   const profile = unwrapMatchRecord(source);
-  const photo =
-    pickImageUrl(profile) ||
-    pickImageUrl(source) ||
-    pickImageUrl(response.profile) ||
-    pickImageUrl(response);
 
   if (!pickString(profile.name, profile.full_name, profile.fullName) && !profile.id) {
     return null;
@@ -929,9 +1194,7 @@ export const mapBestMatch = (
     age: pickNumber(profile.age),
     location: resolveLocation(profile) || '-',
     matchScore: pickNumber(matchScore),
-    image: photo
-      ? toRemoteImageSource(photo)
-      : resolveProfileImage(profile, source, response),
+    image: resolveProfileImage(profile),
   };
 };
 
@@ -1026,6 +1289,9 @@ export const mapMatchProfileDetail = (
     profile.residential_status,
     profile.residence_status,
   );
+  const image = response
+    ? resolveProfileImage(profile)
+    : preview?.image ?? resolveProfileImage(profile);
   const age = pickNumber(profile.age) || preview?.age || 0;
   const city =
     pickString(profile.city) ||
@@ -1098,19 +1364,7 @@ export const mapMatchProfileDetail = (
       (city !== '-' ? city : '') ||
       preview?.location ||
       '-',
-    image: (() => {
-      const photo = pickImageUrl(profile) || pickImageUrl(response);
-      if (photo) {
-        return { uri: photo };
-      }
-      if (
-        preview?.image &&
-        parseVisibilityFlag(profile.profile_photo_visible) !== false
-      ) {
-        return preview.image;
-      }
-      return resolveProfileImage(profile, response ?? {});
-    })(),
+    image,
     tier: resolveTier(profile.tier ?? profile.plan ?? profile.subscription_plan),
     isVerified: Boolean(profile.is_verified || preview?.isVerified),
     about:
@@ -1126,5 +1380,27 @@ export const mapMatchProfileDetail = (
     interests: Array.isArray(profile.interests)
       ? profile.interests.filter(Boolean).map(String)
       : [],
+    photosNeedAccess: profileNeedsPhotoAccess(profile, image),
   };
+};
+
+const isRemoteProfileImage = (image?: ImageSourcePropType | null) =>
+  Boolean(
+    image &&
+      typeof image === 'object' &&
+      !Array.isArray(image) &&
+      'uri' in image &&
+      typeof image.uri === 'string' &&
+      image.uri,
+  );
+
+export const profileNeedsPhotoAccess = (
+  profile: MatchApiItem,
+  displayedImage?: ImageSourcePropType | null,
+): boolean => {
+  if (isRemoteProfileImage(displayedImage)) {
+    return false;
+  }
+
+  return resolveMatchPhotoVisibility(profile).pictureVisible === false;
 };

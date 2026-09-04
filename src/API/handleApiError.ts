@@ -23,8 +23,8 @@ export const getApiErrorMessage = (
       return 'Request timed out. Please try again.';
     }
 
-    if (error.message === 'Network Error') {
-      return 'No internet connection. Please check your network.';
+    if (error.message === 'Network Error' && !error.response) {
+      return 'Could not complete the request. Please try again.';
     }
   }
 

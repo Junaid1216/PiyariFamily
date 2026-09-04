@@ -4,6 +4,7 @@ export type AppNotification = {
   title: string;
   description: string;
   time: string;
+  createdAt?: string;
   unread: boolean;
   actionLabel?: string;
   count?: number;
@@ -131,6 +132,10 @@ const flattenItem = (item?: NotificationApiItem | null): NotificationApiItem => 
       null,
     type: pickString(item.type, nested.type, item.notification_type) || null,
     icon: pickString(item.icon, nested.icon) || null,
+    created_at: pickString(item.created_at, nested.created_at) || null,
+    timestamp: pickString(item.timestamp, nested.timestamp) || null,
+    date: pickString(item.date, nested.date) || null,
+    updated_at: pickString(item.updated_at, nested.updated_at) || null,
   };
 };
 
@@ -177,61 +182,108 @@ const extractList = (response?: NotificationsResponse | null) => {
   return [];
 };
 
-export const formatNotificationTime = (value?: string | null) => {
-  const text = pickString(value);
+const isPreformattedRelativeTime = (value: string) =>
+  /^(yesterday|today|just now|\d+\s*[smhd]|\d+\s*(seconds?|minutes?|hours?|days?|weeks?|months?|years?)(\s+ago)?)$/i.test(
+    value.trim(),
+  );
 
-  if (!text) {
-    return '';
+const parseNotificationDate = (value?: string | number | null) => {
+  if (value == null || value === '') {
+    return null;
   }
 
-  if (/^(yesterday|today|\d+\s*[smhd]|just now)$/i.test(text) || /^\d+[smhd]$/i.test(text)) {
-    return text;
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const ms = value < 1e12 ? value * 1000 : value;
+    const date = new Date(ms);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  const text = String(value).trim();
+
+  if (!text || isPreformattedRelativeTime(text)) {
+    return null;
+  }
+
+  if (/^\d+$/.test(text)) {
+    const parsed = Number(text);
+    const ms = parsed < 1e12 ? parsed * 1000 : parsed;
+    const date = new Date(ms);
+    return Number.isNaN(date.getTime()) ? null : date;
   }
 
   const laravelDate = text.match(
     /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/,
   );
-  const date = laravelDate
-    ? new Date(
-        Number(laravelDate[1]),
-        Number(laravelDate[2]) - 1,
-        Number(laravelDate[3]),
-        Number(laravelDate[4]),
-        Number(laravelDate[5]),
-        Number(laravelDate[6]),
-      )
-    : new Date(text.replace(' ', 'T'));
-  if (Number.isNaN(date.getTime())) {
-    return text;
+
+  if (laravelDate) {
+    const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(text);
+    const date = hasTimezone
+      ? new Date(text.replace(' ', 'T'))
+      : new Date(
+          Number(laravelDate[1]),
+          Number(laravelDate[2]) - 1,
+          Number(laravelDate[3]),
+          Number(laravelDate[4]),
+          Number(laravelDate[5]),
+          Number(laravelDate[6]),
+        );
+
+    return Number.isNaN(date.getTime()) ? null : date;
   }
 
-  const diffMs = Date.now() - date.getTime();
-  const minutes = Math.max(0, Math.floor(diffMs / 60000));
+  const date = new Date(text.replace(' ', 'T'));
+  return Number.isNaN(date.getTime()) ? null : date;
+};
 
-  if (minutes < 1) {
-    return 'now';
+const pluralize = (count: number, unit: string) =>
+  `${count} ${unit}${count === 1 ? '' : 's'} ago`;
+
+export const formatNotificationTime = (
+  value?: string | number | null,
+  now = Date.now(),
+) => {
+  const date = parseNotificationDate(value);
+
+  if (!date) {
+    return '';
   }
+
+  const diffMs = Math.max(0, now - date.getTime());
+  const seconds = Math.floor(diffMs / 1000);
+
+  if (seconds < 45) {
+    return 'Just now';
+  }
+
+  const minutes = Math.floor(seconds / 60);
 
   if (minutes < 60) {
-    return `${minutes}m`;
+    return pluralize(minutes, 'minute');
   }
 
   const hours = Math.floor(minutes / 60);
+
   if (hours < 24) {
-    return `${hours}h`;
+    return pluralize(hours, 'hour');
   }
 
   const days = Math.floor(hours / 24);
-  if (days === 1) {
-    return 'Yesterday';
+
+  if (days < 30) {
+    return pluralize(days, 'day');
   }
 
-  if (days < 7) {
-    return `${days}d`;
+  const months = Math.floor(days / 30);
+
+  if (months < 12) {
+    return pluralize(months, 'month');
   }
 
-  return date.toLocaleDateString();
+  return pluralize(Math.floor(days / 365), 'year');
 };
+
+export const pickNotificationTimestamp = (item: NotificationApiItem) =>
+  pickString(item.created_at, item.timestamp, item.date, item.updated_at);
 
 const iconForNotification = (type: string, title: string, icon?: string) => {
   if (icon?.trim() && !icon.includes('/')) {
@@ -325,21 +377,15 @@ export const mapNotificationItem = (
   );
   const count = pickNumber(data.count, data.badge);
   const id = data.id ?? index;
+  const createdAt = pickNotificationTimestamp(data);
 
   return {
     id: String(id),
     icon: iconForNotification(type, title, pickString(data.icon)),
     title,
     description: pickString(data.message, data.description, data.body),
-    time: formatNotificationTime(
-      pickString(
-        data.time,
-        data.timestamp,
-        data.created_at,
-        data.date,
-        data.updated_at,
-      ),
-    ),
+    createdAt,
+    time: formatNotificationTime(createdAt),
     unread: isUnread(data),
     ...(actionLabel ? { actionLabel } : {}),
     ...(count ? { count } : {}),

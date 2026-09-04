@@ -60,7 +60,7 @@ describe('GET /notifications', () => {
           title: 'Package Reminder',
           message: 'Upgrade your package to view more profile details.',
           is_read: false,
-          created_at: 'Yesterday',
+          created_at: '2026-09-03 12:00:00',
           action_label: 'Upgrade Now',
           type: 'package',
         },
@@ -68,7 +68,9 @@ describe('GET /notifications', () => {
     });
 
     expect(items[0].unread).toBe(true);
-    expect(items[0].time).toBe('Yesterday');
+    expect(items[0].createdAt).toBe('2026-09-03 12:00:00');
+    expect(items[0].time).not.toBe('5h');
+    expect(items[0].time).not.toBe('Yesterday');
     expect(items[0].actionLabel).toBe('Upgrade Now');
     expect(items[0].icon).toBe('gift-outline');
   });
@@ -164,8 +166,50 @@ describe('DELETE /notifications/clear-all', () => {
 });
 
 describe('notification time formatting', () => {
-  it('keeps relative strings from the API', () => {
-    expect(formatNotificationTime('2m')).toBe('2m');
-    expect(formatNotificationTime('Yesterday')).toBe('Yesterday');
+  const now = Date.parse('2026-09-04T15:00:00');
+
+  it('calculates relative time from created_at, not hardcoded labels', () => {
+    expect(formatNotificationTime(new Date(now - 10 * 1000).toISOString(), now)).toBe(
+      'Just now',
+    );
+    expect(
+      formatNotificationTime(new Date(now - 5 * 60 * 1000).toISOString(), now),
+    ).toBe('5 minutes ago');
+    expect(
+      formatNotificationTime(new Date(now - 60 * 60 * 1000).toISOString(), now),
+    ).toBe('1 hour ago');
+    expect(
+      formatNotificationTime(new Date(now - 5 * 60 * 60 * 1000).toISOString(), now),
+    ).toBe('5 hours ago');
+    expect(
+      formatNotificationTime(new Date(now - 24 * 60 * 60 * 1000).toISOString(), now),
+    ).toBe('1 day ago');
+    expect(
+      formatNotificationTime(new Date(now - 2 * 24 * 60 * 60 * 1000).toISOString(), now),
+    ).toBe('2 days ago');
+  });
+
+  it('ignores static API time strings like 5h when created_at is present', () => {
+    const createdAt = new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString();
+    const items = mapNotifications({
+      success: 200,
+      notifications: [
+        {
+          id: 9,
+          title: 'New Notification',
+          message: 'Explore your suggested matches today.',
+          time: '5h',
+          created_at: createdAt,
+        },
+      ],
+    });
+
+    expect(items[0].createdAt).toBe(createdAt);
+    expect(items[0].time).toBe('5 hours ago');
+  });
+
+  it('does not pass through hardcoded relative strings as timestamps', () => {
+    expect(formatNotificationTime('5h')).toBe('');
+    expect(formatNotificationTime('Yesterday')).toBe('');
   });
 });

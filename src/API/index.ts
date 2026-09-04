@@ -1,5 +1,5 @@
 export { Api } from './Api';
-export { hydrateMatchImages, getImageCacheKey } from './hydrateMatchImages';
+export { hydrateMatchImages, getImageCacheKey, isRemoteImage } from './hydrateMatchImages';
 export { apiClient, axiosInstance } from './apiClient';
 export { API_CONFIG } from './config';
 export { resolveMediaUrl, toRemoteImageSource } from './mediaUrl';
@@ -29,25 +29,39 @@ export type {
 } from './mappers/subscriptionMapper';
 export {
   buildMatchSearchParams,
+  parseSearchQuery,
+  profileMatchesSearchQuery,
   mapHomeGreeting,
   mapHomeMatches,
   mapListToHomeMatches,
   arrangeHomeMatchesByProximity,
   mapBestMatch,
   mapMatchList,
+  mapFilterMatchGroups,
   mapMatchProfileDetail,
   pickMatchListTotal,
+  profileNeedsPhotoAccess,
 } from './mappers/matchMapper';
 export {
   buildMatchFilterParams,
   mapFilterSetup,
+  mapIncomeToParams,
+  mapExtraFilterSections,
   mapQuickFilters,
+  toFilterQueryKey,
   withAnyOption,
+  DEFAULT_AGE_MAX,
+  DEFAULT_AGE_MIN,
+  DEFAULT_INCOME_MAX,
+  DEFAULT_INCOME_MIN,
   FILTER_ANY,
 } from './mappers/filterMapper';
 export type {
   BuildFilterParamsInput,
+  FilterAgeBounds,
+  FilterExtraSection,
   FilterFormDefaults,
+  FilterIncomeRangeMeta,
   FilterOptionLists,
   FilterQuickOption,
   FilterSetupData,
@@ -67,6 +81,7 @@ export type {
   MatchProfileResponse,
   MatchProfilePreview,
   MatchSearchParams,
+  SearchQueryCatalogs,
   SuggestedMatch,
 } from './mappers/matchMapper';
 export {
@@ -98,6 +113,7 @@ export {
   applyAllNotificationsRead,
   applyNotificationRead,
   extractReadNotification,
+  formatNotificationTime,
   isViewProfileRequestNotification,
   mapNotifications,
   mapNotificationItem,
@@ -126,6 +142,7 @@ export type {
   PhotoAccessAction,
   PhotoAccessRequestsResponse,
   PhotoAccessRespondResponse,
+  PhotoAccessUserRequestResponse,
   ViewProfileRequest,
   ViewProfileRequestStatus,
 } from './mappers/photoAccessMapper';

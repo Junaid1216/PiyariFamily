@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
@@ -22,16 +22,11 @@ import { AxiosError } from 'axios';
 import { Images } from '../../Assets';
 import {
   Api,
-  ENDPOINTS,
-  buildMatchSearchParams,
   getApiErrorMessage,
   getImageCacheKey,
   hydrateMatchImages,
   mapHomeGreeting,
   mapHomeMatches,
-  mapListToHomeMatches,
-  arrangeHomeMatchesByProximity,
-  mapMatchList,
   type ApiErrorResponse,
   type FeaturedMatch,
   type SuggestedMatch,
@@ -100,22 +95,8 @@ const HomeScreen = () => {
   const subtitle = useAppSelector(selectHomeSubtitle);
   const featuredMatches = useAppSelector(selectFeaturedMatches);
   const suggestedMatches = useAppSelector(selectSuggestedMatches);
-  const { featuredMatches: displayFeatured, suggestedMatches: displaySuggested } =
-    useMemo(
-      () =>
-        arrangeHomeMatchesByProximity(
-          featuredMatches,
-          suggestedMatches,
-          profile?.city,
-          profile?.country,
-        ),
-      [
-        featuredMatches,
-        suggestedMatches,
-        profile?.city,
-        profile?.country,
-      ],
-    );
+  const displayFeatured = featuredMatches;
+  const displaySuggested = suggestedMatches;
   const [loading, setLoading] = useState(true);
   const [reactivating, setReactivating] = useState(false);
   const [liking, setLiking] = useState(false);
@@ -157,22 +138,16 @@ const HomeScreen = () => {
       subtitleText?: string,
       totalMatches = featured.length + suggested.length,
     ) => {
-      const arranged = arrangeHomeMatchesByProximity(
-        featured,
-        suggested,
-        profile?.city,
-        profile?.country,
-      );
       const homePayload = {
         greeting: greetingText || fallbackGreeting,
         subtitle: subtitleText || Strings.homeSubtitle,
-        featuredMatches: arranged.featuredMatches,
-        suggestedMatches: arranged.suggestedMatches,
+        featuredMatches: featured,
+        suggestedMatches: suggested,
         totalMatches,
       };
       dispatch(setHomeMatches(homePayload));
       setActiveIndex(0);
-      return { arranged, homePayload };
+      return homePayload;
     };
 
     try {
@@ -188,32 +163,13 @@ const HomeScreen = () => {
         return;
       }
 
-      let mapped = mapHomeMatches(res?.data);
-
-      if (!mapped.featuredMatches.length && !mapped.suggestedMatches.length) {
-        try {
-          const searchParams = buildMatchSearchParams({
-            profileGender: profile?.gender,
-          });
-          const searchRes = await Api.getMatchSearch(searchParams);
-
-          if (searchRes?.status == 200) {
-            mapped = mapListToHomeMatches(
-              mapMatchList(searchRes?.data),
-              mapped.greeting,
-            );
-          } else {
-          }
-        } catch (searchError) {
-        }
-      }
-
+      const mapped = mapHomeMatches(res?.data);
       const greetingParts = mapHomeGreeting(mapped.greeting);
       const title =
         greetingParts.title && !greetingHasEmail(greetingParts.title)
           ? greetingParts.title
           : fallbackGreeting;
-      const { arranged, homePayload } = applyHomePayload(
+      const homePayload = applyHomePayload(
         mapped.featuredMatches,
         mapped.suggestedMatches,
         title,
@@ -223,19 +179,15 @@ const HomeScreen = () => {
 
       try {
         const [hydratedFeatured, hydratedSuggested] = await Promise.all([
-          hydrateMatchImages(arranged.featuredMatches),
-          hydrateMatchImages(arranged.suggestedMatches),
+          hydrateMatchImages(mapped.featuredMatches),
+          hydrateMatchImages(mapped.suggestedMatches),
         ]);
 
         dispatch(
           setHomeMatches({
             ...homePayload,
-            ...arrangeHomeMatchesByProximity(
-              hydratedFeatured,
-              hydratedSuggested,
-              profile?.city,
-              profile?.country,
-            ),
+            featuredMatches: hydratedFeatured,
+            suggestedMatches: hydratedSuggested,
           }),
         );
       } catch (hydrateError) {
@@ -263,15 +215,7 @@ const HomeScreen = () => {
       fetchingRef.current = false;
       setLoading(false);
     }
-  }, [
-    dispatch,
-    isAccountInactive,
-    profile?.city,
-    profile?.country,
-    profile?.gender,
-    profile?.name,
-    user?.name,
-  ]);
+  }, [dispatch, isAccountInactive, profile?.name, user?.name]);
 
   const handleReactivate = async () => {
     if (reactivating) {

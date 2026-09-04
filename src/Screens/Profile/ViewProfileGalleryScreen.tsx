@@ -28,6 +28,7 @@ import {
   getApiErrorMessage,
   isApiSuccess,
   mapPhotoGallery,
+  resolvePhotoAccessRespond,
 } from '../../API';
 import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
@@ -90,6 +91,8 @@ const ViewProfileGalleryScreen = () => {
   );
   const [error, setError] = useState<string | null>(null);
   const [activePhoto, setActivePhoto] = useState<number | null>(null);
+  const [requesting, setRequesting] = useState(false);
+  const [requestSent, setRequestSent] = useState(false);
   const { isRecording } = useSecurePhotoScreen();
 
   const fetchGallery = useCallback(async () => {
@@ -157,6 +160,39 @@ const ViewProfileGalleryScreen = () => {
     }, [fetchGallery]),
   );
 
+  const requestPhotoAccess = async () => {
+    if (!userId || requesting || requestSent) {
+      return;
+    }
+
+    setRequesting(true);
+
+    try {
+      const res = await Api.requestPhotoAccess(userId);
+
+      if (isApiSuccess(res?.status, res?.data?.success)) {
+        const resolved = resolvePhotoAccessRespond(res?.data);
+        setRequestSent(true);
+        Toast.show(
+          resolved.message || Strings.photoAccessRequested,
+          Toast.LONG,
+        );
+      } else {
+        Toast.show(
+          res?.data?.message ?? Strings.photoAccessRequestError,
+          Toast.LONG,
+        );
+      }
+    } catch (requestError) {
+      Toast.show(
+        getApiErrorMessage(requestError, Strings.photoAccessRequestError),
+        Toast.LONG,
+      );
+    } finally {
+      setRequesting(false);
+    }
+  };
+
   const emptyMessage = error || Strings.noPhotosYet;
 
   return (
@@ -191,6 +227,24 @@ const ViewProfileGalleryScreen = () => {
             color={Colors.gold}
           />
           <Text style={styles.emptyText}>{emptyMessage}</Text>
+          {!accessGranted && userId ? (
+            <TouchableOpacity
+              style={styles.requestBtn}
+              activeOpacity={0.85}
+              onPress={requestPhotoAccess}
+              disabled={requesting || requestSent}
+            >
+              {requesting ? (
+                <ActivityIndicator size="small" color={Colors.white} />
+              ) : (
+                <Text style={styles.requestBtnText}>
+                  {requestSent
+                    ? Strings.photoAccessRequestSent
+                    : Strings.requestPhotoAccess}
+                </Text>
+              )}
+            </TouchableOpacity>
+          ) : null}
         </View>
       ) : isRecording ? (
         <View style={styles.centerContent}>
@@ -334,6 +388,21 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.regular,
     color: Colors.textLight,
     textAlign: 'center',
+  },
+  requestBtn: {
+    marginTop: hp('1.6%'),
+    minWidth: wp('58%'),
+    height: hp('5.4%'),
+    paddingHorizontal: wp('5%'),
+    borderRadius: wp('3%'),
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  requestBtnText: {
+    fontSize: fs(14),
+    fontFamily: Fonts.semiBold,
+    color: Colors.white,
   },
   lightbox: {
     flex: 1,

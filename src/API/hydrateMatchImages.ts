@@ -1,6 +1,6 @@
 import { ImageSourcePropType } from 'react-native';
 import { Api } from './Api';
-import { pickImageUrl } from './mappers/profileMapper';
+import { mapMatchProfileDetail } from './mappers/matchMapper';
 import { toRemoteImageSource } from './mediaUrl';
 
 type MatchWithImage = {
@@ -32,7 +32,17 @@ const fetchMatchPhoto = async (profileId: string) => {
     const res = await Api.getMatchProfile(profileId);
 
     if (res?.status == 200) {
-      return pickImageUrl(res.data);
+      const detail = mapMatchProfileDetail(res.data, profileId);
+      if (detail.photosNeedAccess || !isRemoteImage(detail.image)) {
+        return '';
+      }
+      if (
+        typeof detail.image === 'object' &&
+        detail.image &&
+        'uri' in detail.image
+      ) {
+        return String(detail.image.uri ?? '');
+      }
     }
   } catch {
     return '';
