@@ -2,6 +2,7 @@ import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
@@ -17,14 +18,12 @@ import Toast from 'react-native-simple-toast';
 import ScreenHeader from '../../Components/ScreenHeader';
 import {
   Api,
-  applyPhotoAccessStatus,
   getApiErrorMessage,
   isApiSuccess,
-  mapPhotoAccessRequests,
+  mapPhotoAccessPayload,
   resolvePhotoAccessRespond,
   type PhotoAccessAction,
   type ViewProfileRequest,
-  type ViewProfileRequestStatus,
 } from '../../API';
 import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
@@ -38,6 +37,14 @@ type NavigationProp = NativeStackNavigationProp<
   'ViewProfileRequests'
 >;
 
+type ConfirmModalState = {
+  type: 'accept' | 'reject';
+  request: ViewProfileRequest;
+};
+
+const isPendingRequest = (item: ViewProfileRequest) =>
+  item.status === 'pending';
+
 const ViewProfileRequestsScreen = () => {
   const navigation = useNavigation<NavigationProp>();
   const [requests, setRequests] = useState<ViewProfileRequest[]>([]);
@@ -46,6 +53,9 @@ const ViewProfileRequestsScreen = () => {
   const [respondingId, setRespondingId] = useState<string | null>(null);
   const [respondingAction, setRespondingAction] =
     useState<PhotoAccessAction | null>(null);
+  const [confirmModal, setConfirmModal] = useState<ConfirmModalState | null>(
+    null,
+  );
 
   const fetchRequests = useCallback(async () => {
     setLoading(true);
@@ -53,9 +63,27 @@ const ViewProfileRequestsScreen = () => {
 
     try {
       const res = await Api.getPhotoAccessRequests();
+      const body = res?.data;
+      const items = mapPhotoAccessPayload(body);
 
-      if (isApiSuccess(res?.status, res?.data?.success)) {
-        setRequests(mapPhotoAccessRequests(res?.data));
+      console.log(
+        'ViewProfileRequests backend data:',
+        JSON.stringify(body ?? null, null, 2),
+      );
+      console.log(
+        'ViewProfileRequests mapped:',
+        items.map(item => ({
+          id: item?.id,
+          name: item?.name,
+          status: item?.status,
+        })),
+      );
+
+      const hasRequestList =
+        Array.isArray(body?.requests) || items.length > 0;
+
+      if (isApiSuccess(res?.status, body?.success) || hasRequestList) {
+        setRequests(items.filter(item => item && isPendingRequest(item)));
       } else {
         const message =
           res?.data?.message ?? Strings.viewProfileRequestsError;
@@ -82,16 +110,6 @@ const ViewProfileRequestsScreen = () => {
     }, [fetchRequests]),
   );
 
-  const openGallery = (request: ViewProfileRequest) => {
-    const accessGranted = request.status === 'accepted';
-
-    navigation.navigate('ViewProfileGallery', {
-      userId: request.profileId || undefined,
-      name: request.name ?? '',
-      accessGranted,
-    });
-  };
-
   const respondToRequest = async (
     request: ViewProfileRequest,
     action: PhotoAccessAction,
@@ -102,39 +120,32 @@ const ViewProfileRequestsScreen = () => {
 
     setRespondingId(request.id);
     setRespondingAction(action);
+    setConfirmModal(null);
+
+    let snapshot: ViewProfileRequest[] = [];
+    setRequests(current => {
+      snapshot = current;
+      return current.filter(item => item.id !== request.id);
+    });
 
     try {
       const res = await Api.respondToPhotoAccessRequest(request.id, action);
 
       if (isApiSuccess(res?.status, res?.data?.success)) {
         const resolved = resolvePhotoAccessRespond(res?.data);
-        const backendMessage =
-          resolved.message ||
-          (typeof res?.data?.message === 'string' ? res.data.message.trim() : '');
-        if (backendMessage) {
-          Toast.show(backendMessage, Toast.LONG);
-        }
-
-        const mappedStatus: ViewProfileRequestStatus =
-          resolved.status ?? (action === 'approve' ? 'accepted' : 'declined');
         const targetId = resolved.requestId || request.id;
-
         setRequests(current =>
-          applyPhotoAccessStatus(
-            current,
-            targetId,
-            mappedStatus,
-            res?.data?.status,
-            resolved.request,
-          ),
+          current.filter(item => item.id !== targetId && item.id !== request.id),
         );
       } else {
+        setRequests(snapshot);
         Toast.show(
           res?.data?.message ?? Strings.viewProfileRequestsError,
           Toast.LONG,
         );
       }
     } catch (requestError) {
+      setRequests(snapshot);
       Toast.show(
         getApiErrorMessage(requestError, Strings.viewProfileRequestsError),
         Toast.LONG,
@@ -146,11 +157,28 @@ const ViewProfileRequestsScreen = () => {
   };
 
   const handleAccept = (request: ViewProfileRequest) => {
-    respondToRequest(request, 'approve');
+    if (respondingId) {
+      return;
+    }
+    setConfirmModal({ type: 'accept', request });
   };
 
   const handleReject = (request: ViewProfileRequest) => {
-    respondToRequest(request, 'reject');
+    if (respondingId) {
+      return;
+    }
+    setConfirmModal({ type: 'reject', request });
+  };
+
+  const handleConfirmRespond = () => {
+    if (!confirmModal || respondingId) {
+      return;
+    }
+
+    respondToRequest(
+      confirmModal.request,
+      confirmModal.type === 'accept' ? 'approve' : 'reject',
+    );
   };
 
   const renderRequest = (request: ViewProfileRequest) => {
@@ -162,8 +190,7 @@ const ViewProfileRequestsScreen = () => {
       : request.age != null
         ? String(request.age)
         : '';
-    const isAccepted = request.status === 'accepted';
-    const isDeclined = request.status === 'declined';
+    const busy = respondingId === request.id;
 
     return (
       <View key={request.id} style={styles.requestCard}>
@@ -209,126 +236,52 @@ const ViewProfileRequestsScreen = () => {
               </View>
             ) : null}
 
-            <View
-              style={[
-                styles.statusBadge,
-                isAccepted && styles.statusAccepted,
-                request.status === 'declined' && styles.statusDeclined,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.statusText,
-                  isAccepted && styles.statusAcceptedText,
-                  request.status === 'declined' && styles.statusDeclinedText,
-                ]}
-              >
-                {request.statusLabel}
-              </Text>
+            <View style={styles.statusBadge}>
+              <Text style={styles.statusText}>{Strings.pendingStatus}</Text>
             </View>
           </View>
 
           <Text style={styles.timeText}>{request.requestedAt}</Text>
         </View>
 
-        <TouchableOpacity
-          style={styles.photosBtn}
-          activeOpacity={0.88}
-          onPress={() => openGallery(request)}
-        >
-          <LinearGradient
-            colors={
-              isAccepted
-                ? [Colors.primary, Colors.primaryDark]
-                : ['#8A5A66', '#6E414B']
-            }
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.photosBtnFill}
-          >
-            <Icon
-              name={isAccepted ? 'image-multiple-outline' : 'lock-outline'}
-              size={fs(16)}
-              color={Colors.white}
-            />
-            <Text style={styles.photosBtnText}>{Strings.viewPhotos}</Text>
-          </LinearGradient>
-        </TouchableOpacity>
-
         <View style={styles.actionRow}>
           <TouchableOpacity
-            style={[
-              styles.rejectBtn,
-              isDeclined && styles.rejectBtnDeclined,
-            ]}
+            style={styles.rejectBtn}
             activeOpacity={0.88}
             onPress={() => handleReject(request)}
             disabled={Boolean(respondingId)}
           >
-            {respondingId === request.id && respondingAction === 'reject' ? (
-              <ActivityIndicator
-                size="small"
-                color={isDeclined ? Colors.white : Colors.primary}
-              />
+            {busy && respondingAction === 'reject' ? (
+              <ActivityIndicator size="small" color={Colors.primary} />
             ) : (
               <>
-                <Icon
-                  name="close"
-                  size={fs(16)}
-                  color={isDeclined ? Colors.white : Colors.primary}
-                />
-                <Text
-                  style={[
-                    styles.rejectText,
-                    isDeclined && styles.rejectTextDeclined,
-                  ]}
-                >
-                  {Strings.rejectedButton}
-                </Text>
+                <Icon name="close" size={fs(16)} color={Colors.primary} />
+                <Text style={styles.rejectText}>{Strings.reject}</Text>
               </>
             )}
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[
-              styles.acceptBtn,
-              isDeclined && styles.acceptBtnIdle,
-            ]}
+            style={styles.acceptBtn}
             activeOpacity={0.88}
             onPress={() => handleAccept(request)}
             disabled={Boolean(respondingId)}
           >
-            {isDeclined ? (
-              respondingId === request.id && respondingAction === 'approve' ? (
-                <ActivityIndicator size="small" color={Colors.primary} />
+            <LinearGradient
+              colors={[Colors.primary, Colors.primaryDark]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.acceptBtnFill}
+            >
+              {busy && respondingAction === 'approve' ? (
+                <ActivityIndicator size="small" color={Colors.white} />
               ) : (
                 <>
-                  <Icon name="check" size={fs(16)} color={Colors.primary} />
-                  <Text style={styles.acceptTextIdle}>
-                    {Strings.acceptedButton}
-                  </Text>
+                  <Icon name="check" size={fs(16)} color={Colors.white} />
+                  <Text style={styles.acceptText}>{Strings.accept}</Text>
                 </>
-              )
-            ) : (
-              <LinearGradient
-                colors={[Colors.primary, Colors.primaryDark]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.acceptBtnFill}
-              >
-                {respondingId === request.id &&
-                respondingAction === 'approve' ? (
-                  <ActivityIndicator size="small" color={Colors.white} />
-                ) : (
-                  <>
-                    <Icon name="check" size={fs(16)} color={Colors.white} />
-                    <Text style={styles.acceptText}>
-                      {Strings.acceptedButton}
-                    </Text>
-                  </>
-                )}
-              </LinearGradient>
-            )}
+              )}
+            </LinearGradient>
           </TouchableOpacity>
         </View>
       </View>
@@ -375,16 +328,24 @@ const ViewProfileRequestsScreen = () => {
             requests.map(renderRequest)
           ) : (
             <View style={styles.emptyState}>
-              <View style={styles.emptyIconWrap}>
-                <Icon
-                  name="account-eye-outline"
-                  size={fs(32)}
-                  color={Colors.primary}
-                />
-              </View>
+              <LinearGradient
+                colors={[Colors.goldLight, Colors.gold, Colors.primary]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.emptyIconRing}
+              >
+                <View style={styles.emptyIconWrap}>
+                  <Icon
+                    name="account-eye-outline"
+                    size={fs(30)}
+                    color={Colors.primary}
+                  />
+                </View>
+              </LinearGradient>
               <Text style={styles.emptyTitle}>
                 {Strings.viewProfileRequestsEmpty}
               </Text>
+              <View style={styles.emptyDivider} />
               <Text style={styles.emptyHint}>
                 {Strings.viewProfileRequestsEmptyHint}
               </Text>
@@ -392,6 +353,85 @@ const ViewProfileRequestsScreen = () => {
           )}
         </ScrollView>
       )}
+
+      {confirmModal ? (
+        <Modal
+          visible
+          transparent
+          animationType="fade"
+          onRequestClose={() => {
+            if (!respondingId) {
+              setConfirmModal(null);
+            }
+          }}
+        >
+          <View style={styles.modalBackdrop}>
+            <View style={styles.modalCard}>
+              <LinearGradient
+                colors={
+                  confirmModal.type === 'accept'
+                    ? [Colors.goldLight, Colors.gold]
+                    : [Colors.gradientStart, Colors.focusBorder]
+                }
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.modalIconRing}
+              >
+                <View style={styles.modalIconInner}>
+                  <Icon
+                    name={
+                      confirmModal.type === 'accept'
+                        ? 'check-circle-outline'
+                        : 'close-circle-outline'
+                    }
+                    size={fs(34)}
+                    color={
+                      confirmModal.type === 'accept'
+                        ? Colors.gold
+                        : Colors.primary
+                    }
+                  />
+                </View>
+              </LinearGradient>
+
+              <Text style={styles.modalTitle}>
+                {confirmModal.type === 'accept'
+                  ? Strings.requestAcceptConfirmTitle
+                  : Strings.requestRejectConfirmTitle}
+              </Text>
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={styles.modalNoBtn}
+                  activeOpacity={0.88}
+                  onPress={handleConfirmRespond}
+                  disabled={Boolean(respondingId)}
+                >
+                  <Text style={styles.modalNoText}>{Strings.requestModalNo}</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.modalYesBtn}
+                  activeOpacity={0.9}
+                  onPress={handleConfirmRespond}
+                  disabled={Boolean(respondingId)}
+                >
+                  <LinearGradient
+                    colors={[Colors.primary, Colors.primaryDark]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.modalYesFill}
+                  >
+                    <Text style={styles.modalYesText}>
+                      {Strings.requestModalYes}
+                    </Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      ) : null}
     </SafeAreaView>
   );
 };
@@ -448,18 +488,24 @@ const styles = StyleSheet.create({
   },
   requestTop: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
     marginBottom: hp('1.4%'),
   },
   avatarRing: {
-    padding: wp('0.6%'),
+    width: wp('16%'),
+    height: wp('16%'),
     borderRadius: wp('8%'),
     borderWidth: 1.5,
     borderColor: Colors.gold,
+    padding: wp('0.6%'),
     marginRight: wp('3%'),
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   requestImage: {
-    width: wp('16%'),
-    height: wp('16%'),
+    width: '100%',
+    height: '100%',
     borderRadius: wp('8%'),
   },
   requestInfo: {
@@ -515,22 +561,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: wp('2.4%'),
     paddingVertical: hp('0.28%'),
   },
-  statusAccepted: {
-    backgroundColor: '#E8F8EE',
-  },
-  statusDeclined: {
-    backgroundColor: Colors.badgeVerified,
-  },
   statusText: {
     fontSize: fs(11),
     fontFamily: Fonts.semiBold,
     color: Colors.primary,
-  },
-  statusAcceptedText: {
-    color: '#22C55E',
-  },
-  statusDeclinedText: {
-    color: Colors.redish,
   },
   actionRow: {
     flexDirection: 'row',
@@ -548,32 +582,16 @@ const styles = StyleSheet.create({
     borderColor: Colors.primary,
     backgroundColor: Colors.white,
   },
-  rejectBtnDeclined: {
-    backgroundColor: Colors.redish,
-    borderColor: Colors.redish,
-  },
   rejectText: {
     fontSize: fs(13),
     fontFamily: Fonts.semiBold,
     color: Colors.primary,
-  },
-  rejectTextDeclined: {
-    color: Colors.white,
   },
   acceptBtn: {
     flex: 1,
     height: hp('5%'),
     borderRadius: AuthStyles.inputRadius,
     overflow: 'hidden',
-  },
-  acceptBtnIdle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: wp('1.2%'),
-    backgroundColor: Colors.white,
-    borderWidth: 1.2,
-    borderColor: Colors.primary,
   },
   acceptBtnFill: {
     flex: 1,
@@ -587,29 +605,6 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.semiBold,
     color: Colors.white,
   },
-  acceptTextIdle: {
-    fontSize: fs(13),
-    fontFamily: Fonts.semiBold,
-    color: Colors.primary,
-  },
-  photosBtn: {
-    height: hp('5%'),
-    borderRadius: AuthStyles.inputRadius,
-    overflow: 'hidden',
-    marginBottom: hp('1%'),
-  },
-  photosBtnFill: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: wp('1.5%'),
-  },
-  photosBtnText: {
-    fontSize: fs(13),
-    fontFamily: Fonts.semiBold,
-    color: Colors.white,
-  },
   emptyText: {
     fontSize: FontSizes.bodySmall,
     fontFamily: Fonts.regular,
@@ -619,30 +614,42 @@ const styles = StyleSheet.create({
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: wp('6%'),
-    paddingVertical: hp('5%'),
+    paddingHorizontal: wp('7%'),
+    paddingVertical: hp('6%'),
     backgroundColor: Colors.tabActiveBg,
     borderRadius: wp('5%'),
     borderWidth: 1,
     borderColor: Colors.focusBorder,
   },
+  emptyIconRing: {
+    width: wp('20%'),
+    height: wp('20%'),
+    borderRadius: wp('10%'),
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: hp('2.2%'),
+  },
   emptyIconWrap: {
-    width: wp('16%'),
-    height: wp('16%'),
-    borderRadius: wp('8%'),
+    width: wp('17.5%'),
+    height: wp('17.5%'),
+    borderRadius: wp('8.75%'),
     backgroundColor: Colors.white,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: hp('1.8%'),
-    borderWidth: 1,
-    borderColor: Colors.focusBorder,
   },
   emptyTitle: {
-    fontSize: fs(16),
+    fontSize: fs(18),
     fontFamily: Fonts.bold,
     color: Colors.primary,
     textAlign: 'center',
-    marginBottom: hp('1%'),
+    marginBottom: hp('1.2%'),
+  },
+  emptyDivider: {
+    width: wp('12%'),
+    height: 2,
+    borderRadius: 2,
+    backgroundColor: Colors.gold,
+    marginBottom: hp('1.4%'),
   },
   emptyHint: {
     fontSize: fs(13),
@@ -660,6 +667,94 @@ const styles = StyleSheet.create({
   },
   retryBtnText: {
     fontSize: fs(11),
+    fontFamily: Fonts.semiBold,
+    color: Colors.white,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(107, 4, 29, 0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: wp('7%'),
+  },
+  modalCard: {
+    width: '100%',
+    backgroundColor: Colors.white,
+    borderRadius: wp('6%'),
+    paddingHorizontal: wp('6%'),
+    paddingTop: hp('3.2%'),
+    paddingBottom: hp('2.4%'),
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#F3E6C8',
+  },
+  modalIconRing: {
+    width: wp('18%'),
+    height: wp('18%'),
+    borderRadius: wp('9%'),
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: hp('1.8%'),
+  },
+  modalIconInner: {
+    width: wp('15%'),
+    height: wp('15%'),
+    borderRadius: wp('7.5%'),
+    backgroundColor: Colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalTitle: {
+    fontSize: fs(16),
+    fontFamily: Fonts.bold,
+    color: Colors.primary,
+    textAlign: 'center',
+    marginBottom: hp('2.4%'),
+    lineHeight: fs(24),
+    paddingHorizontal: wp('2%'),
+  },
+  modalMessage: {
+    fontSize: fs(13),
+    fontFamily: Fonts.regular,
+    color: Colors.textLight,
+    textAlign: 'center',
+    lineHeight: fs(20),
+    marginBottom: hp('2.4%'),
+  },
+  modalActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    gap: wp('3%'),
+  },
+  modalNoBtn: {
+    flex: 1,
+    height: hp('5.2%'),
+    borderRadius: wp('4%'),
+    borderWidth: 1.2,
+    borderColor: Colors.primary,
+    backgroundColor: Colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalNoText: {
+    fontSize: fs(14),
+    fontFamily: Fonts.semiBold,
+    color: Colors.primary,
+  },
+  modalYesBtn: {
+    flex: 1,
+    height: hp('5.2%'),
+    borderRadius: wp('4%'),
+    overflow: 'hidden',
+  },
+  modalYesFill: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalYesText: {
+    fontSize: fs(14),
     fontFamily: Fonts.semiBold,
     color: Colors.white,
   },

@@ -16,6 +16,7 @@ export type LikeStackParamList = {
     location?: string;
     image?: ImageSourcePropType;
     isVerified?: boolean;
+    pictureHidden?: boolean;
   };
   MatchSuccess: {
     name: string;

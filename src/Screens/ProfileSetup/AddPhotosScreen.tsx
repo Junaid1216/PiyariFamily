@@ -20,21 +20,27 @@ import PrimaryButton from '../../Components/PrimaryButton';
 import SetupProgressBar from '../../Components/SetupProgressBar';
 import {
   Api,
-  ENDPOINTS,
-  extractProfilePhotoSlots,
   getApiErrorMessage,
   saveProfileCache,
+  extractProfilePhotoSlots,
   type ApiErrorResponse,
 } from '../../API';
 import { normalizeUploadFile, type UploadFile } from '../../API/formData';
+import { accountStorage } from '../../API/accountStorage';
 import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
-import { PROFILE_PHOTO_SLOTS, PROFILE_PHOTO_MAX_BYTES, PROFILE_PHOTO_PICKER_MAX_SIZE, PROFILE_PHOTO_PICKER_QUALITY, PROFILE_SETUP_TOTAL_STEPS } from '../../Constant/ProfileSetup';
+import {
+  PROFILE_PHOTO_SLOTS,
+  PROFILE_PHOTO_MAX_BYTES,
+  PROFILE_PHOTO_PICKER_MAX_SIZE,
+  PROFILE_PHOTO_PICKER_QUALITY,
+  PROFILE_SETUP_TOTAL_STEPS,
+} from '../../Constant/ProfileSetup';
 import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
 import { getFooterBottomPadding } from '../../Functions/safeArea';
 import { fs, hp, wp } from '../../Functions/responsive';
-import { store } from '../../Redux';
+import { setSetupComplete, store } from '../../Redux';
 
 type Props = {
   navigation: {
@@ -47,7 +53,10 @@ const createEmptyPhotos = () =>
   Array.from({ length: PROFILE_PHOTO_SLOTS }, () => null as UploadFile | null);
 
 const isSupportedPhoto = (type?: string | null) =>
-  !type || ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(type.toLowerCase());
+  !type ||
+  ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(
+    type.toLowerCase(),
+  );
 
 const AddPhotosScreen = ({ navigation }: Props) => {
   const insets = useSafeAreaInsets();
@@ -58,8 +67,8 @@ const AddPhotosScreen = ({ navigation }: Props) => {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-      const profile = store.getState().profile.profile;
-      setRemotePhotos(extractProfilePhotoSlots(profile));
+    const profile = store.getState().profile.profile;
+    setRemotePhotos(extractProfilePhotoSlots(profile));
   }, []);
 
   const getSlotUri = (index: number) =>
@@ -131,6 +140,33 @@ const AddPhotosScreen = ({ navigation }: Props) => {
     });
   };
 
+  const finishCompleteProfile = async () => {
+    const res = await Api.completeProfile();
+
+    console.log('POST /profile/complete response:', res);
+
+    if (res?.status == 200 || res?.success === true || res?.success == 200) {
+      const cached = saveProfileCache(res);
+      const accountStatus =
+        cached.status === 'inactive' ? 'inactive' : 'active';
+
+      accountStorage.setStatus(accountStatus);
+      if (cached.profile_completed !== false) {
+        store.dispatch(setSetupComplete(true));
+      }
+
+      Toast.show(
+        res?.message ?? 'Congratulations! Your profile is ready.',
+        Toast.LONG,
+      );
+      navigation.navigate('ProfileReady');
+      return true;
+    }
+
+    Toast.show(res?.message ?? 'Failed to complete profile', Toast.LONG);
+    return false;
+  };
+
   const handleContinue = async () => {
     if (!hasAtLeastOnePhoto) {
       Toast.show(Strings.addPhotoRequired);
@@ -144,23 +180,21 @@ const AddPhotosScreen = ({ navigation }: Props) => {
       (photo): photo is UploadFile => photo !== null,
     );
 
-    if (!selectedPhotos.length && remotePhotos.some(Boolean)) {
-      navigation.navigate('ProfileReady');
-      return;
-    }
-
     setSaving(true);
 
     try {
-      const res = await Api.uploadProfilePhotos(selectedPhotos);
-      const uploaded =
-        res?.status == 200 || res?.success === true || res?.success == 200;
+      if (selectedPhotos.length) {
+        const res = await Api.uploadProfilePhotos(selectedPhotos);
+        const uploaded = res?.status == 200 || res?.success === true;
 
-      if (uploaded) {
+        if (!uploaded) {
+          Toast.show(res?.message ?? 'Failed to upload photos', Toast.LONG);
+          return;
+        }
+
         const uploadedSlotUrls = Array.from(
           { length: PROFILE_PHOTO_SLOTS },
-          (_, index) =>
-            localPhotos[index]?.uri ?? remotePhotos[index] ?? null,
+          (_, index) => localPhotos[index]?.uri ?? remotePhotos[index] ?? null,
         ).filter((url): url is string => Boolean(url));
 
         let cached = saveProfileCache(res?.data ?? res);
@@ -170,8 +204,7 @@ const AddPhotosScreen = ({ navigation }: Props) => {
           if (profileRes?.status == 200) {
             cached = saveProfileCache(profileRes.data);
           }
-        } catch (refreshError) {
-        }
+        } catch (refreshError) {}
 
         const cachedSlots = extractProfilePhotoSlots(cached);
         if (!cachedSlots.some(Boolean) && uploadedSlotUrls.length > 0) {
@@ -201,11 +234,9 @@ const AddPhotosScreen = ({ navigation }: Props) => {
 
         setRemotePhotos(extractProfilePhotoSlots(cached));
         setLocalPhotos(createEmptyPhotos());
-        Toast.show(res?.message ?? 'Photos uploaded', Toast.LONG);
-        navigation.navigate('ProfileReady');
-      } else {
-        Toast.show(res?.message ?? 'Failed to upload photos', Toast.LONG);
       }
+
+      await finishCompleteProfile();
     } catch (error) {
       const axiosError = error as AxiosError<ApiErrorResponse>;
       Toast.show(getApiErrorMessage(axiosError), Toast.LONG);
@@ -268,7 +299,9 @@ const AddPhotosScreen = ({ navigation }: Props) => {
               >
                 {isMain ? (
                   <View style={styles.mainBadge}>
-                    <Text style={styles.mainBadgeText}>{Strings.mainPhoto}</Text>
+                    <Text style={styles.mainBadgeText}>
+                      {Strings.mainPhoto}
+                    </Text>
                   </View>
                 ) : null}
                 <View style={styles.emptyContent}>

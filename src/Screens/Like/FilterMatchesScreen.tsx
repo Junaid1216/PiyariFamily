@@ -31,11 +31,12 @@ import {
   DEFAULT_INCOME_MIN,
   FILTER_ANY,
   getApiErrorMessage,
-  isApiSuccess,
-  mapFilterSetup,
-  mapFilterMatchGroups,
-  pickMatchListTotal,
   hydrateMatchImages,
+  isApiSuccess,
+  mapFilterMatchGroups,
+  mapFilterSetup,
+  pickMatchListTotal,
+  resolveUserCity,
   withAnyOption,
   type FilterSetupData,
 } from '../../API';
@@ -48,7 +49,11 @@ import { getFooterBottomPadding } from '../../Functions/safeArea';
 import { navigateToSearchFilterResults } from '../../Functions/matchNavigation';
 import { fs, hp, wp } from '../../Functions/responsive';
 import {
+  stabilizeMatchOrder,
+} from '../../API/mappers/matchLocationFilter';
+import {
   selectFilterForm,
+  selectProfile,
   setFilterForm,
   setFilterResults,
   useAppDispatch,
@@ -59,66 +64,6 @@ type FilterNavigationProp = NativeStackNavigationProp<
   SearchStackParamList,
   'FilterMatches'
 >;
-
-const logFilterBackendResponse = (source: string, payload: unknown) => {
-  const data = (payload ?? {}) as Record<string, unknown>;
-  const nested =
-    data.data && typeof data.data === 'object' && !Array.isArray(data.data)
-      ? (data.data as Record<string, unknown>)
-      : null;
-  const filterOptions = (data.filter_options ?? nested?.filter_options) as
-    | Record<string, unknown>
-    | undefined;
-  const applied = (data.filters_applied ?? nested?.filters_applied) as
-    | Record<string, unknown>
-    | undefined;
-
-  console.log(`[Filter] ${source} full backend response:`, payload);
-  console.log(`[Filter] ${source} PKR income range from backend:`, {
-    hasFilterOptions: Boolean(filterOptions),
-    income_ranges: filterOptions?.income_ranges ?? null,
-    incomeRanges: filterOptions?.incomeRanges ?? null,
-    monthly_income_ranges: filterOptions?.monthly_income_ranges ?? null,
-    pkr_income_ranges: filterOptions?.pkr_income_ranges ?? null,
-    incomes: filterOptions?.incomes ?? null,
-    monthly_incomes: filterOptions?.monthly_incomes ?? null,
-    filters_applied_income_range: applied?.income_range ?? null,
-    filters_applied_monthly_income: applied?.monthly_income ?? null,
-  });
-};
-
-const EMPTY_SETUP: FilterSetupData = {
-  quickFilters: [],
-  extraSections: [],
-  options: {
-    cities: [],
-    qualifications: [],
-    professions: [],
-    religions: [],
-    maritalStatuses: [],
-    incomeRanges: [],
-  },
-  defaults: {
-    ageMin: DEFAULT_AGE_MIN,
-    ageMax: DEFAULT_AGE_MAX,
-    city: '',
-    qualification: FILTER_ANY,
-    profession: FILTER_ANY,
-    religion: FILTER_ANY,
-    maritalStatus: '',
-    incomeRange: FILTER_ANY,
-    incomeMin: DEFAULT_INCOME_MIN,
-    incomeMax: DEFAULT_INCOME_MAX,
-  },
-  bounds: {
-    ageMin: DEFAULT_AGE_MIN,
-    ageMax: DEFAULT_AGE_MAX,
-    incomeMin: DEFAULT_INCOME_MIN,
-    incomeMax: DEFAULT_INCOME_MAX,
-    incomeStep: 1000,
-  },
-  incomeRangeMeta: {},
-};
 
 const applyDefaults = (setup: FilterSetupData) => {
   const { defaults } = setup;
@@ -149,8 +94,11 @@ const FilterMatchesScreen = () => {
   const navigation = useNavigation<FilterNavigationProp>();
   const dispatch = useAppDispatch();
   const savedForm = useAppSelector(selectFilterForm);
+  const profile = useAppSelector(selectProfile);
 
-  const [filterSetup, setFilterSetup] = useState<FilterSetupData>(EMPTY_SETUP);
+  const [filterSetup, setFilterSetup] = useState<FilterSetupData>(() =>
+    mapFilterSetup(null),
+  );
   const [location, setLocation] = useState('');
   const [education, setEducation] = useState(FILTER_ANY);
   const [profession, setProfession] = useState(FILTER_ANY);
@@ -174,12 +122,9 @@ const FilterMatchesScreen = () => {
     setMetaLoading(true);
 
     try {
-      const res = await Api.getMatchFilter();
-      logFilterBackendResponse('meta (open Filter screen)', res?.data);
-
+      const res = await Api.getMatchSearch();
       if (isApiSuccess(res?.status, res?.data?.success)) {
         const setup = mapFilterSetup(res?.data);
-        console.log('[Filter] mapped PKR incomeRanges for UI:', setup.options.incomeRanges);
         const defaults = applyDefaults(setup);
         const restored = savedForm
           ? {
@@ -240,14 +185,14 @@ const FilterMatchesScreen = () => {
         setActiveQuickFilters(restored.activeQuickFilters);
         setExtraValues(restored.extraValues);
       } else {
-        setFilterSetup(EMPTY_SETUP);
+        setFilterSetup(mapFilterSetup(null));
         Toast.show(
           res?.data?.message ?? 'Failed to load filter options',
           Toast.LONG,
         );
       }
     } catch (error) {
-      setFilterSetup(EMPTY_SETUP);
+      setFilterSetup(mapFilterSetup(null));
       Toast.show(
         getApiErrorMessage(error, 'Failed to load filter options'),
         Toast.LONG,
@@ -276,7 +221,7 @@ const FilterMatchesScreen = () => {
     incomeMin,
     incomeMax,
     extraValues,
-    activeQuickFilters,
+    activeQuickFilters: {},
   });
 
   const handleReset = () => {
@@ -333,13 +278,6 @@ const FilterMatchesScreen = () => {
     dispatch(setFilterForm(cleared));
   };
 
-  const toggleQuickFilter = (id: string) => {
-    setActiveQuickFilters(current => ({
-      ...current,
-      [id]: !current[id],
-    }));
-  };
-
   const applyFilters = useCallback(async () => {
     if (loading) {
       return;
@@ -366,21 +304,18 @@ const FilterMatchesScreen = () => {
         incomeBoundMax: filterSetup.bounds.incomeMax,
         incomeRangeMeta: filterSetup.incomeRangeMeta,
         extraValues,
-        activeQuickFilters,
+        activeQuickFilters: {},
+        profileCity: resolveUserCity(profile),
       });
 
-      const res = await Api.getMatchFilter(params);
-      logFilterBackendResponse('apply filters', res?.data);
-      console.log('[Filter] apply query params:', params);
-      console.log('[Filter] selected quick filters:', activeQuickFilters);
+      const res = await Api.getMatchSearch(params);
 
       if (isApiSuccess(res?.status, res?.data?.success)) {
         Toast.show(res?.data?.message ?? 'Filters applied', Toast.LONG);
         const groups = mapFilterMatchGroups(res?.data);
-        const matches = groups.exact.length
-          ? groups.exact
-          : groups.suggested;
-        const hydrated = await hydrateMatchImages(matches);
+        const matches = groups.exact.length ? groups.exact : groups.suggested;
+        const filtered = stabilizeMatchOrder(matches);
+        const hydrated = await hydrateMatchImages(filtered);
         dispatch(setFilterForm(currentForm()));
         dispatch(
           setFilterResults({
@@ -390,11 +325,6 @@ const FilterMatchesScreen = () => {
             hasExactMatches: groups.exact.length > 0,
           }),
         );
-        console.log('[Filter] navigating to Search with filtered results:', {
-          count: hydrated.length,
-          hasExactMatches: groups.exact.length > 0,
-          fallbackUsed: groups.fallbackUsed,
-        });
         navigateToSearchFilterResults(navigation);
       } else {
         Toast.show(
@@ -411,14 +341,10 @@ const FilterMatchesScreen = () => {
       setLoading(false);
     }
   }, [
-    activeQuickFilters,
     ageMax,
     ageMin,
     citySearch,
     education,
-    incomeRange,
-    incomeMin,
-    incomeMax,
     extraValues,
     dispatch,
     filterSetup.bounds.ageMax,
@@ -426,11 +352,15 @@ const FilterMatchesScreen = () => {
     filterSetup.bounds.incomeMax,
     filterSetup.bounds.incomeMin,
     filterSetup.incomeRangeMeta,
+    incomeMax,
+    incomeMin,
+    incomeRange,
     loading,
     location,
     marital,
     navigation,
     profession,
+    profile,
     religion,
   ]);
 
@@ -484,29 +414,6 @@ const FilterMatchesScreen = () => {
           scrollEnabled={scrollEnabled}
           nestedScrollEnabled
         >
-          {filterSetup.quickFilters.length > 0 ? (
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Icon
-                  name="filter-variant"
-                  size={fs(18)}
-                  color={Colors.primary}
-                />
-                <Text style={styles.sectionTitle}>{Strings.quickFilters}</Text>
-              </View>
-              <View style={styles.chipRow}>
-                {filterSetup.quickFilters.map(filter => (
-                  <FilterChip
-                    key={filter.id}
-                    label={filter.label}
-                    selected={Boolean(activeQuickFilters[filter.id])}
-                    onPress={() => toggleQuickFilter(filter.id)}
-                  />
-                ))}
-              </View>
-            </View>
-          ) : null}
-
           <FilterRangeSlider
             title={Strings.ageRange}
             iconName="calendar-outline"
@@ -517,6 +424,7 @@ const FilterMatchesScreen = () => {
             minLabel={`${filterSetup.bounds.ageMin} yrs`}
             centerLabel={`${ageMin} – ${ageMax} ${Strings.ageYears}`}
             maxLabel={`${filterSetup.bounds.ageMax} yrs`}
+            showControls={false}
             onLowValueChange={setAgeMin}
             onHighValueChange={setAgeMax}
             onDragStart={() => setScrollEnabled(false)}
@@ -581,16 +489,22 @@ const FilterMatchesScreen = () => {
                 <Icon name="school-outline" size={fs(18)} color={Colors.primary} />
                 <Text style={styles.sectionTitle}>{Strings.educationLabel}</Text>
               </View>
-              <View style={styles.chipRow}>
+              <ScrollView
+                horizontal
+                nestedScrollEnabled
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.chipScrollContent}
+              >
                 {educationOptions.map(option => (
                   <FilterChip
                     key={option}
                     label={option}
                     selected={education === option}
                     onPress={() => setEducation(option)}
+                    style={styles.chipFixed}
                   />
                 ))}
-              </View>
+              </ScrollView>
             </View>
           ) : null}
 
@@ -604,16 +518,22 @@ const FilterMatchesScreen = () => {
                 />
                 <Text style={styles.sectionTitle}>{Strings.professionLabel}</Text>
               </View>
-              <View style={styles.chipRow}>
+              <ScrollView
+                horizontal
+                nestedScrollEnabled
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.chipScrollContent}
+              >
                 {professionOptions.map(option => (
                   <FilterChip
                     key={option}
                     label={option}
                     selected={profession === option}
                     onPress={() => setProfession(option)}
+                    style={styles.chipFixed}
                   />
                 ))}
-              </View>
+              </ScrollView>
             </View>
           ) : null}
 
@@ -799,6 +719,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: wp('2%'),
+  },
+  chipScrollContent: {
+    flexDirection: 'row',
+    flexWrap: 'nowrap',
+    alignItems: 'center',
+    gap: wp('2%'),
+    paddingRight: wp('2%'),
+  },
+  chipFixed: {
+    flexShrink: 0,
   },
   footer: {
     paddingHorizontal: AuthStyles.horizontalPadding,

@@ -22,6 +22,7 @@ export type SearchStackParamList = {
     location?: string;
     image?: ImageSourcePropType;
     isVerified?: boolean;
+    pictureHidden?: boolean;
   };
 };
 

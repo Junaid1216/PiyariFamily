@@ -21,6 +21,23 @@ const POSTMAN_LIST = {
 };
 
 describe('GET /photo-access-requests', () => {
+  it('maps a request even when nested collection keys are empty', () => {
+    const [item] = mapPhotoAccessRequests({
+      id: 1,
+      status: 'approved',
+      items: [],
+      profile: {
+        id: 1056,
+        name: 'Taha',
+        profile_photo:
+          'https://ranglerz.click/piyarifamily/uploads/store/profiles/1056/male-08.png',
+      },
+    });
+
+    expect(item.name).toBe('Taha');
+    expect(item.profileId).toBe('1056');
+  });
+
   it('maps the live Postman list onto View Profile Requests cards', () => {
     const [item] = mapPhotoAccessRequests(POSTMAN_LIST);
 
@@ -46,6 +63,31 @@ describe('GET /photo-access-requests', () => {
     });
 
     expect(items).toHaveLength(0);
+  });
+
+  it('maps requests nested under data when wrapper status is success', () => {
+    const [item] = mapPhotoAccessRequests({
+      success: 200,
+      status: 'success',
+      data: {
+        requests: [
+          {
+            id: 1,
+            status: 'approved',
+            profile: {
+              id: 1056,
+              name: 'Taha',
+              profile_photo:
+                'https://ranglerz.click/piyarifamily/uploads/store/profiles/1056/male-08.png',
+            },
+          },
+        ],
+      },
+    });
+
+    expect(item.id).toBe('1');
+    expect(item.name).toBe('Taha');
+    expect(item.profileId).toBe('1056');
   });
 
   it('maps nested request profiles even when the wrapper has a status string', () => {
@@ -94,8 +136,8 @@ describe('GET /photo-access-requests', () => {
     expect(item.name).toBe('Jannat');
   });
 
-  it('does not invent a request card when requests is an empty array', () => {
-    const items = mapPhotoAccessRequests({
+  it('shows the root request when requests is empty but profile data is present', () => {
+    const [item] = mapPhotoAccessRequests({
       success: 200,
       message: 'Photo access is already approved.',
       request_id: 1,
@@ -111,7 +153,9 @@ describe('GET /photo-access-requests', () => {
       },
     });
 
-    expect(items).toHaveLength(0);
+    expect(item.name).toBe('Jannat');
+    expect(item.profileId).toBe('1002');
+    expect(item.statusLabel).toBe('Approved');
   });
 
   it('merges outgoing requests when the incoming list is empty', () => {

@@ -55,11 +55,17 @@ type Props = {
   };
 };
 
-const isLoginSuccess = (response?: {
-  status?: number;
-  success?: boolean | number;
-} | null) =>
-  Boolean(response && isApiSuccess(response.status, response.success) && pickAuthToken(response));
+const isLoginSuccess = (
+  response?: {
+    status?: number;
+    success?: boolean | number;
+  } | null,
+) =>
+  Boolean(
+    response &&
+      isApiSuccess(response.status, response.success) &&
+      pickAuthToken(response),
+  );
 
 const LoginScreen = ({ navigation }: Props) => {
   const insets = useSafeAreaInsets();
@@ -128,7 +134,10 @@ const LoginScreen = ({ navigation }: Props) => {
                 {Strings.welcomeBack}
                 {welcomeName ? `, ${welcomeName} !` : ' !'}
               </Text>
-              <Text style={styles.subtitle}>{Strings.loginSubtitle}</Text>
+              <Text style={styles.subtitle}>
+                {Strings.loginSubtitle}
+                31111111111113453535353535353111111111111311
+              </Text>
 
               <AuthInput
                 label={Strings.emailLabel}

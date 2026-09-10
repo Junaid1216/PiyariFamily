@@ -3,6 +3,10 @@ import { Images } from '../../Assets';
 import type { BasicDetail, QuickInfo } from '../../Constant/MatchProfiles';
 import { pickImageUrl, parseVisibilityFlag } from './profileMapper';
 import { toRemoteImageSource } from '../mediaUrl';
+import {
+  applyLocationFilterParams,
+  classifyLocationQuickFilter,
+} from './matchLocationFilter';
 
 export type MatchTag = {
   icon: string;
@@ -18,6 +22,7 @@ export type FeaturedMatch = {
   tags: MatchTag[];
   isNew?: boolean;
   isVerified?: boolean;
+  pictureHidden?: boolean;
 };
 
 export type SuggestedMatch = {
@@ -25,10 +30,15 @@ export type SuggestedMatch = {
   name: string;
   age: number;
   location: string;
+  city?: string;
+  distanceKm?: number;
+  isNew?: boolean;
+  createdAt?: string;
   profession: string;
   image: ImageSourcePropType;
   tier: 'VIP' | 'VVIP';
   isVerified: boolean;
+  pictureHidden?: boolean;
 };
 
 export type BestMatchData = {
@@ -66,6 +76,12 @@ export type MatchApiItem = {
   country?: string | null;
   state?: string | null;
   location?: string | null;
+  distance?: number | string | null;
+  distance_km?: number | string | null;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+  lat?: number | string | null;
+  lng?: number | string | null;
   qualification?: string | null;
   highest_education?: string | null;
   field_of_study?: string | null;
@@ -92,9 +108,18 @@ export type MatchApiItem = {
     additional_photos_visible?: boolean | number | string | null;
   } | null;
   gender?: string | null;
-  is_verified?: boolean | number | null;
+  is_verified?: boolean | number | string | null;
+  phone_verified?: boolean | number | string | null;
+  is_phone_verified?: boolean | number | string | null;
+  phone_verified_at?: string | null;
   is_new?: boolean | number | null;
   is_new_profile?: boolean | number | null;
+  created_at?: string | null;
+  joined_at?: string | null;
+  registered_at?: string | null;
+  createdAt?: string | null;
+  joined_date?: string | null;
+  registered_on?: string | null;
   tier?: string | null;
   plan?: string | null;
   subscription_plan?: string | null;
@@ -126,6 +151,7 @@ export type HomeMatchesResponse = {
   featured?: MatchApiItem[];
   matches?: MatchApiItem[];
   suggested_matches?: MatchApiItem[];
+  exact_matches?: MatchApiItem[];
   profiles?: MatchApiItem[];
   users?: MatchApiItem[];
   results?: MatchApiItem[];
@@ -149,6 +175,14 @@ export type MatchSearchParams = {
   search?: string;
   q?: string;
   near_me?: boolean | string | number;
+  same_city?: boolean | string | number;
+  radius?: number | string;
+  radius_km?: number | string;
+  origin_city?: string;
+  latitude?: number | string;
+  longitude?: number | string;
+  lat?: number | string;
+  lng?: number | string;
   verified?: boolean | string | number;
   new_profiles?: boolean | string | number;
   height_min?: number | string;
@@ -203,6 +237,8 @@ export type MatchListResponse = {
   profiles?: MatchApiItem[];
   matches?: MatchApiItem[];
   results?: MatchApiItem[];
+  users?: MatchApiItem[];
+  recommendations?: MatchApiItem[];
   pagination?: MatchListPagination | null;
   filters_applied?: Record<string, string | number | null>;
   quick_filters?:
@@ -270,10 +306,30 @@ const PICTURE_VISIBILITY_KEYS = [
   'profile_photo_visible',
   'profilePhotoVisible',
   'profile_picture_visible',
+  'profilePictureVisible',
+  'is_profile_photo_visible',
+  'photo_visible',
+  'is_photo_visible',
+  'can_view_profile_photo',
+  'can_view_photos',
 ];
 const ADDITIONAL_VISIBILITY_KEYS = [
   'additional_photos_visible',
   'additionalPhotosVisible',
+  'gallery_visible',
+  'photos_visible',
+];
+const PICTURE_HIDDEN_KEYS = [
+  'profile_photo_hidden',
+  'profilePhotoHidden',
+  'hide_profile_photo',
+  'is_profile_photo_hidden',
+  'photos_hidden',
+];
+const ADDITIONAL_HIDDEN_KEYS = [
+  'additional_photos_hidden',
+  'additionalPhotosHidden',
+  'hide_additional_photos',
 ];
 
 const pickVisibilityFromSource = (
@@ -303,6 +359,7 @@ export const resolveMatchPhotoVisibility = (item?: MatchApiItem | null) => {
     item,
     item.visibility,
     item.photo_visibility,
+    (item as { settings?: unknown }).settings,
     item.user,
     item.user?.visibility,
     item.user?.photo_visibility,
@@ -316,13 +373,26 @@ export const resolveMatchPhotoVisibility = (item?: MatchApiItem | null) => {
 
   sources.forEach(source => {
     if (pictureVisible === undefined) {
-      pictureVisible = pickVisibilityFromSource(source, PICTURE_VISIBILITY_KEYS);
+      const hidden = pickVisibilityFromSource(source, PICTURE_HIDDEN_KEYS);
+      if (hidden === true) {
+        pictureVisible = false;
+      } else {
+        pictureVisible = pickVisibilityFromSource(
+          source,
+          PICTURE_VISIBILITY_KEYS,
+        );
+      }
     }
     if (additionalVisible === undefined) {
-      additionalVisible = pickVisibilityFromSource(
-        source,
-        ADDITIONAL_VISIBILITY_KEYS,
-      );
+      const hidden = pickVisibilityFromSource(source, ADDITIONAL_HIDDEN_KEYS);
+      if (hidden === true) {
+        additionalVisible = false;
+      } else {
+        additionalVisible = pickVisibilityFromSource(
+          source,
+          ADDITIONAL_VISIBILITY_KEYS,
+        );
+      }
     }
   });
 
@@ -390,7 +460,7 @@ const resolveProfileImage = (
     gender === 'male' ? Images.maleProfile : Images.femaleProfile;
 
   if (pictureHidden) {
-    return placeholder;
+    return Images.hiddenProfile;
   }
 
   for (const item of items) {
@@ -496,21 +566,32 @@ const buildTags = (item: MatchApiItem): MatchTag[] => {
   return tags;
 };
 
+const isPhoneVerified = (profile: MatchApiItem) =>
+  parseVisibilityFlag(profile.is_verified) === true ||
+  parseVisibilityFlag(profile.phone_verified) === true ||
+  parseVisibilityFlag(profile.is_phone_verified) === true ||
+  Boolean(pickString(profile.phone_verified_at));
+
 export const mapFeaturedMatch = (
   item: MatchApiItem,
   index: number,
 ): FeaturedMatch => {
   const profile = normalizeItem(item);
+  const pictureHidden =
+    resolveMatchPhotoVisibility(profile).pictureVisible === false;
 
   return {
     id: resolveId(profile, index),
-    name: pickString(profile.name) || 'Profile',
+    name:
+      pickString(profile.name, profile.full_name, profile.fullName) ||
+      'Profile',
     age: pickNumber(profile.age),
     location: resolveLocation(profile) || '-',
     image: resolveProfileImage(profile),
     tags: buildTags(profile),
     isNew: Boolean(profile.is_new ?? profile.is_new_profile),
-    isVerified: Boolean(profile.is_verified),
+    isVerified: isPhoneVerified(profile),
+    ...(pictureHidden ? { pictureHidden: true } : {}),
   };
 };
 
@@ -519,12 +600,45 @@ export const mapSuggestedMatch = (
   index: number,
 ): SuggestedMatch => {
   const profile = normalizeItem(item);
+  const location = resolveLocation(profile) || '-';
+  const city = locationPart(profile.city) || location.split(',')[0]?.trim();
+  const rawDistance = profile.distance_km ?? profile.distance;
+  const distanceKm =
+    rawDistance == null || rawDistance === ''
+      ? undefined
+      : pickNumber(rawDistance);
 
   return {
     id: resolveId(profile, index),
-    name: pickString(profile.name) || 'Profile',
+    name:
+      pickString(profile.name, profile.full_name, profile.fullName) ||
+      'Profile',
     age: pickNumber(profile.age),
-    location: resolveLocation(profile) || '-',
+    location,
+    ...(city && city !== '-' ? { city } : {}),
+    ...(distanceKm != null ? { distanceKm } : {}),
+    ...(profile.is_new || profile.is_new_profile
+      ? { isNew: true }
+      : {}),
+    ...(pickString(
+      profile.created_at,
+      profile.joined_at,
+      profile.registered_at,
+      profile.createdAt,
+      profile.joined_date,
+      profile.registered_on,
+    )
+      ? {
+          createdAt: pickString(
+            profile.created_at,
+            profile.joined_at,
+            profile.registered_at,
+            profile.createdAt,
+            profile.joined_date,
+            profile.registered_on,
+          ),
+        }
+      : {}),
     profession:
       pickString(
         profile.job_title,
@@ -536,7 +650,10 @@ export const mapSuggestedMatch = (
     tier: resolveTier(
       profile.tier ?? profile.plan ?? profile.subscription_plan,
     ),
-    isVerified: Boolean(profile.is_verified),
+    isVerified: isPhoneVerified(profile),
+    ...(resolveMatchPhotoVisibility(profile).pictureVisible === false
+      ? { pictureHidden: true }
+      : {}),
   };
 };
 
@@ -561,6 +678,22 @@ const extractMatchList = (response?: MatchListResponse | null) => {
 
   if (Array.isArray(normalized.results)) {
     return normalized.results;
+  }
+
+  if (Array.isArray(normalized.users)) {
+    return normalized.users;
+  }
+
+  if (Array.isArray(normalized.recommendations)) {
+    return normalized.recommendations;
+  }
+
+  if (Array.isArray(normalized.suggested_matches)) {
+    return normalized.suggested_matches;
+  }
+
+  if (Array.isArray(normalized.exact_matches)) {
+    return normalized.exact_matches;
   }
 
   return [];
@@ -717,7 +850,9 @@ export const parseSearchQuery = (
 };
 
 export const profileMatchesSearchQuery = (
-  match: Pick<SuggestedMatch, 'name' | 'profession' | 'location'>,
+  match: Pick<SuggestedMatch, 'name' | 'profession' | 'location'> & {
+    city?: string;
+  },
   searchQuery: string,
   catalogs?: SearchQueryCatalogs,
 ) => {
@@ -729,13 +864,15 @@ export const profileMatchesSearchQuery = (
 
   const parsed = parseSearchQuery(trimmed, catalogs);
   const name = match.name.toLowerCase();
-  const profession = match.profession.toLowerCase();
-  const location = match.location.toLowerCase();
+  const profession = (match.profession || '').toLowerCase();
+  const location = (match.location || '').toLowerCase();
+  const city = (match.city || '').toLowerCase();
+  const place = `${location} ${city}`.trim();
 
   if (parsed.profession && parsed.city) {
     return (
       profession.includes(parsed.profession.toLowerCase()) &&
-      location.toLowerCase().includes(parsed.city.toLowerCase())
+      place.includes(parsed.city.toLowerCase())
     );
   }
 
@@ -744,11 +881,11 @@ export const profileMatchesSearchQuery = (
   }
 
   if (parsed.city) {
-    return location.includes(parsed.city.toLowerCase());
+    return place.includes(parsed.city.toLowerCase());
   }
 
   const needle = (parsed.name || parsed.search || trimmed).toLowerCase();
-  const haystack = `${name} ${profession} ${location}`;
+  const haystack = `${name} ${profession} ${place}`;
 
   if (haystack.includes(needle)) {
     return true;
@@ -761,8 +898,12 @@ export const profileMatchesSearchQuery = (
 export type BuildSearchParamsInput = {
   searchQuery?: string;
   quickFilter?: string | null;
+  quickFilterLabel?: string | null;
   quickFilters?: Record<string, boolean | undefined>;
   profileGender?: string | null;
+  profileCity?: string | null;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
   ageMin?: number;
   ageMax?: number;
   city?: string;
@@ -779,8 +920,12 @@ export type BuildSearchParamsInput = {
 export const buildMatchSearchParams = ({
   searchQuery = '',
   quickFilter = null,
+  quickFilterLabel = null,
   quickFilters,
   profileGender,
+  profileCity,
+  latitude,
+  longitude,
   ageMin,
   ageMax,
   city,
@@ -794,6 +939,7 @@ export const buildMatchSearchParams = ({
   searchCatalogs,
 }: BuildSearchParamsInput): MatchSearchParams => {
   const params: MatchSearchParams = {};
+  const parsedSearch = parseSearchQuery(searchQuery, searchCatalogs);
 
   if (profileGender) {
     params.gender = resolveOppositeGender(profileGender);
@@ -839,14 +985,17 @@ export const buildMatchSearchParams = ({
     params.height_max = heightMax;
   }
 
-  const parsedSearch = parseSearchQuery(searchQuery, searchCatalogs);
-
   if (parsedSearch.search) {
     params.search = parsedSearch.search;
+    params.q = parsedSearch.search;
   }
 
   if (parsedSearch.name) {
     params.name = parsedSearch.name;
+    if (!params.search) {
+      params.search = parsedSearch.name;
+      params.q = parsedSearch.name;
+    }
   }
 
   if (!profession?.trim() && parsedSearch.profession) {
@@ -857,14 +1006,64 @@ export const buildMatchSearchParams = ({
     params.city = parsedSearch.city;
   }
 
+  const skipLocationOverlay = Boolean(parsedSearch.city);
+
   if (quickFilters) {
     Object.entries(quickFilters).forEach(([key, enabled]) => {
-      if (enabled) {
-        params[toSearchQueryKey(key)] = true;
+      if (!enabled) {
+        return;
       }
+
+      const kind = classifyLocationQuickFilter(key, key);
+      if (skipLocationOverlay && (kind === 'same_city' || kind === 'near_me')) {
+        return;
+      }
+
+      params[toSearchQueryKey(key)] = 1;
     });
+    applyLocationFilterParams(
+      params,
+      Object.entries(quickFilters)
+        .filter(([, enabled]) => Boolean(enabled))
+        .map(([key]) => ({ id: key, label: key }))
+        .filter(item => {
+          if (!skipLocationOverlay) {
+            return true;
+          }
+
+          const kind = classifyLocationQuickFilter(item.id, item.label);
+          return kind !== 'same_city' && kind !== 'near_me';
+        }),
+      { profileCity, country, latitude, longitude },
+    );
   } else if (quickFilter) {
-    params[toSearchQueryKey(quickFilter)] = true;
+    const locationKind = classifyLocationQuickFilter(
+      quickFilter,
+      quickFilterLabel,
+    );
+    const skipThisLocation =
+      skipLocationOverlay &&
+      (locationKind === 'same_city' || locationKind === 'near_me');
+    const key = toSearchQueryKey(quickFilter);
+    if (
+      !skipThisLocation &&
+      key !== 'city' &&
+      key !== 'location'
+    ) {
+      params[key] = 1;
+    }
+    if (!skipThisLocation) {
+      applyLocationFilterParams(
+        params,
+        [{ id: quickFilter, label: quickFilterLabel || quickFilter }],
+        {
+          profileCity,
+          country,
+          latitude,
+          longitude,
+        },
+      );
+    }
   }
 
   return params;
@@ -952,8 +1151,10 @@ export const mapFilterMatchGroups = (
     };
   }
 
+  const pool = general.length ? general : suggestedItems;
+
   return {
-    exact: general.map(mapSuggestedMatch),
+    exact: pool.map(mapSuggestedMatch),
     suggested: [] as SuggestedMatch[],
     fallbackUsed: false,
   };
@@ -1012,12 +1213,32 @@ const extractFeaturedMatches = (response: HomeMatchesResponse) => {
 const extractSuggestedMatches = (response: HomeMatchesResponse) => {
   return pickMatchArray(
     response.suggested_matches,
+    response.exact_matches,
     response.matches,
     response.profiles,
     response.results,
     response.users,
     response.recommendations,
   );
+};
+
+const collectHomeMatchItems = (response: HomeMatchesResponse) => {
+  const seen = new Set<string>();
+  const items: MatchApiItem[] = [];
+
+  [
+    ...extractFeaturedMatches(response),
+    ...extractSuggestedMatches(response),
+  ].forEach((item, index) => {
+    const id = String(item.id ?? item.user_id ?? `home-${index}`);
+    if (seen.has(id)) {
+      return;
+    }
+    seen.add(id);
+    items.push(item);
+  });
+
+  return items;
 };
 
 const splitGreeting = (greeting: string) => {
@@ -1037,16 +1258,18 @@ export const mapHomeMatches = (
   response?: HomeMatchesResponse | null,
 ): HomeMatchesData => {
   const data = normalizeHomeResponse(response);
+  const allItems = collectHomeMatchItems(data);
   let featuredItems = extractFeaturedMatches(data);
-  let suggestedItems = extractSuggestedMatches(data);
-
-  if (featuredItems.length && suggestedItems.length) {
+  let suggestedItems = allItems.filter(item => {
     const featuredIds = new Set(
-      featuredItems.map(item => String(item.id ?? item.user_id ?? '')),
+      featuredItems.map(featured => String(featured.id ?? featured.user_id ?? '')),
     );
-    suggestedItems = suggestedItems.filter(
-      item => !featuredIds.has(String(item.id ?? item.user_id ?? '')),
-    );
+    return !featuredIds.has(String(item.id ?? item.user_id ?? ''));
+  });
+
+  if (!featuredItems.length && suggestedItems.length) {
+    featuredItems = [suggestedItems[0]];
+    suggestedItems = suggestedItems.slice(1);
   }
 
   const mapped = {
@@ -1058,6 +1281,11 @@ export const mapHomeMatches = (
     suggestedMatches: mapSuggestedMatches(suggestedItems),
   };
 
+  console.log('GET /matches/home mapped names:', [
+    ...mapped.featuredMatches.map(item => item.name),
+    ...mapped.suggestedMatches.map(item => item.name),
+  ]);
+
   return mapped;
 };
 
@@ -1066,12 +1294,13 @@ export const suggestedToFeatured = (item: SuggestedMatch): FeaturedMatch => ({
   name: item.name,
   age: item.age,
   location: item.location,
-  image: item.image,
+  image: item.pictureHidden ? Images.hiddenProfile : item.image,
   tags:
     item.profession && item.profession !== '-'
       ? [{ icon: 'briefcase-outline', label: item.profession }]
       : [],
   isVerified: item.isVerified,
+  ...(item.pictureHidden ? { pictureHidden: true } : {}),
 });
 
 const locationProximityScore = (
@@ -1264,7 +1493,18 @@ export type MatchProfilePreview = {
   location?: string;
   image?: ImageSourcePropType;
   isVerified?: boolean;
+  pictureHidden?: boolean;
 };
+
+const isRemoteProfileImage = (image?: ImageSourcePropType | null) =>
+  Boolean(
+    image &&
+      typeof image === 'object' &&
+      !Array.isArray(image) &&
+      'uri' in image &&
+      typeof image.uri === 'string' &&
+      image.uri,
+  );
 
 export const mapMatchProfileDetail = (
   response: MatchProfileResponse | null | undefined,
@@ -1289,9 +1529,18 @@ export const mapMatchProfileDetail = (
     profile.residential_status,
     profile.residence_status,
   );
-  const image = response
-    ? resolveProfileImage(profile)
-    : preview?.image ?? resolveProfileImage(profile);
+  const visibility = resolveMatchPhotoVisibility(profile);
+  const resolvedImage = resolveProfileImage(profile);
+  const image =
+    preview?.pictureHidden || visibility.pictureVisible === false
+      ? Images.hiddenProfile
+      : visibility.pictureVisible === undefined &&
+          preview?.image &&
+          !isRemoteProfileImage(preview.image)
+        ? preview.image
+        : response
+          ? resolvedImage
+          : preview?.image ?? resolvedImage;
   const age = pickNumber(profile.age) || preview?.age || 0;
   const city =
     pickString(profile.city) ||
@@ -1381,26 +1630,26 @@ export const mapMatchProfileDetail = (
       ? profile.interests.filter(Boolean).map(String)
       : [],
     photosNeedAccess: profileNeedsPhotoAccess(profile, image),
+    pictureHidden:
+      Boolean(preview?.pictureHidden) || visibility.pictureVisible === false,
+    additionalPhotosHidden: visibility.additionalVisible === false,
   };
 };
-
-const isRemoteProfileImage = (image?: ImageSourcePropType | null) =>
-  Boolean(
-    image &&
-      typeof image === 'object' &&
-      !Array.isArray(image) &&
-      'uri' in image &&
-      typeof image.uri === 'string' &&
-      image.uri,
-  );
 
 export const profileNeedsPhotoAccess = (
   profile: MatchApiItem,
   displayedImage?: ImageSourcePropType | null,
 ): boolean => {
+  const { pictureVisible, additionalVisible } =
+    resolveMatchPhotoVisibility(profile);
+
+  if (pictureVisible === false || additionalVisible === false) {
+    return false;
+  }
+
   if (isRemoteProfileImage(displayedImage)) {
     return false;
   }
 
-  return resolveMatchPhotoVisibility(profile).pictureVisible === false;
+  return false;
 };

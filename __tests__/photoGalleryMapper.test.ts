@@ -1,3 +1,18 @@
+jest.mock('../src/API/profileStorage', () => ({
+  profileStorage: {
+    get: jest.fn(() => null),
+    set: jest.fn(),
+    clear: jest.fn(),
+  },
+}));
+
+jest.mock('../src/API/userStorage', () => ({
+  userStorage: {
+    getUser: jest.fn(() => null),
+    setUser: jest.fn(),
+  },
+}));
+
 import { mapPhotoGallery } from '../src/API/mappers/photoGalleryMapper';
 
 describe('GET /profile/{id}/photo-gallery', () => {
@@ -54,7 +69,7 @@ describe('GET /profile/{id}/photo-gallery', () => {
       ],
     });
 
-    expect(gallery.accessGranted).toBe(true);
+    expect(gallery.accessGranted).toBe(false);
     expect(gallery.photos).toHaveLength(2);
     expect(gallery.photos[0]).toEqual({
       uri: 'https://ranglerz.click/piyarifamily/uploads/store/profiles/1056/male-08.png',
@@ -79,5 +94,58 @@ describe('GET /profile/{id}/photo-gallery', () => {
     expect(gallery.photos).toHaveLength(0);
     expect(gallery.name).toBe('Taha');
     expect(gallery.userId).toBe('1056');
+  });
+
+  it('locks the gallery when the owner hides profile and additional photos', () => {
+    const gallery = mapPhotoGallery({
+      success: 200,
+      user: { id: 22, name: 'Hina' },
+      visibility: {
+        access_granted: true,
+        additional_photos_visible: false,
+        profile_photo_visible: false,
+      },
+      photos: [
+        {
+          index: 0,
+          url: 'https://example.com/main.png',
+          is_main: true,
+        },
+        {
+          index: 1,
+          url: 'https://example.com/extra.png',
+          is_main: false,
+        },
+      ],
+    });
+
+    expect(gallery.hiddenByOwner).toBe(true);
+    expect(gallery.accessGranted).toBe(false);
+    expect(gallery.photos).toHaveLength(0);
+  });
+
+  it('hides only additional photos when that visibility flag is off', () => {
+    const gallery = mapPhotoGallery({
+      visibility: {
+        profile_photo_visible: true,
+        additional_photos_visible: false,
+      },
+      photos: [
+        {
+          index: 0,
+          url: 'https://example.com/main.png',
+          is_main: true,
+        },
+        {
+          index: 1,
+          url: 'https://example.com/extra.png',
+          is_main: false,
+        },
+      ],
+    });
+
+    expect(gallery.photos).toEqual([{ uri: 'https://example.com/main.png' }]);
+    expect(gallery.additionalPhotosVisible).toBe(false);
+    expect(gallery.hiddenByOwner).toBe(true);
   });
 });

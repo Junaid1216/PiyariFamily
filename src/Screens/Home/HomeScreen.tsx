@@ -43,7 +43,6 @@ import {
 } from '../../Functions/welcomeGreeting';
 import { fs, hp, wp } from '../../Functions/responsive';
 import {
-  store,
   useAppDispatch,
   useAppSelector,
   clearHomeMatches,
@@ -247,14 +246,7 @@ const HomeScreen = () => {
 
   useFocusEffect(
     useCallback(() => {
-      const home = store.getState().home;
-      if (
-        !hasLoadedRef.current &&
-        !home.featuredMatches.length &&
-        !home.suggestedMatches.length
-      ) {
-        fetchHomeMatches();
-      }
+      fetchHomeMatches();
     }, [fetchHomeMatches]),
   );
 
@@ -382,8 +374,9 @@ const HomeScreen = () => {
         name: match.name,
         age: match.age,
         location: match.location,
-        image: match.image,
+        image: match.pictureHidden ? Images.hiddenProfile : match.image,
         isVerified: match.isVerified,
+        pictureHidden: Boolean(match.pictureHidden),
       });
     },
     [navigation],

@@ -213,8 +213,9 @@ const ShortlistedScreen = () => {
                 name: item.name,
                 age: item.age,
                 location: item.location,
-                image: item.image,
+                image: item.pictureHidden ? undefined : item.image,
                 isVerified: item.isVerified,
+                pictureHidden: Boolean(item.pictureHidden),
               })
             }
           >

@@ -229,6 +229,7 @@ export const toFormData = (data: Record<string, FormValue>) => {
 export const toProfileUpdateFormData = async (
   data: Record<string, FormValue>,
   photo?: UploadFile | UploadFile[] | null,
+  additionalPhotos?: UploadFile | UploadFile[] | null,
 ) => {
   const formData = new FormData();
   const photoKeys = new Set(['photos', 'photo', 'image', 'profile_photo']);
@@ -254,6 +255,14 @@ export const toProfileUpdateFormData = async (
 
   const parts = await resolvePhotosParts(photo, true);
   parts.forEach(part => appendPhotosFile(formData, part));
+
+  const extraParts = await resolvePhotosParts(additionalPhotos);
+  extraParts.forEach(part => {
+    formData.append(
+      'additional_photos',
+      toNativeFilePart(part) as unknown as Blob,
+    );
+  });
 
   return formData;
 };

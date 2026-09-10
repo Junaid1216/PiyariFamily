@@ -198,7 +198,13 @@ describe('GET /matches/filter', () => {
       monthly_income_min: 50000,
       monthly_income_max: 90000,
       near_me: 1,
+      radius: 50,
+      radius_km: 50,
       new_profiles: 1,
+      new_profile: 1,
+      joined_in_last_3_days: 1,
+      last_3_days: 1,
+      days: 3,
     });
   });
 
@@ -221,6 +227,8 @@ describe('GET /matches/filter', () => {
       }),
     ).toEqual({
       near_me: 1,
+      radius: 50,
+      radius_km: 50,
       verified: 1,
     });
   });
@@ -335,6 +343,8 @@ describe('GET /matches/filter', () => {
     ).toEqual({
       sect: 'Sunni',
       near_me: 1,
+      radius: 50,
+      radius_km: 50,
     });
   });
 
@@ -354,7 +364,21 @@ describe('GET /matches/filter', () => {
       }),
     ).toEqual([
       { id: 'verified', label: 'Verified' },
-      { id: 'custom_chip', label: 'Top Rated' },
+      { id: 'custom_chip', label: 'Custom Chip' },
+    ]);
+  });
+
+  it('shows API quick filter keys as chip text, not the description values', () => {
+    expect(
+      mapQuickFilters({
+        near_me: 'Same city or within 50km',
+        new_profiles: 'Joined in last 3 days',
+        verified: 'Phone verified profiles',
+      }),
+    ).toEqual([
+      { id: 'near_me', label: 'Near Me' },
+      { id: 'new_profiles', label: 'New Profiles' },
+      { id: 'verified', label: 'Verified' },
     ]);
   });
 

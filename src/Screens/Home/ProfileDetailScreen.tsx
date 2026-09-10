@@ -26,6 +26,7 @@ import {
   getImageCacheKey,
   isApiSuccess,
   mapMatchProfileDetail,
+  resolvePhotoAccessRespond,
 } from '../../API';
 import { type ProfileDetail } from '../../Constant/MatchProfiles';
 import { Colors } from '../../Constant/Colors';
@@ -33,8 +34,8 @@ import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
 import { HomeStackParamList } from '../../Navigation/HomeStackNavigator';
 import { getFooterBottomPadding } from '../../Functions/safeArea';
-import { navigateToMatchSuccess } from '../../Functions/matchNavigation';
 import { popStackOrGoHome } from '../../Functions/tabNavigation';
+import { navigateToPhotoGallery } from '../../Functions/profileNavigation';
 import { fs, hp, wp } from '../../Functions/responsive';
 import {
   selectIsAccountInactive,
@@ -52,19 +53,22 @@ const ProfileDetailScreen = () => {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<RouteProps>();
   const isAccountInactive = useAppSelector(selectIsAccountInactive);
-  const { profileId, name, age, location, image, isVerified } = route.params;
+  const { profileId, name, age, location, image, isVerified, pictureHidden } =
+    route.params;
   const preview = {
     name,
     age,
     location,
-    image,
+    image: pictureHidden ? Images.hiddenProfile : image,
     isVerified,
+    pictureHidden: Boolean(pictureHidden),
   };
   const [profile, setProfile] = useState<ProfileDetail | null>(
     name ? mapMatchProfileDetail(null, profileId, preview) : null,
   );
   const [loading, setLoading] = useState(!name);
-  const [sending, setSending] = useState(false);
+  const [requestingPhotos, setRequestingPhotos] = useState(false);
+  const [photoRequestSent, setPhotoRequestSent] = useState(false);
 
   const fetchProfile = useCallback(async () => {
     if (!name) {
@@ -91,7 +95,7 @@ const ProfileDetailScreen = () => {
     } finally {
       setLoading(false);
     }
-  }, [profileId, name, age, location, image, isVerified]);
+  }, [profileId, name, age, location, image, isVerified, pictureHidden]);
 
   useFocusEffect(
     useCallback(() => {
@@ -122,41 +126,59 @@ const ProfileDetailScreen = () => {
     );
   }
 
-  const handleSendInterest = async () => {
+  const photosHidden = Boolean(
+    pictureHidden ||
+      profile?.pictureHidden ||
+      profile?.additionalPhotosHidden,
+  );
+
+  const handleSendPhotoRequest = async () => {
     if (isAccountInactive) {
       Toast.show(Strings.inactiveReactivateHint, Toast.LONG);
       return;
     }
 
-    if (!profile || sending) {
+    if (!profile || requestingPhotos || photoRequestSent) {
       return;
-    } else {
-      setSending(true);
+    }
 
-      try {
+    setRequestingPhotos(true);
 
-        const res = await Api.sendShortlistInterest(profileId);
+    try {
+      const res = await Api.requestPhotoAccess(profileId);
 
-        if (isApiSuccess(res?.status, res?.success)) {
-          navigateToMatchSuccess(navigation, {
-            name: profile.fullName.split(' ')[0] || profile.fullName,
-            fullName: profile.fullName,
-            matchId: profileId,
-            matchImage: profile.image,
-            mutualMatch: Boolean(res.mutual_match),
-          });
-        } else {
-          Toast.show(res?.message ?? 'Failed to send interest', Toast.LONG);
-        }
-      } catch (error) {
+      if (isApiSuccess(res?.status, res?.data?.success)) {
+        const resolved = resolvePhotoAccessRespond(res?.data);
+        setPhotoRequestSent(true);
         Toast.show(
-          getApiErrorMessage(error, 'Failed to send interest'),
+          resolved.message || Strings.photoAccessRequested,
           Toast.LONG,
         );
-      } finally {
-        setSending(false);
+      } else {
+        Toast.show(
+          res?.data?.message ?? Strings.photoAccessRequestError,
+          Toast.LONG,
+        );
       }
+    } catch (error) {
+      Toast.show(
+        getApiErrorMessage(error, Strings.photoAccessRequestError),
+        Toast.LONG,
+      );
+    } finally {
+      setRequestingPhotos(false);
     }
+  };
+
+  const openPhotoGallery = () => {
+    navigateToPhotoGallery(navigation, {
+      userId: profile.id,
+      name: profile.fullName,
+      accessGranted:
+        !profile.photosNeedAccess &&
+        !profile.pictureHidden &&
+        !profile.additionalPhotosHidden,
+    });
   };
 
   return (
@@ -165,16 +187,29 @@ const ProfileDetailScreen = () => {
         showsVerticalScrollIndicator={true}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: hp('8%') + insets.bottom },
+          {
+            paddingBottom: photosHidden
+              ? hp('6%') +
+                hp('1.5%') +
+                getFooterBottomPadding(insets.bottom) +
+                hp('2.5%')
+              : hp('3%') + insets.bottom,
+          },
         ]}
       >
         <View style={styles.hero}>
-          <Image
-            key={getImageCacheKey(profile.image, profile.id)}
-            source={profile.image}
-            style={styles.heroImage}
-            resizeMode="cover"
-          />
+          <TouchableOpacity
+            style={styles.heroPress}
+            activeOpacity={0.92}
+            onPress={openPhotoGallery}
+          >
+            <Image
+              key={getImageCacheKey(profile.image, profile.id)}
+              source={profile.image}
+              style={styles.heroImage}
+              resizeMode="cover"
+            />
+          </TouchableOpacity>
 
           <LinearGradient
             colors={['rgba(0,0,0,0.35)', 'transparent', 'rgba(0,0,0,0.75)']}
@@ -262,6 +297,16 @@ const ProfileDetailScreen = () => {
           <Text style={styles.aboutText}>{profile.about}</Text>
         </View>
 
+        <TouchableOpacity
+          style={styles.galleryBtn}
+          activeOpacity={0.88}
+          onPress={openPhotoGallery}
+        >
+          <Icon name="image-multiple-outline" size={fs(18)} color={Colors.gold} />
+          <Text style={styles.galleryBtnText}>{Strings.viewPhotos}</Text>
+          <Icon name="chevron-right" size={fs(18)} color={Colors.gold} />
+        </TouchableOpacity>
+
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{Strings.basicDetails}</Text>
           <View style={styles.detailsGrid}>
@@ -316,6 +361,7 @@ const ProfileDetailScreen = () => {
         ) : null}
       </ScrollView>
 
+      {photosHidden ? (
       <View
         style={[
           styles.footer,
@@ -337,21 +383,28 @@ const ProfileDetailScreen = () => {
             isAccountInactive && styles.interestBtnDisabled,
           ]}
           activeOpacity={0.85}
-          onPress={handleSendInterest}
-          disabled={sending || isAccountInactive}
+          onPress={handleSendPhotoRequest}
+          disabled={requestingPhotos || photoRequestSent || isAccountInactive}
         >
-          {sending ? (
+          {requestingPhotos ? (
             <ActivityIndicator size="small" color={Colors.white} />
           ) : (
             <>
-              <Icon name="heart" size={fs(18)} color={Colors.white} />
+              <Icon
+                name={photoRequestSent ? 'check' : 'lock-open-outline'}
+                size={fs(18)}
+                color={Colors.white}
+              />
               <Text style={styles.interestBtnText}>
-                {Strings.sendInterest}
+                {photoRequestSent
+                  ? Strings.photoAccessRequestSent
+                  : Strings.sendRequest}
               </Text>
             </>
           )}
         </TouchableOpacity>
       </View>
+      ) : null}
     </View>
   );
 };
@@ -390,6 +443,10 @@ const styles = StyleSheet.create({
     width: '100%',
     height: hp('48%'),
     position: 'relative',
+    backgroundColor: Colors.primary,
+  },
+  heroPress: {
+    ...StyleSheet.absoluteFillObject,
   },
   heroImage: {
     width: '100%',
@@ -397,12 +454,14 @@ const styles = StyleSheet.create({
   },
   heroGradient: {
     ...StyleSheet.absoluteFill,
+    zIndex: 1,
   },
   heroTopBar: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
+    zIndex: 2,
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: wp('4%'),
@@ -420,6 +479,7 @@ const styles = StyleSheet.create({
     left: wp('4.5%'),
     right: wp('4.5%'),
     bottom: hp('2%'),
+    zIndex: 2,
   },
   heroName: {
     fontSize: fs(24),
@@ -523,6 +583,26 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     lineHeight: hp('2.4%'),
   },
+  galleryBtn: {
+    marginHorizontal: wp('5%'),
+    marginBottom: hp('2%'),
+    height: hp('5.6%'),
+    borderRadius: wp('3%'),
+    borderWidth: 1.2,
+    borderColor: Colors.gold,
+    backgroundColor: Colors.white,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: wp('1.5%'),
+    paddingHorizontal: wp('4%'),
+  },
+  galleryBtnText: {
+    flex: 1,
+    fontSize: fs(14),
+    fontFamily: Fonts.semiBold,
+    color: Colors.gold,
+  },
   detailsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -561,6 +641,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: wp('2%'),
+    paddingBottom: hp('0.6%'),
   },
   chip: {
     paddingHorizontal: wp('4%'),

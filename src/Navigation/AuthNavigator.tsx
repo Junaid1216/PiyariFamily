@@ -94,7 +94,11 @@ const AuthNavigator = () => {
         <Stack.Screen
           name="SelectCountry"
           component={SelectCountryScreen}
-          options={{ gestureEnabled: false, animation: 'fade' }}
+          options={{
+            gestureEnabled: false,
+            fullScreenGestureEnabled: false,
+            animation: 'fade',
+          }}
         />
         <Stack.Screen name="BasicInfo" component={BasicInfoScreen} />
         <Stack.Screen name="Education" component={EducationScreen} />

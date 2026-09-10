@@ -1,11 +1,12 @@
 import { ImageSourcePropType } from 'react-native';
+import { Images } from '../Assets';
 import { Api } from './Api';
 import { mapMatchProfileDetail } from './mappers/matchMapper';
-import { toRemoteImageSource } from './mediaUrl';
 
 type MatchWithImage = {
   id: string;
   image: ImageSourcePropType;
+  pictureHidden?: boolean;
 };
 
 export const isRemoteImage = (image: ImageSourcePropType) =>
@@ -27,39 +28,34 @@ export const getImageCacheKey = (
   return fallback;
 };
 
-const fetchMatchPhoto = async (profileId: string) => {
-  try {
-    const res = await Api.getMatchProfile(profileId);
-
-    if (res?.status == 200) {
-      const detail = mapMatchProfileDetail(res.data, profileId);
-      if (detail.photosNeedAccess || !isRemoteImage(detail.image)) {
-        return '';
-      }
-      if (
-        typeof detail.image === 'object' &&
-        detail.image &&
-        'uri' in detail.image
-      ) {
-        return String(detail.image.uri ?? '');
-      }
-    }
-  } catch {
-    return '';
+const withHydratedImage = async <T extends MatchWithImage>(item: T): Promise<T> => {
+  if (item.pictureHidden) {
+    return { ...item, image: Images.hiddenProfile, pictureHidden: true };
   }
 
-  return '';
-};
-
-const withHydratedImage = async <T extends MatchWithImage>(item: T): Promise<T> => {
   if (isRemoteImage(item.image)) {
     return item;
   }
 
-  const photo = await fetchMatchPhoto(item.id);
+  try {
+    const res = await Api.getMatchProfile(item.id);
+    if (res?.status != 200) {
+      return item;
+    }
 
-  if (photo) {
-    return { ...item, image: toRemoteImageSource(photo) };
+    const detail = mapMatchProfileDetail(res.data, item.id, {
+      image: item.image,
+    });
+
+    if (detail.pictureHidden) {
+      return { ...item, image: Images.hiddenProfile, pictureHidden: true };
+    }
+
+    if (isRemoteImage(detail.image)) {
+      return { ...item, image: detail.image };
+    }
+  } catch {
+    return item;
   }
 
   return item;

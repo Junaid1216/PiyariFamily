@@ -9,6 +9,7 @@ import {
   NotificationsScreen,
   ViewProfileGalleryScreen,
   ViewProfileRequestsScreen,
+  RequestHistoryScreen,
   ProfileVerifiedScreen,
   ReferralProgramScreen,
   SettingsScreen,
@@ -35,10 +36,11 @@ export type ProfileStackParamList = {
   ProfileVerified: { phone: string };
   Notifications: undefined;
   ViewProfileRequests: undefined;
+  RequestHistory: undefined;
   ViewProfileGallery: {
     userId?: string;
     name: string;
-    accessGranted: boolean;
+    accessGranted?: boolean;
   };
   ProfileDetail: ProfileDetailParams;
   MatchSuccess: {
@@ -95,6 +97,7 @@ const ProfileStackNavigator = () => {
         name="ViewProfileRequests"
         component={ViewProfileRequestsScreen}
       />
+      <Stack.Screen name="RequestHistory" component={RequestHistoryScreen} />
       <Stack.Screen
         name="ViewProfileGallery"
         component={ViewProfileGalleryScreen}

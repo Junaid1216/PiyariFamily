@@ -43,6 +43,14 @@ export {
   profileNeedsPhotoAccess,
 } from './mappers/matchMapper';
 export {
+  applyLocationFilterParams,
+  classifyLocationQuickFilter,
+  filterMatchesByLocation,
+  filterMatchesByQuickFilters,
+  NEAR_ME_RADIUS_KM,
+  resolveUserCity,
+} from './mappers/matchLocationFilter';
+export {
   buildMatchFilterParams,
   mapFilterSetup,
   mapIncomeToParams,
@@ -131,6 +139,7 @@ export type {
 } from './mappers/notificationMapper';
 export {
   applyPhotoAccessStatus,
+  mapPhotoAccessPayload,
   mapPhotoAccessRequests,
   mapPhotoAccessStatus,
   overlayPhotoAccessDetails,
@@ -164,8 +173,8 @@ export type {
   ShortlistTab,
   ShortlistedProfile,
 } from './mappers/shortlistMapper';
-export { mapProfileToForm, mapFormToProfilePayload, mapProfileToSettings, normalizeProfileData, resolveProfileData, saveProfileCache, extractPhotoUrl, extractProfileGalleryPhotos, extractProfilePhotoSlots, pickImageUrl, parseVisibilityFlag } from './mappers/profileMapper';
-export type { EditProfileFormData, ProfileApiData, ProfileGalleryPhoto, SettingsProfileData, PhotoVisibilityResponse } from './mappers/profileMapper';
+export { mapProfileToForm, mapFormToProfilePayload, mapProfileToSettings, normalizeProfileData, resolveProfileData, saveProfileCache, mapCompleteProfile, isProfileMarkedComplete, extractPhotoUrl, extractProfileGalleryPhotos, extractProfilePhotoSlots, pickImageUrl, parseVisibilityFlag, toApiMaritalStatus } from './mappers/profileMapper';
+export type { EditProfileFormData, ProfileApiData, ProfileGalleryPhoto, SettingsProfileData, PhotoVisibilityFlags, PhotoVisibilityResponse, CompleteProfileResponse } from './mappers/profileMapper';
 export { profileStorage } from './profileStorage';
 export { accountStorage } from './accountStorage';
 export { pendingReferralStorage } from './pendingReferralStorage';
@@ -176,6 +185,10 @@ export { userStorage } from './userStorage';
 export * from './types';
 export { isSuccessStatus } from './types';
 export { authService, pickAuthToken } from './services/authService';
+export {
+  MIN_SEARCH_LENGTH,
+  searchMatches,
+} from './services/matchSearchService';
 export type {
   ChangePasswordPayload,
   EmailPayload,

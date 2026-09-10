@@ -26,6 +26,15 @@ export const isProfileSetupComplete = (profile?: ProfileApiData | null) => {
     return false;
   }
 
+  if (profile.profile_completed === true) {
+    return true;
+  }
+
+  const step = Number(profile.profile_step);
+  if (Number.isFinite(step) && step >= 8) {
+    return true;
+  }
+
   const hasBasicInfo = hasText(profile.gender) || hasText(profile.birthday);
   const hasPhoto = Boolean(pickImageUrl(profile));
 

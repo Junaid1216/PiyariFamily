@@ -1,3 +1,27 @@
+jest.mock('../src/API/profileStorage', () => ({
+  profileStorage: {
+    get: jest.fn(() => null),
+    set: jest.fn(),
+    clear: jest.fn(),
+  },
+}));
+
+jest.mock('../src/API/userStorage', () => ({
+  userStorage: {
+    getUser: jest.fn(() => null),
+    setUser: jest.fn(),
+  },
+}));
+
+jest.mock('../src/Assets', () => ({
+  Images: {
+    maleProfile: 1,
+    femaleProfile: 1,
+    religionIcon: 1,
+    hiddenProfile: 7,
+  },
+}));
+
 import {
   mapFeaturedMatch,
   mapMatchProfileDetail,
@@ -18,12 +42,11 @@ describe('hidden match photos', () => {
       0,
     );
 
-    expect(match.image).not.toEqual(
-      expect.objectContaining({ uri: 'https://example.com/hina.png' }),
-    );
+    expect(match.pictureHidden).toBe(true);
+    expect(match.image).toBe(7);
   });
 
-  it('reads nested visibility flags and requires a photo access request', () => {
+  it('hides nested visibility photos from other members', () => {
     const profile = {
       id: 22,
       name: 'Hina',
@@ -34,10 +57,12 @@ describe('hidden match photos', () => {
       },
     };
 
-    expect(profileNeedsPhotoAccess(profile)).toBe(true);
+    expect(profileNeedsPhotoAccess(profile)).toBe(false);
     expect(mapMatchProfileDetail({ profile }, '22').photosNeedAccess).toBe(
-      true,
+      false,
     );
+    expect(mapMatchProfileDetail({ profile }, '22').pictureHidden).toBe(true);
+    expect(mapMatchProfileDetail({ profile }, '22').image).toBe(7);
   });
 
   it('does not request photo access when the profile picture is already visible', () => {
@@ -56,19 +81,21 @@ describe('hidden match photos', () => {
       expect.objectContaining({ uri: 'https://example.com/jannat.png' }),
     );
     expect(mapped.photosNeedAccess).toBe(false);
+    expect(mapped.additionalPhotosHidden).toBe(true);
   });
 
-  it('does not request photo access when a remote photo is already on screen', () => {
-    expect(
-      profileNeedsPhotoAccess(
-        {
-          visibility: {
-            profile_photo_visible: false,
-            additional_photos_visible: false,
-          },
-        },
-        { uri: 'https://example.com/jannat.png' },
-      ),
-    ).toBe(false);
+  it('keeps a dummy image when another account opens a hidden preview', () => {
+    const mapped = mapMatchProfileDetail(
+      {
+        id: 22,
+        name: 'Hina',
+        profile_photo: 'https://example.com/hina.png',
+      },
+      '22',
+      { pictureHidden: true },
+    );
+
+    expect(mapped.pictureHidden).toBe(true);
+    expect(mapped.image).toBe(7);
   });
 });

@@ -56,6 +56,7 @@ import {
   mapFormToProfilePayload,
   mapProfileToForm,
   saveProfileCache,
+  toApiMaritalStatus,
   type ApiErrorResponse,
   type EditProfileFormData,
   type ProfileGalleryPhoto,
@@ -65,6 +66,7 @@ import { ProfileStackParamList } from '../../Navigation/ProfileStackNavigator';
 import { getFooterBottomPadding } from '../../Functions/safeArea';
 import { fs, hp, wp } from '../../Functions/responsive';
 import {
+  selectProfile,
   selectProfilePhoto,
   store,
   useAppSelector,
@@ -99,17 +101,61 @@ const EMPTY_FORM: EditProfileFormData = {
   profilePhoto: null,
 };
 
-const remainingToApiPhotos = (photos: ProfileGalleryPhoto[]) =>
-  photos.map((item, position) => ({
-    index: item.index ?? position,
+const remainingToApiPhotos = (photos: ProfileGalleryPhoto[]) => {
+  const ordered = [
+    ...photos.filter(item => item.isMain),
+    ...photos.filter(item => !item.isMain),
+  ];
+
+  return ordered.map((item, position) => ({
+    index: item.isMain ? 0 : item.index ?? Math.max(position, 1),
     path: item.path,
     url: item.url,
     is_main: item.isMain,
   }));
+};
+
+/** Remote keep_photos only — device picker URIs must not go to the API. */
+const isDeviceLocalPhotoUri = (uri?: string | null) => {
+  if (!uri) {
+    return false;
+  }
+  return (
+    uri.startsWith('file://') ||
+    uri.startsWith('content://') ||
+    uri.startsWith('ph://') ||
+    uri.startsWith('assets-library://')
+  );
+};
+
+const toRemoteKeepPhotos = (
+  photos: ReturnType<typeof remainingToApiPhotos>,
+) =>
+  photos.filter(item => {
+    const url = typeof item.url === 'string' ? item.url.trim() : '';
+    const path = typeof item.path === 'string' ? item.path.trim() : '';
+    // Keep http(s) and server-relative paths; drop only device local URIs.
+    if (url && !isDeviceLocalPhotoUri(url)) {
+      return true;
+    }
+    if (path && !isDeviceLocalPhotoUri(path)) {
+      return true;
+    }
+    return false;
+  });
+
+const nextGalleryPhotoIndex = (photos: ProfileGalleryPhoto[]) => {
+  const indexes = photos
+    .map(item => item.index)
+    .filter((index): index is number => index != null && Number.isFinite(index));
+  const next = indexes.length ? Math.max(...indexes) + 1 : 1;
+  return next < 1 ? 1 : next;
+};
 
 const EditProfileScreen = () => {
   const navigation = useNavigation<NavigationProp>();
   const insets = useSafeAreaInsets();
+  const reduxProfile = useAppSelector(selectProfile);
   const cachedPhoto = useAppSelector(selectProfilePhoto);
 
   const [form, setForm] = useState<EditProfileFormData>(EMPTY_FORM);
@@ -138,12 +184,24 @@ const EditProfileScreen = () => {
   const newPhotoRef = useRef<UploadFile | null>(null);
   const pendingGalleryFilesRef = useRef<UploadFile[]>([]);
   const galleryDirtyRef = useRef(false);
+  const maritalDirtyRef = useRef(false);
   const removedPhotoIndexesRef = useRef<number[]>([]);
   newPhotoRef.current = newPhoto;
 
+  const profileFieldsFromForm = (data: EditProfileFormData) => {
+    const marital =
+      toApiMaritalStatus(data.maritalStatus) ||
+      store.getState().profile.profile?.marital_status ||
+      '';
+    return {
+      ...(marital ? { marital_status: marital } : {}),
+      ...(data.community.trim() ? { community: data.community.trim() } : {}),
+    };
+  };
+
   useFocusEffect(
     useCallback(() => {
-      const latestProfile = store.getState().profile.profile;
+      const latestProfile = reduxProfile ?? store.getState().profile.profile;
       if (!latestProfile) {
         return;
       }
@@ -152,13 +210,20 @@ const EditProfileScreen = () => {
         setGalleryPhotos(extractProfileGalleryPhotos(latestProfile));
       }
       if (!loading && !newPhotoRef.current) {
+        const mapped = mapProfileToForm(latestProfile);
         setForm(prev => ({
           ...prev,
           profilePhoto:
-            mapProfileToForm(latestProfile).profilePhoto ?? prev.profilePhoto,
+            newPhotoRef.current || galleryDirtyRef.current
+              ? prev.profilePhoto
+              : mapped.profilePhoto ?? prev.profilePhoto,
+          maritalStatus: maritalDirtyRef.current
+            ? prev.maritalStatus
+            : mapped.maritalStatus || prev.maritalStatus,
+          community: prev.community || mapped.community,
         }));
       }
-    }, [loading]),
+    }, [loading, reduxProfile]),
   );
 
   const updateForm = <K extends keyof EditProfileFormData>(
@@ -170,18 +235,24 @@ const EditProfileScreen = () => {
 
   const applyProfile = (profile: Parameters<typeof mapProfileToForm>[0]) => {
     const mapped = mapProfileToForm(profile);
-    setForm(prev =>
-      newPhotoRef.current
-        ? { ...mapped, profilePhoto: prev.profilePhoto }
-        : mapped,
-    );
+    setForm(prev => ({
+      ...mapped,
+      profilePhoto: newPhotoRef.current
+        ? prev.profilePhoto
+        : galleryDirtyRef.current
+          ? prev.profilePhoto
+          : mapped.profilePhoto,
+      maritalStatus: maritalDirtyRef.current
+        ? prev.maritalStatus
+        : mapped.maritalStatus,
+    }));
     if (!galleryDirtyRef.current) {
       setGalleryPhotos(extractProfileGalleryPhotos(profile));
     }
   };
 
   const fetchProfile = useCallback(async () => {
-    const cachedProfile = store.getState().profile.profile;
+    const cachedProfile = reduxProfile ?? store.getState().profile.profile;
     if (cachedProfile) {
       applyProfile(cachedProfile);
     } else if (cachedPhoto) {
@@ -296,19 +367,24 @@ const EditProfileScreen = () => {
           profilePhoto: asset.uri ?? prev.profilePhoto,
         }));
         setGalleryPhotos(prev => {
-          const next = [...prev];
           const localPhoto: ProfileGalleryPhoto = {
             id: null,
-            index: null,
+            index: 0,
             url: asset.uri as string,
             path: null,
             isMain: true,
           };
-          if (next.length) {
-            next[0] = localPhoto;
+          const mainIndex = prev.findIndex(item => item.isMain);
+          if (mainIndex >= 0) {
+            const next = [...prev];
+            next[mainIndex] = {
+              ...next[mainIndex],
+              ...localPhoto,
+              index: next[mainIndex].index ?? 0,
+            };
             return next;
           }
-          return [localPhoto];
+          return [localPhoto, ...prev.map(item => ({ ...item, isMain: false }))];
         });
       },
     );
@@ -369,7 +445,7 @@ const EditProfileScreen = () => {
             ...prev,
             {
               id: null,
-              index: null,
+              index: nextGalleryPhotoIndex(prev),
               url: file.uri,
               path: null,
               isMain: false,
@@ -383,59 +459,60 @@ const EditProfileScreen = () => {
   const persistGalleryToProfile = async (
     photos: ProfileGalleryPhoto[],
     removedIndexes: number[],
+    data: EditProfileFormData,
   ) => {
-    const remainingPhotos = photos.map((item, position) => ({
-      index: item.index ?? position,
-      path: item.path,
-      url: item.url,
-      is_main: item.isMain,
-    }));
-    const remainingIndexes = remainingPhotos
-      .map(item => item.index)
-      .filter((index): index is number => index != null)
-      .map(String);
+    const didChangeMainPhoto = Boolean(newPhoto);
+    const remainingPhotos = remainingToApiPhotos(
+      photos.some(item => item.isMain)
+        ? photos
+        : form.profilePhoto
+          ? [
+              {
+                id: null,
+                index: 0,
+                url: form.profilePhoto,
+                path: null,
+                isMain: true,
+              },
+              ...photos,
+            ]
+          : photos,
+    );
+    const keepPhotos = toRemoteKeepPhotos(remainingPhotos);
     const remainingFiles: UploadFile[] = [];
 
     if (
+      didChangeMainPhoto &&
       newPhoto &&
       isLocalUploadUri(newPhoto.uri) &&
-      photos.some(item => item.url === newPhoto.uri)
+      remainingPhotos.some(item => item.is_main && item.url === newPhoto.uri)
     ) {
       remainingFiles.push(newPhoto);
     }
 
+    const galleryUploads: UploadFile[] = [];
+    const uploadIndexes: string[] = [];
+
     pendingGalleryFilesRef.current.forEach(file => {
+      const photo = remainingPhotos.find(
+        item => item.url === file.uri && !item.is_main,
+      );
       if (
-        photos.some(item => item.url === file.uri) &&
-        !remainingFiles.some(item => item.uri === file.uri)
+        photo &&
+        !galleryUploads.some(item => item.uri === file.uri)
       ) {
-        remainingFiles.push(file);
+        galleryUploads.push(file);
+        const index =
+          typeof photo.index === 'number' && photo.index > 0 ? photo.index : 1;
+        uploadIndexes.push(String(index));
       }
     });
-
-    photos.forEach(item => {
-      if (
-        isLocalUploadUri(item.url) &&
-        !remainingFiles.some(file => file.uri === item.url)
-      ) {
-        remainingFiles.push(normalizeUploadFile(item.url));
-      }
-    });
-
-    if (!remainingFiles.length) {
-      const keep = photos.find(item => item.isMain) ?? photos[0];
-      if (keep?.url) {
-        remainingFiles.push({ uri: keep.url });
-      } else if (form.profilePhoto) {
-        remainingFiles.push({ uri: form.profilePhoto });
-      }
-    }
 
     const payload = {
-      ...mapFormToProfilePayload(form),
-      keep_photos: JSON.stringify(remainingPhotos),
-      replace_photos: 1,
-      ...(remainingIndexes.length ? { photo_indexes: remainingIndexes } : {}),
+      ...mapFormToProfilePayload(data),
+      keep_photos: JSON.stringify(keepPhotos),
+      ...(didChangeMainPhoto ? { main_photo_index: 0 } : {}),
+      ...(uploadIndexes.length ? { photo_indexes: uploadIndexes } : {}),
       ...(removedIndexes.length
         ? { removed_indexes: removedIndexes.map(String) }
         : {}),
@@ -444,6 +521,7 @@ const EditProfileScreen = () => {
     return Api.updateProfile(
       payload,
       remainingFiles.length ? remainingFiles : null,
+      galleryUploads.length ? galleryUploads : null,
     );
   };
 
@@ -452,7 +530,13 @@ const EditProfileScreen = () => {
     photos: ProfileGalleryPhoto[],
     removedIndexes: number[] = [],
   ) => {
-    const remainingApiPhotos = remainingToApiPhotos(photos);
+    const remainingApiPhotos = remainingToApiPhotos(photos).map(item => ({
+      ...item,
+      // Never cache a pending local gallery URI as main.
+      is_main:
+        item.is_main &&
+        !(typeof item.url === 'string' && isLocalUploadUri(item.url) && !newPhotoRef.current),
+    }));
     const base =
       source && typeof source === 'object'
         ? { ...(source as Record<string, unknown>) }
@@ -461,13 +545,84 @@ const EditProfileScreen = () => {
       base.user && typeof base.user === 'object'
         ? { ...(base.user as Record<string, unknown>), photos: remainingApiPhotos }
         : undefined;
+    const cached = store.getState().profile.profile;
+    const mainPhoto = photos.find(item => item.isMain);
+    const keepMainPhoto =
+      newPhotoRef.current == null
+        ? cached?.profile_photo ||
+          (mainPhoto?.url && !isLocalUploadUri(mainPhoto.url)
+            ? mainPhoto.url
+            : form.profilePhoto && !isLocalUploadUri(form.profilePhoto)
+              ? form.profilePhoto
+              : cached?.profile_photo)
+        : mainPhoto?.url && !isLocalUploadUri(mainPhoto.url)
+          ? mainPhoto.url
+          : cached?.profile_photo;
 
     return saveProfileCache({
       ...base,
-      ...(nestedUser ? { user: nestedUser } : {}),
+      ...(nestedUser
+        ? {
+            user: {
+              ...nestedUser,
+              photos: remainingApiPhotos,
+              ...(keepMainPhoto ? { profile_photo: keepMainPhoto } : {}),
+            },
+          }
+        : {}),
       photos: remainingApiPhotos,
       removed_photo_indexes: removedIndexes,
+      ...(newPhotoRef.current ? { main_photo_index: 0 } : {}),
+      ...(keepMainPhoto ? { profile_photo: keepMainPhoto } : {}),
+      ...profileFieldsFromForm(form),
     });
+  };
+
+  const persistMaritalAndCommunity = async (data: EditProfileFormData) => {
+    const cached = store.getState().profile.profile;
+    const marital =
+      toApiMaritalStatus(data.maritalStatus) ||
+      cached?.marital_status ||
+      '';
+    const community = data.community.trim();
+    const requests: Array<Promise<unknown>> = [];
+
+    if (marital && data.fullName.trim() && data.birthday) {
+      requests.push(
+        Api.updateProfileBasicInfo({
+          name: data.fullName.trim(),
+          birthday: data.birthday,
+          gender: data.gender,
+          marital_status: marital,
+          'marital status': marital,
+        }),
+      );
+    }
+
+    const religion = cached?.religion?.trim();
+    const motherTongue =
+      data.motherTongue.trim() || cached?.mother_tongue?.trim() || '';
+    if (community && religion && motherTongue) {
+      requests.push(
+        Api.updateProfileFaith({
+          religion,
+          community,
+          ...(cached?.sect ? { sect: cached.sect } : {}),
+          mother_tongue: motherTongue,
+          other_languages: data.otherLanguages,
+        }),
+      );
+    }
+
+    saveProfileCache({
+      ...(cached ?? {}),
+      ...(marital ? { marital_status: marital } : {}),
+      ...(community ? { community } : {}),
+    });
+
+    if (requests.length) {
+      await Promise.all(requests);
+    }
   };
 
   const handleDeleteGalleryPhoto = () => {
@@ -514,36 +669,62 @@ const EditProfileScreen = () => {
       setSaving(true);
 
       try {
+        const cachedMarital = store.getState().profile.profile?.marital_status;
+        const didChangeMainPhoto = Boolean(newPhoto);
+        const existingMainPhoto = didChangeMainPhoto
+          ? null
+          : store.getState().profile.profile?.profile_photo ||
+            cachedPhoto ||
+            form.profilePhoto ||
+            null;
+        const dataToSave: EditProfileFormData = {
+          ...form,
+          maritalStatus:
+            form.maritalStatus ||
+            mapProfileToForm({ marital_status: cachedMarital }).maritalStatus,
+        };
         const res = await persistGalleryToProfile(
           galleryPhotos,
           removedPhotoIndexesRef.current,
+          dataToSave,
         );
 
         if (isApiSuccess(res?.status, res?.success) && res?.success !== false) {
           galleryDirtyRef.current = false;
           pendingGalleryFilesRef.current = [];
+          await persistMaritalAndCommunity(dataToSave);
           cacheRemainingPhotos(
             res?.user ?? res,
             galleryPhotos,
             removedPhotoIndexesRef.current,
           );
 
-          try {
-            const profileRes = await Api.getProfile();
-            if (profileRes?.status == 200) {
-              const latest = saveProfileCache(profileRes.data);
-              const fromDb = extractProfileGalleryPhotos(latest);
-              if (fromDb.length > galleryPhotos.length) {
-                cacheRemainingPhotos(
-                  latest,
-                  galleryPhotos,
-                  removedPhotoIndexesRef.current,
-                );
+          if (didChangeMainPhoto) {
+            try {
+              const profileRes = await Api.getProfile();
+              if (profileRes?.status == 200) {
+                saveProfileCache({
+                  ...(profileRes.data ?? {}),
+                  ...profileFieldsFromForm(dataToSave),
+                });
               }
+            } catch (refreshError) {
             }
-          } catch (refreshError) {
+          } else if (existingMainPhoto) {
+            saveProfileCache({
+              ...(store.getState().profile.profile ?? {}),
+              profile_photo: existingMainPhoto,
+            });
+            setForm(prev => ({
+              ...prev,
+              profilePhoto:
+                typeof existingMainPhoto === 'string'
+                  ? existingMainPhoto
+                  : prev.profilePhoto,
+            }));
           }
 
+          maritalDirtyRef.current = false;
           Toast.show(res?.message ?? Strings.profileSaved, Toast.LONG);
           navigation.goBack();
         } else {
@@ -1044,6 +1225,14 @@ const EditProfileScreen = () => {
             }
             onSelect={value => {
               updateForm('maritalStatus', value);
+              maritalDirtyRef.current = true;
+              const marital = toApiMaritalStatus(value);
+              if (marital) {
+                saveProfileCache({
+                  ...(store.getState().profile.profile ?? {}),
+                  marital_status: marital,
+                });
+              }
               setOpenDropdown(null);
             }}
             style={styles.fieldSpacing}
@@ -1054,7 +1243,12 @@ const EditProfileScreen = () => {
             iconSource={Images.communityIcon}
             placeholder={Strings.community}
             value={form.community}
-            options={COMMUNITY_OPTIONS}
+            options={
+              form.community &&
+              !(COMMUNITY_OPTIONS as readonly string[]).includes(form.community)
+                ? [...COMMUNITY_OPTIONS, form.community]
+                : COMMUNITY_OPTIONS
+            }
             isOpen={openDropdown === 'community'}
             onToggle={() =>
               setOpenDropdown(prev =>

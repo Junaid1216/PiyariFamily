@@ -26,6 +26,8 @@ export type PhotoGalleryResponse = {
     photo?: string | null;
     image?: string | null;
     photos?: PhotoGalleryPhotoApi[] | string[] | null;
+    profile_photo_visible?: boolean | number | string | null;
+    additional_photos_visible?: boolean | number | string | null;
   } | null;
   visibility?: {
     profile_photo_visible?: boolean | number | string | null;
@@ -41,6 +43,9 @@ export type PhotoGalleryData = {
   name: string;
   accessGranted: boolean;
   photos: ImageSourcePropType[];
+  profilePictureVisible: boolean;
+  additionalPhotosVisible: boolean;
+  hiddenByOwner: boolean;
 };
 
 const pickString = (...values: Array<string | null | undefined>) => {
@@ -95,8 +100,8 @@ const extractPhotos = (
     data.user?.profile_photo
       ? { url: data.user.profile_photo, is_main: true, index: -1 }
       : null,
-    data.user?.photo ? { url: data.user.photo, index: -1 } : null,
-    data.user?.image ? { url: data.user.image, index: -1 } : null,
+    data.user?.photo ? { url: data.user.photo, is_main: true, index: -1 } : null,
+    data.user?.image ? { url: data.user.image, is_main: true, index: -1 } : null,
   ].filter(Boolean) as PhotoGalleryPhotoApi[];
 
   return [
@@ -108,15 +113,56 @@ const extractPhotos = (
   ];
 };
 
+const isMainGalleryPhoto = (item: PhotoGalleryPhotoApi) =>
+  parseVisibilityFlag(item.is_main) === true;
+
+const filterGalleryPhotos = (
+  photos: PhotoGalleryPhotoApi[],
+  pictureVisible: boolean,
+  additionalVisible: boolean,
+) => {
+  if (pictureVisible && additionalVisible) {
+    return photos;
+  }
+
+  const mainIndex = photos.findIndex(isMainGalleryPhoto);
+  const resolvedMain = mainIndex >= 0 ? mainIndex : 0;
+
+  return photos.filter((_, index) => {
+    const isMainPhoto = index === resolvedMain;
+    return isMainPhoto ? pictureVisible : additionalVisible;
+  });
+};
+
 export const mapPhotoGallery = (
   response?: PhotoGalleryResponse | null,
   fallbackUserId = '',
   fallbackName = '',
 ): PhotoGalleryData => {
   const data = unwrapPayload(response);
-  const rawPhotos = extractPhotos(response)
-    .slice()
-    .sort((left, right) => Number(left.index ?? 0) - Number(right.index ?? 0));
+  const pictureVisible =
+    parseVisibilityFlag(data?.visibility?.profile_photo_visible) ??
+    parseVisibilityFlag(data?.visibility?.profile_picture_visible) ??
+    parseVisibilityFlag(
+      (data as { profile_photo_visible?: unknown } | null)?.profile_photo_visible,
+    ) ??
+    parseVisibilityFlag(data?.user?.profile_photo_visible) ??
+    true;
+  const additionalVisible =
+    parseVisibilityFlag(data?.visibility?.additional_photos_visible) ??
+    parseVisibilityFlag(
+      (data as { additional_photos_visible?: unknown } | null)
+        ?.additional_photos_visible,
+    ) ??
+    parseVisibilityFlag(data?.user?.additional_photos_visible) ??
+    true;
+  const rawPhotos = filterGalleryPhotos(
+    extractPhotos(response)
+      .slice()
+      .sort((left, right) => Number(left.index ?? 0) - Number(right.index ?? 0)),
+    pictureVisible,
+    additionalVisible,
+  );
   const photos = rawPhotos
     .map(item =>
       resolveMediaUrl(
@@ -135,14 +181,11 @@ export const mapPhotoGallery = (
   const grantedFlag =
     parseVisibilityFlag(data?.access_granted) ??
     parseVisibilityFlag(data?.visibility?.access_granted);
-  const additionalVisible = parseVisibilityFlag(
-    data?.visibility?.additional_photos_visible,
-  );
+  const hiddenByOwner = !pictureVisible || !additionalVisible;
   const accessGranted =
-    grantedFlag === true ||
-    (grantedFlag !== false &&
-      additionalVisible !== false &&
-      photos.length > 0);
+    !hiddenByOwner &&
+    (grantedFlag === true ||
+      (grantedFlag !== false && photos.length > 0));
 
   return {
     userId: pickString(
@@ -152,5 +195,8 @@ export const mapPhotoGallery = (
     name: pickString(data?.user?.name, data?.user?.full_name, fallbackName),
     accessGranted,
     photos,
+    profilePictureVisible: pictureVisible,
+    additionalPhotosVisible: additionalVisible,
+    hiddenByOwner,
   };
 };

@@ -18,6 +18,7 @@ export const Images = {
   femaleProfile: require('./images/female1.png'),
   femaleProfile2: require('./images/female2.png'),
   maleProfile: require('./images/male2.png'),
+  hiddenProfile: require('./images/hiddenProfile.png'),
   religionIcon: require('./images/religion.png'),
   fieldStudyIcon: require('./images/fieldStudy.png'),
   universityIcon: require('./images/university.png'),

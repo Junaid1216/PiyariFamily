@@ -12,6 +12,7 @@ export type ProfileDetailParams = {
   location?: string;
   image?: ImageSourcePropType;
   isVerified?: boolean;
+  pictureHidden?: boolean;
 };
 
 export type HomeStackParamList = {

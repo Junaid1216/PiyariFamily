@@ -13,6 +13,7 @@ const HIDDEN_TAB_BAR_ROUTES: Record<string, string[]> = {
     'ProfileVerified',
     'Notifications',
     'ViewProfileRequests',
+    'RequestHistory',
     'ViewProfileGallery',
     'ProfileDetail',
     'MatchSuccess',

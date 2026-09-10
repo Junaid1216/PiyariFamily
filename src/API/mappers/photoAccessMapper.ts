@@ -125,13 +125,13 @@ const locationPart = (value: unknown): string => {
   }
 
   return locationPart(
-    value.name ??
-      value.title ??
-      value.label ??
-      value.city_name ??
-      value.city ??
-      value.country_name ??
-      value.country,
+    value?.name ??
+      value?.title ??
+      value?.label ??
+      value?.city_name ??
+      value?.city ??
+      value?.country_name ??
+      value?.country,
   );
 };
 
@@ -212,69 +212,104 @@ const pickNumber = (...values: Array<number | string | null | undefined>) => {
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 
+const WRAPPER_STATUSES = new Set([
+  'success',
+  'ok',
+  'error',
+  'fail',
+  'failed',
+]);
+
+const isRequestStatus = (status: unknown) => {
+  if (typeof status !== 'string' || !status.trim()) {
+    return false;
+  }
+
+  const key = status.trim().toLowerCase();
+  if (WRAPPER_STATUSES.has(key)) {
+    return false;
+  }
+
+  return (
+    key === 'pending' ||
+    key === 'approved' ||
+    key === 'accepted' ||
+    key === 'rejected' ||
+    key === 'declined' ||
+    key === 'denied' ||
+    key === 'accept' ||
+    key === 'reject'
+  );
+};
+
+const REQUEST_LIST_KEYS = [
+  'requests',
+  'incoming',
+  'outgoing',
+  'received',
+  'sent',
+  'items',
+  'list',
+  'records',
+  'photo_access_requests',
+  'view_profile_requests',
+  'view_requests',
+] as const;
+
 const isRequestItem = (value: unknown): value is PhotoAccessRequestApiItem => {
   if (!isPlainObject(value)) {
     return false;
   }
 
   return (
-    value.id != null ||
-    value.request_id != null ||
     isPlainObject(value.profile) ||
     isPlainObject(value.user) ||
     isPlainObject(value.requester) ||
-    typeof value.status === 'string'
+    isRequestStatus(value.status) ||
+    value.request_id != null
   );
 };
 
-const hasRequestCollections = (value: Record<string, unknown>) =>
-  value.requests != null ||
-  value.incoming != null ||
-  value.outgoing != null ||
-  value.received != null ||
-  value.sent != null ||
-  value.items != null ||
-  value.list != null ||
-  value.records != null ||
-  value.photo_access_requests != null ||
-  value.view_profile_requests != null ||
-  value.view_requests != null;
-
-const collectItems = (value: unknown, depth = 0): PhotoAccessRequestApiItem[] => {
-  if (depth > 4 || value == null) {
+const listFromUnknown = (
+  value: unknown,
+  depth: number,
+): PhotoAccessRequestApiItem[] => {
+  if (depth > 6 || value == null) {
     return [];
   }
 
   if (Array.isArray(value)) {
-    return value.flatMap(item => collectItems(item, depth + 1));
+    const items = value.filter(isRequestItem);
+    if (items.length) {
+      return items;
+    }
+
+    return value.flatMap(item => listFromUnknown(item, depth + 1));
   }
 
   if (!isPlainObject(value)) {
     return [];
   }
 
-  if (hasRequestCollections(value)) {
-    return [
-      ...collectItems(value.requests, depth + 1),
-      ...collectItems(value.incoming, depth + 1),
-      ...collectItems(value.outgoing, depth + 1),
-      ...collectItems(value.received, depth + 1),
-      ...collectItems(value.sent, depth + 1),
-      ...collectItems(value.items, depth + 1),
-      ...collectItems(value.list, depth + 1),
-      ...collectItems(value.records, depth + 1),
-      ...collectItems(value.photo_access_requests, depth + 1),
-      ...collectItems(value.view_profile_requests, depth + 1),
-      ...collectItems(value.view_requests, depth + 1),
-      ...collectItems(value.data, depth + 1),
-    ];
+  const fromKeys = REQUEST_LIST_KEYS.flatMap(key =>
+    listFromUnknown(value[key], depth + 1),
+  );
+  if (fromKeys.length) {
+    return fromKeys;
+  }
+
+  if (value.data != null) {
+    const fromData = listFromUnknown(value.data, depth + 1);
+    if (fromData.length) {
+      return fromData;
+    }
   }
 
   if (isRequestItem(value)) {
     return [value];
   }
 
-  return collectItems(value.data, depth + 1);
+  return [];
 };
 
 const unwrapPayload = (
@@ -319,14 +354,20 @@ const mergeProfile = (
   return merged;
 };
 
-export const extractPhotoAccessRequestItems = (
-  response?: PhotoAccessRequestsResponse | null,
-): PhotoAccessRequestApiItem[] => {
-  const payload = unwrapPayload(response);
-  const items = collectItems(payload);
+const asRequestRows = (value: unknown): PhotoAccessRequestApiItem[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
 
-  if (!payload) {
-    return items;
+  return value.filter(isPlainObject) as PhotoAccessRequestApiItem[];
+};
+
+const withRootProfile = (
+  payload: PhotoAccessRequestsResponse,
+  items: PhotoAccessRequestApiItem[],
+): PhotoAccessRequestApiItem[] => {
+  if (!items.length) {
+    return [];
   }
 
   const rootProfile = mergeProfile(
@@ -334,10 +375,6 @@ export const extractPhotoAccessRequestItems = (
     payload.requester,
     payload.user,
   );
-
-  if (!items.length) {
-    return [];
-  }
 
   if (!Object.keys(rootProfile).length) {
     return items;
@@ -347,6 +384,55 @@ export const extractPhotoAccessRequestItems = (
     ...item,
     profile: mergeProfile(rootProfile, item.profile),
   }));
+};
+
+export const extractPhotoAccessRequestItems = (
+  response?: PhotoAccessRequestsResponse | string | null,
+): PhotoAccessRequestApiItem[] => {
+  if (typeof response === 'string') {
+    try {
+      return extractPhotoAccessRequestItems(
+        JSON.parse(response) as PhotoAccessRequestsResponse,
+      );
+    } catch {
+      return [];
+    }
+  }
+
+  if (Array.isArray(response)) {
+    const rows = asRequestRows(response);
+    return rows.length ? rows : listFromUnknown(response, 0);
+  }
+
+  const payload = unwrapPayload(response);
+  if (!payload) {
+    return [];
+  }
+
+  const buckets: unknown[] = [
+    payload.requests,
+    payload.outgoing,
+    payload.incoming,
+    payload.data,
+  ];
+
+  for (const bucket of buckets) {
+    const rows = asRequestRows(bucket);
+    if (rows.length) {
+      return withRootProfile(payload, rows);
+    }
+
+    if (isPlainObject(bucket)) {
+      const nested = asRequestRows(
+        bucket.requests ?? bucket.data ?? bucket.items,
+      );
+      if (nested.length) {
+        return withRootProfile(payload, nested);
+      }
+    }
+  }
+
+  return withRootProfile(payload, listFromUnknown(payload, 0));
 };
 
 export const formatPhotoAccessStatusLabel = (status?: string | null) => {
@@ -499,21 +585,26 @@ const resolveAvatar = (
 };
 
 export const mapPhotoAccessRequestItem = (
-  item: PhotoAccessRequestApiItem,
+  item: PhotoAccessRequestApiItem | null | undefined,
   index: number,
 ): ViewProfileRequest => {
-  const profile = mergeProfile(item.profile, item.requester, item.user);
+  const safeItem = item ?? {};
+  const profile = mergeProfile(
+    safeItem.profile,
+    safeItem.requester,
+    safeItem.user,
+  );
   const photos = mapPhotoSources(
     profile.profile_photo,
     profile.photo,
     profile.avatar,
     profile.image,
     profile.photos,
-    item.photos,
+    safeItem.photos,
   );
   const age = pickNumber(profile.age);
-  const location = resolvePhotoAccessLocation(profile, item);
-  const id = item.request_id ?? item.id ?? index;
+  const location = resolvePhotoAccessLocation(profile, safeItem);
+  const id = safeItem.request_id ?? safeItem.id ?? index;
   const profileId = profile.id ?? profile.user_id ?? '';
   const verified = profile.is_verified;
 
@@ -529,15 +620,15 @@ export const mapPhotoAccessRequestItem = (
     photos,
     requestedAt: formatNotificationTime(
       pickString(
-        item.created_at,
-        item.requested_at,
-        item.time,
-        item.updated_at,
+        safeItem.created_at,
+        safeItem.requested_at,
+        safeItem.time,
+        safeItem.updated_at,
         profile.created_at,
       ),
     ),
-    status: mapStatus(item.status),
-    statusLabel: formatPhotoAccessStatusLabel(item.status),
+    status: mapStatus(safeItem.status),
+    statusLabel: formatPhotoAccessStatusLabel(safeItem.status),
     ...(verified === true || verified === 1 || verified === '1'
       ? { isVerified: true }
       : {}),

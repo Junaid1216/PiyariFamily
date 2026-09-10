@@ -36,6 +36,10 @@ export type ProfileApiData = {
   is_verified?: boolean;
   phone_verified?: boolean;
   location?: string | null;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+  lat?: number | string | null;
+  lng?: number | string | null;
   profile_photo?: string | null;
   image?: string | null;
   language?: string | null;
@@ -58,6 +62,12 @@ export type ProfileApiData = {
   photos?: Array<Record<string, unknown> | string> | null;
   main_photo_index?: number | string | null;
   removed_photo_indexes?: number[];
+  id?: number | string | null;
+  profile_completed?: boolean;
+  profile_step?: number | string | null;
+  status?: string | null;
+  referral_code?: string | null;
+  reward_points?: number | string | null;
 };
 
 export type EditProfileFormData = {
@@ -101,6 +111,13 @@ export type PhotoVisibilityResponse = {
   data?: PhotoVisibilityFlags;
 };
 
+export type CompleteProfileResponse = {
+  success?: boolean | number;
+  message?: string;
+  user?: ProfileApiData;
+  data?: CompleteProfileResponse | ProfileApiData;
+};
+
 export const parseVisibilityFlag = (value: unknown): boolean | undefined => {
   if (value === true || value === 1) {
     return true;
@@ -113,11 +130,22 @@ export const parseVisibilityFlag = (value: unknown): boolean | undefined => {
   if (typeof value === 'string') {
     const normalized = value.trim().toLowerCase();
 
-    if (['1', 'true', 'yes', 'on'].includes(normalized)) {
+    if (['1', 'true', 'yes', 'on', 'visible', 'public', 'show'].includes(normalized)) {
       return true;
     }
 
-    if (['0', 'false', 'no', 'off'].includes(normalized)) {
+    if (
+      [
+        '0',
+        'false',
+        'no',
+        'off',
+        'hidden',
+        'hide',
+        'private',
+        'invisible',
+      ].includes(normalized)
+    ) {
       return false;
     }
   }
@@ -149,10 +177,18 @@ const mergeVisibilityFlags = (
     'profile_photo_visible',
     'profilePhotoVisible',
     'profile_picture_visible',
+    'profilePictureVisible',
+    'is_profile_photo_visible',
+    'photo_visible',
+    'is_photo_visible',
+    'can_view_profile_photo',
+    'can_view_photos',
   ];
   const additionalKeys = [
     'additional_photos_visible',
     'additionalPhotosVisible',
+    'gallery_visible',
+    'photos_visible',
   ];
 
   for (const source of sources) {
@@ -198,10 +234,19 @@ const MARITAL_STATUS_MAP: Record<string, string> = {
 };
 
 const MARITAL_TO_API: Record<string, string> = {
-  'Never Married': 'never married',
+  'Never Married': 'single',
   Single: 'single',
   Divorced: 'divorced',
   Widowed: 'widowed',
+};
+
+export const toApiMaritalStatus = (value?: string | null) => {
+  const status = value?.trim();
+  if (!status) {
+    return '';
+  }
+
+  return MARITAL_TO_API[status] ?? status.toLowerCase();
 };
 
 export const normalizeProfileData = (source: unknown): ProfileApiData => {
@@ -212,21 +257,35 @@ export const normalizeProfileData = (source: unknown): ProfileApiData => {
   const obj = source as Record<string, unknown>;
 
   if (obj.user && typeof obj.user === 'object') {
-    return withNormalizedPhotos(
-      mapGetProfileFields(obj.user as Record<string, unknown>),
-      obj,
-    );
+    const fromUser = mapGetProfileFields(obj.user as Record<string, unknown>);
+    const overlayMarital = [
+      obj.marital_status,
+      obj.maritalStatus,
+      obj['marital status'],
+    ].find(value => typeof value === 'string' && value.trim());
+    if (typeof overlayMarital === 'string') {
+      fromUser.marital_status = overlayMarital;
+    }
+    return withNormalizedPhotos(fromUser, obj);
   }
 
   if (obj.data && typeof obj.data === 'object') {
     const data = obj.data as Record<string, unknown>;
 
     if (data.user && typeof data.user === 'object') {
-      return withNormalizedPhotos(
-        mapGetProfileFields(data.user as Record<string, unknown>),
-        data,
-        obj,
-      );
+      const fromUser = mapGetProfileFields(data.user as Record<string, unknown>);
+      const overlayMarital = [
+        obj.marital_status,
+        data.marital_status,
+        obj.maritalStatus,
+        data.maritalStatus,
+        obj['marital status'],
+        data['marital status'],
+      ].find(value => typeof value === 'string' && value.trim());
+      if (typeof overlayMarital === 'string') {
+        fromUser.marital_status = overlayMarital;
+      }
+      return withNormalizedPhotos(fromUser, data, obj);
     }
 
     return withNormalizedPhotos(mapGetProfileFields(data), obj);
@@ -374,6 +433,16 @@ const mapGetProfileFields = (
     profile.marital_status = marital;
   }
 
+  const community = pick('community', 'caste');
+  if (typeof community === 'string') {
+    profile.community = community;
+  }
+
+  const religion = pick('religion');
+  if (typeof religion === 'string') {
+    profile.religion = religion;
+  }
+
   const siblings = pick('siblings');
   if (typeof siblings === 'string') {
     profile.siblings = siblings;
@@ -431,6 +500,40 @@ const mapGetProfileFields = (
   );
   if (additionalPhotosVisible !== undefined) {
     profile.additional_photos_visible = additionalPhotosVisible;
+  }
+
+  const profileCompleted = parseVisibilityFlag(
+    pick('profile_completed', 'is_profile_completed', 'profileCompleted'),
+  );
+  if (profileCompleted !== undefined) {
+    profile.profile_completed = profileCompleted;
+  }
+
+  const profileStep = pick('profile_step', 'profileStep', 'step');
+  if (typeof profileStep === 'number' && Number.isFinite(profileStep)) {
+    profile.profile_step = profileStep;
+  } else if (typeof profileStep === 'string' && profileStep.trim()) {
+    const parsed = Number(profileStep);
+    if (Number.isFinite(parsed)) {
+      profile.profile_step = parsed;
+    }
+  }
+
+  const accountStatus = pick('status', 'account_status', 'accountStatus');
+  if (typeof accountStatus === 'string') {
+    profile.status = accountStatus.toLowerCase();
+  }
+
+  const phoneVerified = parseVisibilityFlag(
+    pick('phone_verified', 'is_phone_verified', 'phoneVerified'),
+  );
+  if (phoneVerified !== undefined) {
+    profile.phone_verified = phoneVerified;
+  }
+
+  const profession = pick('profession', 'job_title');
+  if (typeof profession === 'string') {
+    profile.profession = profession;
   }
 
   const countryValue = pick('country', 'country_name', 'countryName');
@@ -499,6 +602,8 @@ export const resolveProfileData = (source: unknown): ProfileApiData => {
       fromApi.marital_status,
       cached?.marital_status,
     ),
+    religion: pickProfileField(fromApi.religion, cached?.religion),
+    sect: pickProfileField(fromApi.sect, cached?.sect),
     siblings: pickProfileField(fromApi.siblings, cached?.siblings),
     family_information: pickProfileField(
       fromApi.family_information,
@@ -545,6 +650,26 @@ export const resolveProfileData = (source: unknown): ProfileApiData => {
       parseVisibilityFlag(fromApi.additional_photos_visible) ??
       parseVisibilityFlag(cached?.additional_photos_visible),
     location: pickProfileField(fromApi.location, cached?.location),
+    id: pickProfileField(fromApi.id, cached?.id),
+    phone_verified: pickProfileField(
+      fromApi.phone_verified,
+      cached?.phone_verified,
+    ),
+    profile_completed: pickProfileField(
+      fromApi.profile_completed,
+      cached?.profile_completed,
+    ),
+    profile_step: pickProfileField(fromApi.profile_step, cached?.profile_step),
+    status: pickProfileField(fromApi.status, cached?.status),
+    profession: pickProfileField(fromApi.profession, cached?.profession),
+    referral_code: pickProfileField(
+      fromApi.referral_code,
+      cached?.referral_code,
+    ),
+    reward_points: pickProfileField(
+      fromApi.reward_points,
+      cached?.reward_points,
+    ),
   };
 
   profileStorage.set(resolved);
@@ -566,6 +691,39 @@ export const saveProfileCache = (source: unknown): ProfileApiData => {
   }
 
   return resolved;
+};
+
+export const isProfileMarkedComplete = (profile?: ProfileApiData | null) => {
+  if (!profile) {
+    return false;
+  }
+
+  if (profile.profile_completed === true) {
+    return true;
+  }
+
+  const step = Number(profile.profile_step);
+  return Number.isFinite(step) && step >= 8;
+};
+
+export const mapCompleteProfile = (response?: CompleteProfileResponse | null) => {
+  const profile = saveProfileCache(response);
+  const message =
+    typeof response?.message === 'string' ? response.message.trim() : '';
+  const nested =
+    response?.data && typeof response.data === 'object'
+      ? (response.data as CompleteProfileResponse)
+      : null;
+  const nestedMessage =
+    typeof nested?.message === 'string' ? nested.message.trim() : '';
+
+  return {
+    profile,
+    message: message || nestedMessage,
+    profileCompleted: isProfileMarkedComplete(profile),
+    status: profile.status ?? null,
+    user: profile,
+  };
 };
 
 const MAIN_PHOTO_FIELD_KEYS = [
@@ -861,6 +1019,22 @@ export type ProfileGalleryPhoto = {
   isMain: boolean;
 };
 
+const urlsMatchLoose = (left?: string | null, right?: string | null) => {
+  if (!left || !right) {
+    return false;
+  }
+  const normalize = (value: string) =>
+    value
+      .trim()
+      .replace(/\\/g, '/')
+      .replace(/[?#].*$/, '')
+      .replace(/\/+$/, '')
+      .toLowerCase();
+  const a = normalize(left);
+  const b = normalize(right);
+  return a === b || a.endsWith(b) || b.endsWith(a);
+};
+
 export const extractProfileGalleryPhotos = (
   profile?: ProfileApiData | null,
 ): ProfileGalleryPhoto[] => {
@@ -874,9 +1048,34 @@ export const extractProfileGalleryPhotos = (
         : typeof mainIndexValue === 'string' && mainIndexValue.trim()
           ? Number(mainIndexValue)
           : NaN;
+    const flaggedMainPosition = photoItems.findIndex(isMainPhoto);
+    const flaggedMainIndex =
+      flaggedMainPosition >= 0
+        ? pickPhotoIndex(photoItems[flaggedMainPosition], flaggedMainPosition)
+        : NaN;
+
+    const profilePhotoUrl = pickImageUrl(profile?.profile_photo || profile?.image);
+    const profilePhotoMatchIndex =
+      profilePhotoUrl
+        ? photoItems.findIndex(photo => {
+            const url = extractPhotoUrl(photo);
+            return Boolean(url) && urlsMatchLoose(url, profilePhotoUrl);
+          })
+        : -1;
+    const profilePhotoMainIndex =
+      profilePhotoMatchIndex >= 0
+        ? pickPhotoIndex(photoItems[profilePhotoMatchIndex], profilePhotoMatchIndex)
+        : NaN;
+
+    // Prefer explicit flags, then profile_photo URL match — never default to
+    // photos[0] when profile_photo points at a different image.
     const mainIndex = Number.isFinite(parsedMainIndex)
       ? parsedMainIndex
-      : photoItems.findIndex(isMainPhoto);
+      : Number.isFinite(flaggedMainIndex)
+        ? flaggedMainIndex
+        : Number.isFinite(profilePhotoMainIndex)
+          ? profilePhotoMainIndex
+          : 0;
 
     return photoItems
       .map((photo, position) => {
@@ -886,7 +1085,7 @@ export const extractProfileGalleryPhotos = (
         }
 
         const index = pickPhotoIndex(photo, position);
-        const isMain = index === (mainIndex >= 0 ? mainIndex : 0);
+        const isMain = index === mainIndex;
 
         return {
           id: String(index),
@@ -1036,7 +1235,9 @@ export const mapProfileToForm = (
       : '',
     otherLanguages: parseLanguages(safeProfile.other_languages),
     maritalStatus: mapMaritalStatus(safeProfile.marital_status),
-    community: safeProfile.community ? toTitleCase(safeProfile.community) : '',
+    community: safeProfile.community
+      ? toTitleCase(safeProfile.community)
+      : '',
     residenceStatus:
       safeProfile.residential_status ?? safeProfile.residence_status
         ? toTitleCase(
@@ -1109,8 +1310,9 @@ export const mapFormToProfilePayload = (
   payload.other_languages = [...form.otherLanguages];
 
   if (form.maritalStatus) {
-    payload.marital_status =
-      MARITAL_TO_API[form.maritalStatus] ?? form.maritalStatus.toLowerCase();
+    const marital = toApiMaritalStatus(form.maritalStatus);
+    payload.marital_status = marital;
+    payload['marital status'] = marital;
   }
 
   if (form.community) {

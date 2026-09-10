@@ -1,6 +1,7 @@
 import React, { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Dimensions,
   Modal,
   Pressable,
   ScrollView,
@@ -52,7 +53,11 @@ const NotificationsScreen = () => {
   const [markingAll, setMarkingAll] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [menuPos, setMenuPos] = useState({ top: 0, left: 0, width: 0 });
+  const [menuPos, setMenuPos] = useState({
+    bottom: 0,
+    left: 0,
+    width: 0,
+  });
   const bellRef = useRef<View>(null);
 
   const fetchNotifications = useCallback(async (opts?: { silent?: boolean }) => {
@@ -93,10 +98,14 @@ const NotificationsScreen = () => {
 
       if (photoAccessRes.status === 'fulfilled') {
         const res = photoAccessRes.value;
-        if (isApiSuccess(res?.status, res?.data?.success)) {
-          setPendingViewProfileCount(
-            pickPendingPhotoAccessCount(mapPhotoAccessRequests(res?.data)),
-          );
+        const body = res?.data;
+        const items = mapPhotoAccessRequests(body);
+        if (
+          isApiSuccess(res?.status, body?.success) ||
+          Array.isArray(body?.requests) ||
+          items.length > 0
+        ) {
+          setPendingViewProfileCount(pickPendingPhotoAccessCount(items));
         }
       }
     } finally {
@@ -144,9 +153,10 @@ const NotificationsScreen = () => {
     }
 
     const menuWidth = wp('42%');
-    bellRef.current?.measureInWindow((x, y, width, height) => {
+    bellRef.current?.measureInWindow((x, y, width) => {
+      const windowHeight = Dimensions.get('window').height;
       setMenuPos({
-        top: y + height + hp('0.35%'),
+        bottom: windowHeight - y + hp('0.4%'),
         left: Math.max(wp('4%'), x + width - menuWidth),
         width: menuWidth,
       });
@@ -289,6 +299,13 @@ const NotificationsScreen = () => {
               onPress={openMenu}
             >
               <Icon name="bell-outline" size={fs(20)} color={Colors.primary} />
+              <View style={styles.optionsBadge}>
+                <Icon
+                  name="dots-vertical"
+                  size={fs(10)}
+                  color={Colors.primary}
+                />
+              </View>
               {hasUnread ? <View style={styles.notificationDot} /> : null}
             </TouchableOpacity>
           </View>
@@ -361,7 +378,7 @@ const NotificationsScreen = () => {
             style={[
               styles.menu,
               {
-                top: menuPos.top,
+                bottom: menuPos.bottom,
                 left: menuPos.left,
                 width: menuPos.width,
               },
@@ -417,10 +434,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  optionsBadge: {
+    position: 'absolute',
+    right: wp('1.4%'),
+    top: hp('0.7%'),
+    width: wp('4.2%'),
+    height: wp('4.2%'),
+    borderRadius: wp('2.1%'),
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: Colors.goldLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   notificationDot: {
     position: 'absolute',
-    top: hp('1.2%'),
-    right: wp('2.8%'),
+    top: hp('0.9%'),
+    left: wp('2.4%'),
     width: wp('2.2%'),
     height: wp('2.2%'),
     borderRadius: wp('1.1%'),

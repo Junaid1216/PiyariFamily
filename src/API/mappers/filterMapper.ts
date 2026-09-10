@@ -5,6 +5,7 @@ import type {
   MatchListResponse,
 } from './matchMapper';
 import { normalizeMatchListResponse } from './matchMapper';
+import { applyLocationFilterParams } from './matchLocationFilter';
 
 export type FilterQuickOption = {
   id: string;
@@ -358,17 +359,10 @@ export const mapQuickFilters = (
     }
 
     const queryKey = toFilterQueryKey(id) || id;
-    const isFlag =
-      typeof label === 'boolean' ||
-      label === 1 ||
-      label === '1' ||
-      label === true;
-    const text = isFlag ? '' : pickString(label);
-
     return [
       {
         id: queryKey,
-        label: text || humanizeFilterKey(id),
+        label: humanizeFilterKey(id),
       },
     ];
   });
@@ -761,6 +755,9 @@ export type BuildFilterParamsInput = {
   incomeRangeMeta?: Record<string, FilterIncomeRangeMeta>;
   extraValues?: Record<string, string>;
   activeQuickFilters: Record<string, boolean>;
+  profileCity?: string | null;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
 };
 
 export const buildMatchFilterParams = ({
@@ -782,6 +779,9 @@ export const buildMatchFilterParams = ({
   incomeRangeMeta,
   extraValues,
   activeQuickFilters,
+  profileCity,
+  latitude,
+  longitude,
 }: BuildFilterParamsInput): MatchFilterParams => {
   const params: MatchFilterParams = {};
 
@@ -849,6 +849,14 @@ export const buildMatchFilterParams = ({
     const queryKey = toFilterQueryKey(key) || key;
     params[queryKey] = 1;
   });
+
+  applyLocationFilterParams(
+    params,
+    Object.entries(activeQuickFilters)
+      .filter(([, enabled]) => Boolean(enabled))
+      .map(([key]) => key),
+    { profileCity, latitude, longitude },
+  );
 
   return params;
 };

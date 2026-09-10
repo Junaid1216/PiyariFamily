@@ -4,20 +4,21 @@ import { ENDPOINTS } from './endpoints';
 import { toProfileUpdateFormData, type FormValue, type UploadFile } from './formData';
 import { profileStorage } from './profileStorage';
 import { userStorage } from './userStorage';
-import type { ProfileApiData, PhotoVisibilityResponse } from './mappers/profileMapper';
+import type { ProfileApiData, PhotoVisibilityResponse, CompleteProfileResponse } from './mappers/profileMapper';
+import { mapCompleteProfile } from './mappers/profileMapper';
+import { isApiSuccess } from './types';
 import type {
   BestMatchResponse,
   HomeMatchesResponse,
-  MatchFilterParams,
   MatchListResponse,
   MatchProfileResponse,
   MatchSearchParams,
 } from './mappers/matchMapper';
-import type {
-  PhotoAccessAction,
-  PhotoAccessRequestsResponse,
-  PhotoAccessRespondResponse,
-  PhotoAccessUserRequestResponse,
+import {
+  type PhotoAccessAction,
+  type PhotoAccessRequestsResponse,
+  type PhotoAccessRespondResponse,
+  type PhotoAccessUserRequestResponse,
 } from './mappers/photoAccessMapper';
 import type { PhotoGalleryResponse } from './mappers/photoGalleryMapper';
 import type {
@@ -223,6 +224,40 @@ export const Api = {
     return Api.updateProfile(payload, photos);
   },
 
+  completeProfile: async () => {
+    let status = 0;
+    let data: CompleteProfileResponse = {};
+
+    try {
+      const res = await apiClient.postEmpty<CompleteProfileResponse>(
+        ENDPOINTS.PROFILE_COMPLETE,
+      );
+      status = res.status;
+      data = res.data ?? {};
+    } catch (error) {
+      if (!isMethodNotAllowed(error) && !isMissingEndpoint(error)) {
+        throw error;
+      }
+
+      const res = await apiClient.postForm<CompleteProfileResponse>(
+        ENDPOINTS.PROFILE_COMPLETE,
+        {},
+      );
+      status = res.status;
+      data = res.data ?? {};
+    }
+
+    const mapped = mapCompleteProfile(data);
+
+    return {
+      ...data,
+      ...mapped,
+      status,
+      accountStatus: mapped.status,
+      isSuccess: isApiSuccess(status, data.success),
+    };
+  },
+
   deleteProfilePhoto: async (photo: {
     index?: number | null;
     path?: string | null;
@@ -275,19 +310,20 @@ export const Api = {
     return { status, ...data };
   },
 
-  updatePhotoVisibility: (
-    payload: {
-      profile_photo_visible: boolean;
-      additional_photos_visible: boolean;
-    },
-  ) =>
-    apiClient.postForm<PhotoVisibilityResponse>(
+  updatePhotoVisibility: async (payload: {
+    profile_photo_visible: boolean;
+    additional_photos_visible: boolean;
+  }) => {
+    const { status, data } = await apiClient.postForm<PhotoVisibilityResponse>(
       ENDPOINTS.PROFILE_PHOTO_VISIBILITY,
       {
         profile_photo_visible: payload.profile_photo_visible ? 1 : 0,
         additional_photos_visible: payload.additional_photos_visible ? 1 : 0,
       },
-    ),
+    );
+
+    return { status, ...data };
+  },
 
   sendVerifyPhone: async (payload: Record<string, FormValue>) => {
     const { status, data } = await apiClient.postForm<VerifyPhoneResponse>(
@@ -310,8 +346,13 @@ export const Api = {
   updateProfile: async (
     payload: Record<string, FormValue>,
     photo?: UploadFile | UploadFile[] | null,
+    additionalPhotos?: UploadFile | UploadFile[] | null,
   ) => {
-    const formData = await toProfileUpdateFormData(payload, photo);
+    const formData = await toProfileUpdateFormData(
+      payload,
+      photo,
+      additionalPhotos,
+    );
 
     const { status, data } = await apiClient.postFormData<UpdateProfileResponse>(
       ENDPOINTS.PROFILE_UPDATE,
@@ -351,13 +392,33 @@ export const Api = {
       reward_type: rewardType,
     }),
 
-  getPhotoAccessRequests: () =>
-    apiClient.get<PhotoAccessRequestsResponse>(ENDPOINTS.PHOTO_ACCESS_REQUESTS, {
-      params: { type: 'incoming' },
-    }),
+  getPhotoAccessRequests: async () => {
+    const incoming = await apiClient.get<PhotoAccessRequestsResponse>(
+      ENDPOINTS.PHOTO_ACCESS_REQUESTS,
+      { params: { type: 'incoming' } },
+    );
+
+    console.log(
+      'GET /photo-access-requests incoming:',
+      JSON.stringify(incoming.data ?? null, null, 2),
+    );
+
+    return incoming;
+  },
 
   requestPhotoAccess: async (userId: string) => {
-    const payload = { user_id: userId };
+    const targetUserId = String(userId ?? '').trim();
+    const payload = {
+      user_id: targetUserId,
+      profile_id: targetUserId,
+      to_user_id: targetUserId,
+    };
+
+    console.log(
+      'POST /photo-access-requests target user id:',
+      targetUserId,
+      payload,
+    );
 
     try {
       return await apiClient.postForm<PhotoAccessUserRequestResponse>(
@@ -370,34 +431,57 @@ export const Api = {
       }
     }
 
-    try {
-      return await apiClient.postForm<PhotoAccessUserRequestResponse>(
-        ENDPOINTS.PHOTO_ACCESS_REQUESTS,
-        { to_user_id: userId },
-      );
-    } catch (error) {
-      if (!isRetryablePhotoAccessRequest(error)) {
-        throw error;
-      }
-    }
-
     return apiClient.postForm<PhotoAccessUserRequestResponse>(
-      `${ENDPOINTS.PHOTO_ACCESS}/${userId}/request`,
+      `${ENDPOINTS.PHOTO_ACCESS}/${targetUserId}/request`,
       payload,
     );
   },
 
-  respondToPhotoAccessRequest: (
+  respondToPhotoAccessRequest: async (
     requestId: string,
     action: PhotoAccessAction,
   ) => {
-    const formData = new FormData();
-    formData.append('action', action);
+    const url = `${ENDPOINTS.PHOTO_ACCESS_REQUESTS}/${requestId}/respond`;
+    const actionValues =
+      action === 'approve'
+        ? ['approve', 'accept', 'approved', 'accepted']
+        : ['reject', 'decline', 'rejected', 'denied'];
 
-    return apiClient.postFormData<PhotoAccessRespondResponse>(
-      `${ENDPOINTS.PHOTO_ACCESS_REQUESTS}/${requestId}/respond`,
-      formData,
-    );
+    let lastError: unknown;
+
+    for (const value of actionValues) {
+      try {
+        const res = await apiClient.postForm<PhotoAccessRespondResponse>(url, {
+          action: value,
+        });
+
+        if (
+          isApiSuccess(res.status, res.data?.success) ||
+          res.data?.success === true ||
+          res.data?.success == 200
+        ) {
+          return res;
+        }
+
+        lastError = res;
+      } catch (error) {
+        lastError = error;
+        const status =
+          error instanceof AxiosError ? error.response?.status : undefined;
+
+        if (status === 403 || status === 422) {
+          continue;
+        }
+
+        throw error;
+      }
+    }
+
+    if (lastError) {
+      throw lastError;
+    }
+
+    throw new Error('Failed to respond to photo access request');
   },
 
   getProfilePhotoGallery: (userId: string) =>
@@ -452,9 +536,6 @@ export const Api = {
 
   getMatchSearch: (params?: MatchSearchParams) =>
     apiClient.get<MatchListResponse>(ENDPOINTS.MATCHES_SEARCH, { params }),
-
-  getMatchFilter: (params?: MatchFilterParams) =>
-    apiClient.get<MatchListResponse>(ENDPOINTS.MATCHES_FILTER, { params }),
 
   getMatchProfile: (profileId: string) =>
     apiClient.get<MatchProfileResponse>(`${ENDPOINTS.MATCHES}/${profileId}`),

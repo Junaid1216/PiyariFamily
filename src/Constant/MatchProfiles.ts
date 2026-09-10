@@ -29,6 +29,8 @@ export type ProfileDetail = {
   languages: string[];
   interests: string[];
   photosNeedAccess?: boolean;
+  pictureHidden?: boolean;
+  additionalPhotosHidden?: boolean;
 };
 
 export const PROFILE_DETAILS: Record<string, ProfileDetail> = {

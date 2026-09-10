@@ -22,6 +22,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-simple-toast';
+import { Images } from '../../Assets';
 import ScreenHeader from '../../Components/ScreenHeader';
 import {
   Api,
@@ -85,28 +86,22 @@ const ViewProfileGalleryScreen = () => {
     route.params;
   const [name, setName] = useState(previewName);
   const [photos, setPhotos] = useState<ImageSourcePropType[]>([]);
-  const [accessGranted, setAccessGranted] = useState(requestAccessGranted);
-  const [loading, setLoading] = useState(
-    Boolean(userId) && requestAccessGranted,
+  const [accessGranted, setAccessGranted] = useState(
+    Boolean(requestAccessGranted),
   );
+  const [loading, setLoading] = useState(Boolean(userId));
   const [error, setError] = useState<string | null>(null);
   const [activePhoto, setActivePhoto] = useState<number | null>(null);
   const [requesting, setRequesting] = useState(false);
   const [requestSent, setRequestSent] = useState(false);
+  const [hiddenByOwner, setHiddenByOwner] = useState(false);
   const { isRecording } = useSecurePhotoScreen();
 
   const fetchGallery = useCallback(async () => {
-    if (!requestAccessGranted) {
-      setPhotos([]);
-      setAccessGranted(false);
-      setError(Strings.photoGalleryAccessDenied);
-      setLoading(false);
-      return;
-    }
-
     if (!userId) {
       setPhotos([]);
       setAccessGranted(false);
+      setHiddenByOwner(false);
       setLoading(false);
       return;
     }
@@ -127,32 +122,43 @@ const ViewProfileGalleryScreen = () => {
       if (galleryOk) {
         const gallery = mapPhotoGallery(res?.data, userId, previewName);
         setName(gallery.name || previewName);
-        setAccessGranted(gallery.photos.length > 0);
+        setHiddenByOwner(gallery.hiddenByOwner);
+        setAccessGranted(
+          gallery.hiddenByOwner
+            ? false
+            : gallery.accessGranted || gallery.photos.length > 0,
+        );
         setPhotos(gallery.photos);
-        setError(null);
-        if (backendMessage) {
-          Toast.show(backendMessage, Toast.LONG);
-        }
+        const hiddenMessage = gallery.hiddenByOwner
+          ? !gallery.profilePictureVisible && !gallery.additionalPhotosVisible
+            ? Strings.memberPhotosHidden
+            : !gallery.profilePictureVisible
+              ? Strings.memberProfilePictureHidden
+              : Strings.memberAdditionalPhotosHidden
+          : '';
+        setError(
+          gallery.photos.length
+            ? null
+            : hiddenMessage ||
+              (gallery.accessGranted ? null : backendMessage || Strings.photoGalleryAccessDenied),
+        );
       } else {
-        const message = backendMessage || Strings.photoGalleryError;
         setPhotos([]);
         setAccessGranted(false);
-        setError(message);
-        Toast.show(message, Toast.LONG);
+        setHiddenByOwner(false);
+        setError(backendMessage || Strings.photoGalleryAccessDenied);
       }
     } catch (requestError) {
-      const message = getApiErrorMessage(
-        requestError,
-        Strings.photoGalleryError,
-      );
       setPhotos([]);
       setAccessGranted(false);
-      setError(message);
-      Toast.show(message, Toast.LONG);
+      setHiddenByOwner(false);
+      setError(
+        getApiErrorMessage(requestError, Strings.photoGalleryAccessDenied),
+      );
     } finally {
       setLoading(false);
     }
-  }, [previewName, requestAccessGranted, userId]);
+  }, [previewName, userId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -161,13 +167,14 @@ const ViewProfileGalleryScreen = () => {
   );
 
   const requestPhotoAccess = async () => {
-    if (!userId || requesting || requestSent) {
+    if (!userId || requesting || requestSent || hiddenByOwner) {
       return;
     }
 
     setRequesting(true);
 
     try {
+      console.log('Request photo access for user id:', userId);
       const res = await Api.requestPhotoAccess(userId);
 
       if (isApiSuccess(res?.status, res?.data?.success)) {
@@ -177,6 +184,7 @@ const ViewProfileGalleryScreen = () => {
           resolved.message || Strings.photoAccessRequested,
           Toast.LONG,
         );
+        await fetchGallery();
       } else {
         Toast.show(
           res?.data?.message ?? Strings.photoAccessRequestError,
@@ -221,13 +229,21 @@ const ViewProfileGalleryScreen = () => {
         </View>
       ) : photos.length === 0 ? (
         <View style={styles.centerContent}>
-          <Icon
-            name={accessGranted ? 'image-off-outline' : 'lock-outline'}
-            size={fs(36)}
-            color={Colors.gold}
-          />
+          {hiddenByOwner ? (
+            <Image
+              source={Images.hiddenProfile}
+              style={styles.dummyPhoto}
+              resizeMode="cover"
+            />
+          ) : (
+            <Icon
+              name={accessGranted ? 'image-off-outline' : 'lock-outline'}
+              size={fs(36)}
+              color={Colors.gold}
+            />
+          )}
           <Text style={styles.emptyText}>{emptyMessage}</Text>
-          {!accessGranted && userId ? (
+          {!accessGranted && !hiddenByOwner && userId ? (
             <TouchableOpacity
               style={styles.requestBtn}
               activeOpacity={0.85}
@@ -350,6 +366,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: AuthStyles.horizontalPadding,
     gap: hp('1%'),
+  },
+  dummyPhoto: {
+    width: wp('42%'),
+    height: wp('42%'),
+    borderRadius: wp('6%'),
+    borderWidth: 1,
+    borderColor: Colors.goldLight,
+    backgroundColor: Colors.notificationBg,
   },
   scrollContent: {
     paddingHorizontal: AuthStyles.horizontalPadding,

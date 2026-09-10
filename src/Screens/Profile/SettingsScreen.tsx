@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Image,
   ScrollView,
@@ -20,7 +20,7 @@ import { AuthStyles, FontSizes } from '../../Constant/AuthStyles';
 import { Colors } from '../../Constant/Colors';
 import { Fonts } from '../../Constant/Fonts';
 import { Strings } from '../../Constant/Strings';
-import { Api, authService, getApiErrorMessage, isApiSuccess, mapProfileToSettings, parseVisibilityFlag, saveProfileCache, type ApiErrorResponse } from '../../API';
+import { Api, authService, getApiErrorMessage, isApiSuccess, mapProfileToSettings, parseVisibilityFlag, saveProfileCache, type ApiErrorResponse, type PhotoVisibilityFlags } from '../../API';
 import { ProfileStackParamList } from '../../Navigation/ProfileStackNavigator';
 import { resetToLogin } from '../../Functions/authNavigation';
 import { navigateToHomeTab, useTabRootBackToHome } from '../../Functions/tabNavigation';
@@ -69,6 +69,8 @@ const SettingItem = ({
   </TouchableOpacity>
 );
 
+const VISIBILITY_SAVE_DELAY_MS = 700;
+
 const SettingsScreen = () => {
   const navigation = useNavigation<NavigationProp>();
   useTabRootBackToHome(navigation);
@@ -81,14 +83,33 @@ const SettingsScreen = () => {
   const [additionalPhotosVisible, setAdditionalPhotosVisible] = useState(true);
   const [savingVisibility, setSavingVisibility] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const visibilityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const visibilityInFlightRef = useRef(false);
+  const pendingVisibilityRef = useRef<{
+    profilePictureVisible: boolean;
+    additionalPhotosVisible: boolean;
+  } | null>(null);
+  const savedVisibilityRef = useRef({
+    profilePictureVisible: true,
+    additionalPhotosVisible: true,
+  });
+  const visibilityRetryRef = useRef(0);
 
   const applyProfile = useCallback((rawProfile: ReturnType<typeof saveProfileCache>) => {
     const profile = mapProfileToSettings(rawProfile);
     setProfileName(profile.name);
     setProfileMeta(profile.meta);
     setIsVerified(profile.isVerified);
-    setProfilePictureVisible(profile.profilePictureVisible);
-    setAdditionalPhotosVisible(profile.additionalPhotosVisible);
+    if (!pendingVisibilityRef.current && !visibilityInFlightRef.current) {
+      setProfilePictureVisible(profile.profilePictureVisible);
+      setAdditionalPhotosVisible(profile.additionalPhotosVisible);
+      savedVisibilityRef.current = {
+        profilePictureVisible: profile.profilePictureVisible,
+        additionalPhotosVisible: profile.additionalPhotosVisible,
+      };
+    }
   }, []);
 
   const fetchProfile = useCallback(async () => {
@@ -121,88 +142,145 @@ const SettingsScreen = () => {
     }, [fetchProfile]),
   );
 
-  const persistPhotoVisibility = useCallback(
-    async (nextProfileVisible: boolean, nextAdditionalVisible: boolean) => {
-      if (savingVisibility) {
-        return;
-      }
+  const flushPhotoVisibility = useCallback(async () => {
+    const pending = pendingVisibilityRef.current;
+    if (!pending || visibilityInFlightRef.current) {
+      return;
+    }
 
-      const previousProfileVisible = profilePictureVisible;
-      const previousAdditionalVisible = additionalPhotosVisible;
+    if (
+      pending.profilePictureVisible ===
+        savedVisibilityRef.current.profilePictureVisible &&
+      pending.additionalPhotosVisible ===
+        savedVisibilityRef.current.additionalPhotosVisible
+    ) {
+      pendingVisibilityRef.current = null;
+      return;
+    }
 
-      if (
-        nextProfileVisible === previousProfileVisible &&
-        nextAdditionalVisible === previousAdditionalVisible
+    pendingVisibilityRef.current = null;
+    visibilityInFlightRef.current = true;
+    setSavingVisibility(true);
+
+    try {
+      const res = await Api.updatePhotoVisibility({
+        profile_photo_visible: pending.profilePictureVisible,
+        additional_photos_visible: pending.additionalPhotosVisible,
+      });
+
+      if (isApiSuccess(res?.status, res?.success)) {
+        const flags: PhotoVisibilityFlags =
+          res.data && typeof res.data === 'object' ? res.data : res;
+        visibilityRetryRef.current = 0;
+        savedVisibilityRef.current = pending;
+        applyProfile(
+          saveProfileCache({
+            ...store.getState().profile.profile,
+            profile_photo_visible:
+              parseVisibilityFlag(flags?.profile_photo_visible) ??
+              pending.profilePictureVisible,
+            additional_photos_visible:
+              parseVisibilityFlag(flags?.additional_photos_visible) ??
+              pending.additionalPhotosVisible,
+          }),
+        );
+        Toast.show(res?.message || 'Photo visibility updated', Toast.LONG);
+      } else if (
+        `${res?.message ?? ''}`.toLowerCase().includes('too many') &&
+        visibilityRetryRef.current < 1
       ) {
+        visibilityRetryRef.current += 1;
+        pendingVisibilityRef.current = pendingVisibilityRef.current ?? pending;
+        visibilityInFlightRef.current = false;
+        setSavingVisibility(false);
+        visibilityTimerRef.current = setTimeout(() => {
+          visibilityTimerRef.current = null;
+          flushPhotoVisibility();
+        }, 2000);
+        return;
+      } else {
+        setProfilePictureVisible(savedVisibilityRef.current.profilePictureVisible);
+        setAdditionalPhotosVisible(
+          savedVisibilityRef.current.additionalPhotosVisible,
+        );
+        Toast.show(
+          res?.message || 'Failed to update photo visibility',
+          Toast.LONG,
+        );
+      }
+    } catch (error) {
+      const axiosError = error as AxiosError<ApiErrorResponse>;
+      const retryAfter = Number(axiosError.response?.headers?.['retry-after']);
+      const tooManyAttempts =
+        axiosError.response?.status === 429 ||
+        `${axiosError.response?.data?.message ?? ''}`
+          .toLowerCase()
+          .includes('too many');
+
+      if (tooManyAttempts && visibilityRetryRef.current < 1) {
+        visibilityRetryRef.current += 1;
+        pendingVisibilityRef.current = pendingVisibilityRef.current ?? pending;
+        visibilityInFlightRef.current = false;
+        setSavingVisibility(false);
+        visibilityTimerRef.current = setTimeout(
+          () => {
+            visibilityTimerRef.current = null;
+            flushPhotoVisibility();
+          },
+          Number.isFinite(retryAfter) && retryAfter > 0
+            ? retryAfter * 1000
+            : 2000,
+        );
         return;
       }
 
-      setProfilePictureVisible(nextProfileVisible);
-      setAdditionalPhotosVisible(nextAdditionalVisible);
-      setSavingVisibility(true);
-
-      try {
-        const res = await Api.updatePhotoVisibility({
-          profile_photo_visible: nextProfileVisible,
-          additional_photos_visible: nextAdditionalVisible,
-        });
-
-        if (isApiSuccess(res?.status, res?.data?.success)) {
-          const body = res.data;
-          const flags =
-            body?.data && typeof body.data === 'object'
-              ? body.data
-              : body;
-          applyProfile(
-            saveProfileCache({
-              ...store.getState().profile.profile,
-              profile_photo_visible:
-                parseVisibilityFlag(
-                  flags && typeof flags === 'object'
-                    ? (flags as { profile_photo_visible?: unknown })
-                        .profile_photo_visible
-                    : undefined,
-                ) ?? nextProfileVisible,
-              additional_photos_visible:
-                parseVisibilityFlag(
-                  flags && typeof flags === 'object'
-                    ? (flags as { additional_photos_visible?: unknown })
-                        .additional_photos_visible
-                    : undefined,
-                ) ?? nextAdditionalVisible,
-            }),
-          );
-
-          Toast.show(
-            body?.message || 'Photo visibility updated',
-            Toast.LONG,
-          );
-          return;
-        }
-
-        setProfilePictureVisible(previousProfileVisible);
-        setAdditionalPhotosVisible(previousAdditionalVisible);
-        Toast.show(
-          res?.data?.message || 'Failed to update photo visibility',
-          Toast.LONG,
-        );
-      } catch (error) {
-        setProfilePictureVisible(previousProfileVisible);
-        setAdditionalPhotosVisible(previousAdditionalVisible);
-        Toast.show(
-          getApiErrorMessage(error, 'Failed to update photo visibility'),
-          Toast.LONG,
-        );
-      } finally {
+      setProfilePictureVisible(savedVisibilityRef.current.profilePictureVisible);
+      setAdditionalPhotosVisible(
+        savedVisibilityRef.current.additionalPhotosVisible,
+      );
+      Toast.show(
+        getApiErrorMessage(error, 'Failed to update photo visibility'),
+        Toast.LONG,
+      );
+    } finally {
+      if (visibilityInFlightRef.current) {
+        visibilityInFlightRef.current = false;
         setSavingVisibility(false);
+        if (pendingVisibilityRef.current) {
+          flushPhotoVisibility();
+        }
+      }
+    }
+  }, [applyProfile]);
+
+  const persistPhotoVisibility = (
+    nextProfileVisible: boolean,
+    nextAdditionalVisible: boolean,
+  ) => {
+    setProfilePictureVisible(nextProfileVisible);
+    setAdditionalPhotosVisible(nextAdditionalVisible);
+    pendingVisibilityRef.current = {
+      profilePictureVisible: nextProfileVisible,
+      additionalPhotosVisible: nextAdditionalVisible,
+    };
+
+    if (visibilityTimerRef.current) {
+      clearTimeout(visibilityTimerRef.current);
+    }
+
+    visibilityTimerRef.current = setTimeout(() => {
+      visibilityTimerRef.current = null;
+      flushPhotoVisibility();
+    }, VISIBILITY_SAVE_DELAY_MS);
+  };
+
+  useEffect(
+    () => () => {
+      if (visibilityTimerRef.current) {
+        clearTimeout(visibilityTimerRef.current);
       }
     },
-    [
-      additionalPhotosVisible,
-      applyProfile,
-      profilePictureVisible,
-      savingVisibility,
-    ],
+    [],
   );
 
   const handleLogout = async () => {
@@ -298,7 +376,6 @@ const SettingsScreen = () => {
             <Text style={styles.toggleLabel}>{Strings.profilePicture}</Text>
             <Switch
               value={profilePictureVisible}
-              disabled={savingVisibility}
               onValueChange={value =>
                 persistPhotoVisibility(value, additionalPhotosVisible)
               }
@@ -316,7 +393,6 @@ const SettingsScreen = () => {
             <Text style={styles.toggleLabel}>{Strings.additionalPhotos}</Text>
             <Switch
               value={additionalPhotosVisible}
-              disabled={savingVisibility}
               onValueChange={value =>
                 persistPhotoVisibility(profilePictureVisible, value)
               }
@@ -345,6 +421,20 @@ const SettingsScreen = () => {
             title={Strings.verifyYourProfile}
             subtitle={Strings.verifyProfileSubtitle}
             onPress={() => navigation.navigate('VerifyProfile')}
+          />
+          <View style={styles.itemDivider} />
+          <SettingItem
+            icon="account-eye-outline"
+            title={Strings.viewProfileRequest}
+            subtitle={Strings.viewProfileRequestSubtitle}
+            onPress={() => navigation.navigate('ViewProfileRequests')}
+          />
+          <View style={styles.itemDivider} />
+          <SettingItem
+            icon="history"
+            title={Strings.requestHistory}
+            subtitle={Strings.requestHistorySubtitle}
+            onPress={() => navigation.navigate('RequestHistory')}
           />
         </View>
 

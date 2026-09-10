@@ -18,3 +18,10 @@ export const navigateToProfileScreen = <T extends ProfileScreen>(
 
   navigation.getParent()?.navigate('Profile', { screen, params });
 };
+
+export const navigateToPhotoGallery = (
+  navigation: NavigationProp<ParamListBase>,
+  params: ProfileStackParamList['ViewProfileGallery'],
+) => {
+  navigateToProfileScreen(navigation, 'ViewProfileGallery', params);
+};

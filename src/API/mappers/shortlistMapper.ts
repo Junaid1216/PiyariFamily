@@ -2,6 +2,7 @@ import { ImageSourcePropType } from 'react-native';
 import { Images } from '../../Assets';
 import { toRemoteImageSource } from '../mediaUrl';
 import { pickImageUrl } from './profileMapper';
+import { resolveMatchPhotoVisibility } from './matchMapper';
 
 export type ShortlistTab = 'i_liked' | 'liked_me';
 
@@ -14,6 +15,7 @@ export type ShortlistedProfile = {
   profession: string;
   image: ImageSourcePropType;
   isVerified?: boolean;
+  pictureHidden?: boolean;
 };
 
 export type ShortlistApiItem = {
@@ -41,6 +43,12 @@ export type ShortlistApiItem = {
   photos?: Array<Record<string, unknown> | string> | null;
   gender?: string | null;
   is_verified?: boolean | number | null;
+  profile_photo_visible?: boolean | number | string | null;
+  additional_photos_visible?: boolean | number | string | null;
+  visibility?: {
+    profile_photo_visible?: boolean | number | string | null;
+    additional_photos_visible?: boolean | number | string | null;
+  } | null;
   user?: ShortlistApiItem;
   profile?: ShortlistApiItem;
   liked_user?: ShortlistApiItem;
@@ -98,22 +106,32 @@ const normalizeItem = (item: ShortlistApiItem): ShortlistApiItem => {
 const resolveProfileImage = (
   ...items: ShortlistApiItem[]
 ): ImageSourcePropType => {
+  const pictureHidden = items.some(
+    item => resolveMatchPhotoVisibility(item).pictureVisible === false,
+  );
+
+  const gender = items
+    .map(item => item.gender?.toLowerCase())
+    .find(value => value === 'male' || value === 'female');
+  const placeholder =
+    gender === 'male' ? Images.maleProfile : Images.femaleProfile;
+
+  if (pictureHidden) {
+    return Images.hiddenProfile;
+  }
+
   for (const item of items) {
+    if (resolveMatchPhotoVisibility(item).pictureVisible === false) {
+      continue;
+    }
+
     const photo = pickImageUrl(item);
     if (photo) {
       return toRemoteImageSource(photo);
     }
   }
 
-  const gender = items
-    .map(item => item.gender?.toLowerCase())
-    .find(value => value === 'male' || value === 'female');
-
-  if (gender === 'male') {
-    return Images.maleProfile;
-  }
-
-  return Images.femaleProfile;
+  return placeholder;
 };
 
 const resolveLocation = (item: ShortlistApiItem) => {
@@ -158,6 +176,8 @@ export const mapShortlistItem = (
   index: number,
 ): ShortlistedProfile => {
   const profile = normalizeItem(item);
+  const pictureHidden =
+    resolveMatchPhotoVisibility(profile).pictureVisible === false;
 
   return {
     id: resolveId(profile, index),
@@ -176,6 +196,7 @@ export const mapShortlistItem = (
       '-',
     image: resolveProfileImage(item, profile),
     isVerified: Boolean(profile.is_verified),
+    ...(pictureHidden ? { pictureHidden: true } : {}),
   };
 };
 
