@@ -54,9 +54,9 @@ const NotificationsScreen = () => {
   const [clearing, setClearing] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPos, setMenuPos] = useState({
-    bottom: 0,
+    top: 0,
     left: 0,
-    width: 0,
+    width: wp('42%'),
   });
   const bellRef = useRef<View>(null);
 
@@ -153,15 +153,29 @@ const NotificationsScreen = () => {
     }
 
     const menuWidth = wp('42%');
-    bellRef.current?.measureInWindow((x, y, width) => {
-      const windowHeight = Dimensions.get('window').height;
+    const windowWidth = Dimensions.get('window').width;
+
+    const showMenu = (x: number, y: number, width: number, height: number) => {
+      const anchorTop =
+        y > 0 || height > 0 ? y + height + hp('0.5%') : hp('12%');
+
       setMenuPos({
-        bottom: windowHeight - y + hp('0.4%'),
-        left: Math.max(wp('4%'), x + width - menuWidth),
+        top: anchorTop,
+        left: Math.min(
+          Math.max(wp('4%'), x + width - menuWidth),
+          windowWidth - menuWidth - wp('4%'),
+        ),
         width: menuWidth,
       });
       setMenuOpen(true);
-    });
+    };
+
+    if (!bellRef.current) {
+      showMenu(windowWidth - menuWidth - wp('4%'), hp('10%'), menuWidth, wp('12%'));
+      return;
+    }
+
+    bellRef.current.measureInWindow(showMenu);
   };
 
   const isActionSuccess = (
@@ -372,18 +386,19 @@ const NotificationsScreen = () => {
         transparent
         animationType="fade"
         onRequestClose={closeMenu}
+        statusBarTranslucent
       >
-        <Pressable style={styles.menuBackdrop} onPress={closeMenu}>
+        <View style={styles.menuBackdrop}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={closeMenu} />
           <View
             style={[
               styles.menu,
               {
-                bottom: menuPos.bottom,
+                top: menuPos.top,
                 left: menuPos.left,
                 width: menuPos.width,
               },
             ]}
-            onStartShouldSetResponder={() => true}
           >
             <TouchableOpacity
               style={styles.menuOption}
@@ -402,7 +417,7 @@ const NotificationsScreen = () => {
               <Text style={styles.menuOptionText}>{Strings.clearAll}</Text>
             </TouchableOpacity>
           </View>
-        </Pressable>
+        </View>
       </Modal>
     </SafeAreaView>
   );

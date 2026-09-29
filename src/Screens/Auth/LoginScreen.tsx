@@ -134,9 +134,8 @@ const LoginScreen = ({ navigation }: Props) => {
                 {Strings.welcomeBack}
                 {welcomeName ? `, ${welcomeName} !` : ' !'}
               </Text>
-              <Text style={styles.subtitle}>
+              <Text style={styles.subtitle} >
                 {Strings.loginSubtitle}
-                31111111111113453535353535353111111111111311
               </Text>
 
               <AuthInput
@@ -230,6 +229,7 @@ const styles = StyleSheet.create({
     marginBottom: hp('2%'),
     fontFamily: Fonts.regular,
     lineHeight: hp('2.5%'),
+
   },
   forgotBtn: {
     alignSelf: 'flex-end',
